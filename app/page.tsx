@@ -6,6 +6,7 @@ import { getMonthList, formatYearMonth } from '@/lib/dateUtils'
 import SheetView from '@/components/SheetView'
 import AnalysisView from '@/components/AnalysisView'
 import RepSettings from '@/components/RepSettings'
+import DailyInputForm from '@/components/DailyInputForm'
 
 export default function Home() {
   const [reps, setReps] = useState<SalesRep[]>([])
@@ -14,7 +15,7 @@ export default function Home() {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
-  const [activeTab, setActiveTab] = useState<'sheet' | 'analysis' | 'settings'>('sheet')
+  const [activeTab, setActiveTab] = useState<'form' | 'sheet' | 'analysis' | 'settings'>('form')
   const [loading, setLoading] = useState(true)
 
   const months = getMonthList(24)
@@ -43,66 +44,86 @@ export default function Home() {
     )
   }
 
+  const tabs = [
+    { id: 'form',     label: '📝 かんたん入力' },
+    { id: 'sheet',    label: '📊 表形式' },
+    { id: 'analysis', label: '📈 分析' },
+    { id: 'settings', label: '⚙️ 設定' },
+  ] as const
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Top bar */}
-      <div className="bg-white border-b border-gray-300 px-3 py-2 flex items-center gap-3 sticky top-0 z-20 shadow-sm">
-        <h1 className="font-bold text-sm text-gray-800 whitespace-nowrap">営業活動管理</h1>
+      <div className="bg-white border-b border-gray-300 px-3 py-2 sticky top-0 z-20 shadow-sm">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <h1 className="font-bold text-sm text-gray-800 whitespace-nowrap">営業活動管理</h1>
 
-        {/* Month selector */}
-        <select
-          value={selectedMonth}
-          onChange={e => setSelectedMonth(e.target.value)}
-          className="border border-gray-300 rounded px-2 py-1 text-xs font-medium bg-white"
-        >
-          {months.map(m => (
-            <option key={m} value={m}>{formatYearMonth(m)}</option>
-          ))}
-        </select>
+          {/* Month selector */}
+          <select
+            value={selectedMonth}
+            onChange={e => setSelectedMonth(e.target.value)}
+            className="border border-gray-300 rounded px-2 py-1 text-xs font-medium bg-white"
+          >
+            {months.map(m => (
+              <option key={m} value={m}>{formatYearMonth(m)}</option>
+            ))}
+          </select>
 
-        {/* Rep selector */}
-        <select
-          value={selectedRep?.id ?? ''}
-          onChange={e => {
-            const rep = reps.find(r => r.id === e.target.value)
-            setSelectedRep(rep || null)
-          }}
-          className="border border-gray-300 rounded px-2 py-1 text-xs font-medium bg-white max-w-[140px]"
-        >
-          {reps.map(r => (
-            <option key={r.id} value={r.id}>{r.name}</option>
-          ))}
-        </select>
+          {/* Rep selector */}
+          <select
+            value={selectedRep?.id ?? ''}
+            onChange={e => {
+              const rep = reps.find(r => r.id === e.target.value)
+              setSelectedRep(rep || null)
+            }}
+            className="border border-gray-300 rounded px-2 py-1 text-xs font-medium bg-white max-w-[160px]"
+          >
+            {reps.map(r => (
+              <option key={r.id} value={r.id}>{r.name}</option>
+            ))}
+          </select>
+        </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 ml-2">
-          {(['sheet', 'analysis', 'settings'] as const).map(tab => (
+        <div className="flex gap-1 flex-wrap">
+          {tabs.map(tab => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-3 py-1 text-xs rounded font-medium transition-colors ${
-                activeTab === tab
-                  ? 'bg-blue-600 text-white'
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-blue-600 text-white shadow-sm'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {tab === 'sheet' ? '日次入力' : tab === 'analysis' ? '分析' : '設定'}
+              {tab.label}
             </button>
           ))}
-        </div>
-
-        <div className="ml-auto text-xs text-gray-400">
-          {selectedRep?.name} / {formatYearMonth(selectedMonth)}
         </div>
       </div>
 
       {/* Content */}
-      <div className="p-2">
+      <div className="p-3">
+        {activeTab === 'form' && selectedRep && (
+          <DailyInputForm
+            repId={selectedRep.id}
+            repName={selectedRep.name}
+            yearMonth={selectedMonth}
+          />
+        )}
         {activeTab === 'sheet' && selectedRep && (
-          <SheetView repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />
+          <SheetView
+            repId={selectedRep.id}
+            repName={selectedRep.name}
+            yearMonth={selectedMonth}
+          />
         )}
         {activeTab === 'analysis' && selectedRep && (
-          <AnalysisView repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />
+          <AnalysisView
+            repId={selectedRep.id}
+            repName={selectedRep.name}
+            yearMonth={selectedMonth}
+          />
         )}
         {activeTab === 'settings' && (
           <RepSettings reps={reps} onUpdate={loadReps} />
