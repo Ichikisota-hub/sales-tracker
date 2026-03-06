@@ -85,10 +85,10 @@ export function calcMonthlyStats(
   const gapToTarget = planCases - forecastAcquisitions
   const gapToTargetActual = planCases - totalAcquisitions
 
-  const meetingRate = totalVisits > 0 ? totalNetMeetings / totalVisits : 0
-  const ownerMeetingRate = totalNetMeetings > 0 ? totalOwnerMeetings / totalNetMeetings : 0
-  const negotiationRate = totalOwnerMeetings > 0 ? totalNegotiations / totalOwnerMeetings : 0
-  const acquisitionRate = totalNegotiations > 0 ? totalAcquisitions / totalNegotiations : 0
+  const meetingRate      = totalVisits > 0          ? totalNetMeetings    / totalVisits          : 0  // 対面率     = 対面数 ÷ 訪問数
+  const ownerMeetingRate = totalNetMeetings > 0     ? totalOwnerMeetings  / totalNetMeetings     : 0  // 主権対面率 = 主権対面数 ÷ 対面数
+  const negotiationRate  = totalNetMeetings > 0     ? totalNegotiations   / totalNetMeetings     : 0  // 商談率     = 商談数 ÷ 対面数
+  const acquisitionRate  = totalNegotiations > 0    ? totalAcquisitions   / totalNegotiations    : 0  // 獲得率     = 獲得数 ÷ 商談数
 
   const avgVisits = actualWorkingDays > 0 ? totalVisits / actualWorkingDays : 0
   const avgNetMeetings = actualWorkingDays > 0 ? totalNetMeetings / actualWorkingDays : 0
