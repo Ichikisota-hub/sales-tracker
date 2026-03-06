@@ -1,0 +1,133 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-plan: #ffd6d6;
+  --color-saturday: #d6e4ff;
+  --color-sunday: #ffd6d6;
+  --color-holiday: #ffe0cc;
+  --color-working: #4472c4;
+  --color-header-yellow: #ffff00;
+  --color-header-red: #ff0000;
+  --color-header-blue: #4472c4;
+  --color-header-green: #70ad47;
+  --color-header-orange: #ed7d31;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 12px;
+  background: #f5f5f5;
+  color: #222;
+}
+
+/* Compact table styles */
+.sheet-table {
+  border-collapse: collapse;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.sheet-table th,
+.sheet-table td {
+  border: 1px solid #b0b0b0;
+  padding: 2px 4px;
+  text-align: center;
+  min-width: 32px;
+}
+
+.sheet-table input[type="number"],
+.sheet-table input[type="text"],
+.sheet-table select {
+  border: none;
+  background: transparent;
+  text-align: center;
+  width: 100%;
+  font-size: 11px;
+  font-family: 'Noto Sans JP', sans-serif;
+  padding: 0;
+  outline: none;
+  cursor: pointer;
+}
+
+.sheet-table input[type="number"]:focus,
+.sheet-table select:focus {
+  background: #e8f0ff;
+  border-radius: 2px;
+}
+
+/* Row color coding */
+.row-saturday { background-color: #d6e4ff; }
+.row-sunday   { background-color: #ffd6d6; }
+.row-holiday  { background-color: #ffe0cc; }
+.row-weekday  { background-color: #ffffff; }
+
+/* Header color coding */
+.header-yellow { background-color: #ffff00; font-weight: 700; }
+.header-red    { background-color: #ff0000; color: white; font-weight: 700; }
+.header-blue   { background-color: #4472c4; color: white; font-weight: 700; }
+.header-green  { background-color: #70ad47; color: white; font-weight: 700; }
+.header-orange { background-color: #ed7d31; color: white; font-weight: 700; }
+.header-pink   { background-color: #ffd6d6; font-weight: 700; }
+
+/* Progress cell coloring */
+.progress-positive { color: #0070c0; font-weight: 600; }
+.progress-negative { color: #ff0000; font-weight: 600; }
+.progress-zero     { color: #222; }
+
+/* Forecast big display */
+.forecast-box {
+  background: #ff0000;
+  color: white;
+  font-size: 48px;
+  font-weight: 900;
+  text-align: center;
+  border-radius: 8px;
+  padding: 16px 24px;
+  min-width: 160px;
+}
+
+.forecast-label {
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Scrollable container */
+.table-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 120px);
+}
+
+/* Sticky headers */
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background: inherit;
+}
+
+/* Save indicator */
+.saving { opacity: 0.5; }
+.saved  { color: #0a0; font-size: 10px; }
+
+/* Tabs */
+.tab-active {
+  border-bottom: 3px solid #4472c4;
+  font-weight: 700;
+  color: #4472c4;
+}
