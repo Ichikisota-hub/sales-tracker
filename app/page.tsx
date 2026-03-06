@@ -7,6 +7,7 @@ import SheetView from '@/components/SheetView'
 import AnalysisView from '@/components/AnalysisView'
 import RepSettings from '@/components/RepSettings'
 import DailyInputForm from '@/components/DailyInputForm'
+import OverallView from '@/components/OverallView'
 
 export default function Home() {
   const [reps, setReps] = useState<SalesRep[]>([])
@@ -15,7 +16,7 @@ export default function Home() {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
-  const [activeTab, setActiveTab] = useState<'form' | 'sheet' | 'analysis' | 'settings'>('form')
+  const [activeTab, setActiveTab] = useState<'form' | 'sheet' | 'analysis' | 'overall' | 'settings'>('form')
   const [loading, setLoading] = useState(true)
 
   const months = getMonthList(24)
@@ -40,6 +41,7 @@ export default function Home() {
     { id: 'form',     label: '入力' },
     { id: 'sheet',    label: '表' },
     { id: 'analysis', label: '分析' },
+    { id: 'overall',  label: '全体' },
     { id: 'settings', label: '設定' },
   ] as const
 
@@ -84,7 +86,8 @@ export default function Home() {
             >
               {tab.id === 'form' ? '✏️ ' + tab.label :
                tab.id === 'sheet' ? '📋 ' + tab.label :
-               tab.id === 'analysis' ? '📈 ' + tab.label : '⚙️ ' + tab.label}
+               tab.id === 'analysis' ? '📈 ' + tab.label :
+               tab.id === 'overall' ? '🏆 ' + tab.label : '⚙️ ' + tab.label}
             </button>
           ))}
         </div>
@@ -100,6 +103,9 @@ export default function Home() {
         )}
         {activeTab === 'analysis' && selectedRep && (
           <AnalysisView repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />
+        )}
+        {activeTab === 'overall' && (
+          <OverallView yearMonth={selectedMonth} />
         )}
         {activeTab === 'settings' && (
           <RepSettings reps={reps} onUpdate={loadReps} />

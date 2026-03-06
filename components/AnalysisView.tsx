@@ -106,34 +106,49 @@ export default function AnalysisView({ repId, repName, yearMonth }: Props) {
           <div className="mobile-card-label">稼働サマリー</div>
           <div className="stat-grid">
             {[
-              {label:'生産性', value:round1(stats.productivity), sub:'獲得÷実稼働'},
-              {label:'実稼働日数', value:`${stats.actualWorkingDays}日`, sub:`計画${stats.planWorkingDays}日`},
-              {label:'残稼働日数', value:`${stats.remainingWorkingDays}日`, sub:'計画-実績'},
-              {label:'稼働時間', value:`${stats.totalWorkingHours}h`, sub:'累計'},
+              { label:'⚡ 生産性',   value: round1(stats.productivity),            sub:'獲得÷実稼働',     bg:'bg-blue-50',   val:'text-blue-700' },
+              { label:'📅 実稼働',   value: `${stats.actualWorkingDays}日`,         sub:`計画${stats.planWorkingDays}日`, bg:'bg-slate-50', val:'text-slate-700' },
+              { label:'🔜 残稼働',   value: `${stats.remainingWorkingDays}日`,      sub:'計画-実績',      bg:'bg-amber-50',  val:'text-amber-700' },
+              { label:'⏱ 稼働時間', value: `${stats.totalWorkingHours}h`,          sub:'累計',           bg:'bg-purple-50', val:'text-purple-700' },
             ].map(s => (
-              <div key={s.label} className="stat-card">
-                <div className="stat-card-label">{s.label}</div>
-                <div className="stat-card-value">{s.value}</div>
-                <div className="stat-card-sub">{s.sub}</div>
+              <div key={s.label} className={`${s.bg} rounded-xl p-3 text-center`}>
+                <div className="text-xs text-slate-500 font-semibold mb-1">{s.label}</div>
+                <div className={`text-xl font-black ${s.val}`}>{s.value}</div>
+                <div className="text-xs text-slate-400 mt-0.5">{s.sub}</div>
               </div>
             ))}
           </div>
         </div>
         <div className="mobile-card">
           <div className="mobile-card-label">各種率</div>
-          <div className="stat-grid">
+          <div className="space-y-2">
             {[
-              {label:'対面率', value:pct(stats.meetingRate), sub:'ネット÷訪問'},
-              {label:'主権対面率', value:pct(stats.ownerMeetingRate), sub:'主権÷ネット'},
-              {label:'商談率', value:pct(stats.negotiationRate), sub:'商談÷主権'},
-              {label:'獲得率', value:pct(stats.acquisitionRate), sub:'獲得÷商談'},
-            ].map(s => (
-              <div key={s.label} className="stat-card">
-                <div className="stat-card-label">{s.label}</div>
-                <div className="stat-card-value" style={{fontSize:17}}>{s.value}</div>
-                <div className="stat-card-sub">{s.sub}</div>
-              </div>
-            ))}
+              { label:'👣 対面率',     value: stats.meetingRate,      sub:'ネット÷訪問',  color:'blue' },
+              { label:'🤝 主権対面率', value: stats.ownerMeetingRate, sub:'主権÷ネット',  color:'indigo' },
+              { label:'💬 商談率',     value: stats.negotiationRate,  sub:'商談÷主権',    color:'violet' },
+              { label:'🏆 獲得率',     value: stats.acquisitionRate,  sub:'獲得÷商談',    color:'emerald' },
+            ].map(s => {
+              const pctVal = Math.round(s.value * 100)
+              const colorMap: Record<string, { bar: string; text: string; bg: string }> = {
+                blue:    { bar:'bg-blue-500',    text:'text-blue-700',    bg:'bg-blue-50' },
+                indigo:  { bar:'bg-indigo-500',  text:'text-indigo-700',  bg:'bg-indigo-50' },
+                violet:  { bar:'bg-violet-500',  text:'text-violet-700',  bg:'bg-violet-50' },
+                emerald: { bar:'bg-emerald-500', text:'text-emerald-700', bg:'bg-emerald-50' },
+              }
+              const c = colorMap[s.color]
+              return (
+                <div key={s.label} className={`${c.bg} rounded-xl px-3 py-2`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-semibold text-slate-700">{s.label}</span>
+                    <span className={`text-lg font-black ${c.text}`}>{pctVal}%</span>
+                  </div>
+                  <div className="w-full bg-white bg-opacity-60 rounded-full h-2">
+                    <div className={`${c.bar} h-2 rounded-full`} style={{ width: `${Math.min(100, pctVal)}%` }} />
+                  </div>
+                  <div className="text-xs text-slate-400 mt-0.5">{s.sub}</div>
+                </div>
+              )
+            })}
           </div>
         </div>
         <div className="mobile-card">
