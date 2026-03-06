@@ -49,7 +49,7 @@ export default function Home() {
       <div className="top-nav">
         {/* Row 1: title + selectors */}
         <div className="flex items-center gap-2 mb-2">
-          <span className="top-nav-title">📊 営業管理</span>
+          <span className="top-nav-title">origin-dx 数値管理</span>
           <div className="flex-1" />
           {/* Month */}
           <select

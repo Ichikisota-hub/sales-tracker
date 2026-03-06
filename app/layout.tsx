@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: '営業活動管理システム',
+  title: 'origin-dx 数値管理',
   description: '月次営業活動記録・分析',
 }
 
