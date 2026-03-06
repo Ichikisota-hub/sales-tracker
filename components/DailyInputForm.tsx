@@ -183,31 +183,58 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
       {isWorking && (
         <div className="bg-white rounded-xl shadow-sm p-4 mb-3">
           <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">行動量（1日）</div>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {[
               { label: '訪問', field: 'visits' as keyof DailyRecord, color: 'blue' },
               { label: 'ネット対面', field: 'net_meetings' as keyof DailyRecord, color: 'indigo' },
               { label: '主権対面', field: 'owner_meetings' as keyof DailyRecord, color: 'purple' },
               { label: '商談', field: 'negotiations' as keyof DailyRecord, color: 'orange' },
               { label: '獲得', field: 'acquisitions' as keyof DailyRecord, color: 'green' },
-            ].map(({ label, field, color }) => (
-              <div key={field} className="flex items-center gap-3">
-                <span className="text-sm font-medium text-gray-700 w-20">{label}</span>
-                <div className="flex items-center gap-3 flex-1">
-                  <button
-                    onClick={() => decrement(field)}
-                    className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 text-xl font-bold text-gray-600 flex items-center justify-center"
-                  >−</button>
-                  <span className={`flex-1 text-center text-2xl font-bold text-${color}-600`}>
-                    {(record[field] as number) || 0}
-                  </span>
-                  <button
-                    onClick={() => increment(field)}
-                    className={`w-10 h-10 rounded-full bg-${color}-600 hover:bg-${color}-700 text-white text-xl font-bold flex items-center justify-center shadow-sm`}
-                  >＋</button>
+            ].map(({ label, field, color }) => {
+              const val = (record[field] as number) || 0
+              const colorMap: Record<string, string> = {
+                blue: 'bg-blue-600 hover:bg-blue-700',
+                indigo: 'bg-indigo-600 hover:bg-indigo-700',
+                purple: 'bg-purple-600 hover:bg-purple-700',
+                orange: 'bg-orange-500 hover:bg-orange-600',
+                green: 'bg-green-600 hover:bg-green-700',
+              }
+              const textMap: Record<string, string> = {
+                blue: 'text-blue-600', indigo: 'text-indigo-600',
+                purple: 'text-purple-600', orange: 'text-orange-500', green: 'text-green-600',
+              }
+              return (
+                <div key={field}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-gray-700">{label}</span>
+                    <span className={`text-xs font-bold ${textMap[color]}`}>{val}件</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {/* −ボタン */}
+                    <button
+                      onClick={() => decrement(field)}
+                      className="w-11 h-11 rounded-xl bg-gray-100 hover:bg-gray-200 text-2xl font-bold text-gray-600 flex items-center justify-center flex-shrink-0"
+                    >−</button>
+
+                    {/* 直接入力 */}
+                    <input
+                      type="number"
+                      min={0}
+                      value={val === 0 ? '' : val}
+                      placeholder="0"
+                      onChange={e => set(field, parseInt(e.target.value) || 0)}
+                      className="flex-1 text-center text-2xl font-black border-2 border-gray-200 rounded-xl py-2 focus:outline-none focus:border-blue-400"
+                    />
+
+                    {/* ＋ボタン */}
+                    <button
+                      onClick={() => increment(field)}
+                      className={`w-11 h-11 rounded-xl ${colorMap[color]} text-white text-2xl font-bold flex items-center justify-center flex-shrink-0 shadow-sm`}
+                    >＋</button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}

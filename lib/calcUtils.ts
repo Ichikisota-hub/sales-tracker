@@ -1,9 +1,5 @@
 import { DailyRecord } from './supabase'
-import { getDaysArray, isWeekend } from './dateUtils'
-
-export type DailyCalc = DailyRecord & {
-  progress: number // 進捗 = 獲得件数累計 - 計画の進捗
-}
+import { getDaysArray } from './dateUtils'
 
 export type MonthlyStats = {
   // 行動量合計
@@ -12,7 +8,7 @@ export type MonthlyStats = {
   totalOwnerMeetings: number
   totalNegotiations: number
   totalAcquisitions: number
-  // 平均
+  // 平均（稼働日あたり）
   avgVisits: number
   avgNetMeetings: number
   avgOwnerMeetings: number
@@ -24,30 +20,35 @@ export type MonthlyStats = {
   perCaseNegotiations: number
   // 月間稼働
   actualWorkingDays: number
+  remainingWorkingDays: number  // 残稼働日数 = 計画 - 実績
   totalWorkingHours: number
   // 生産性・率
-  productivity: number  // 生産性 = 獲得/稼働数
-  meetingRate: number   // 対面率
-  ownerMeetingRate: number // 主権対面率
-  negotiationRate: number  // 商談率
-  acquisitionRate: number  // 獲得率
+  productivity: number       // 生産性 = 実績獲得 ÷ 実稼働日数
+  meetingRate: number
+  ownerMeetingRate: number
+  negotiationRate: number
+  acquisitionRate: number
+  // 着地予想
+  forecastAcquisitions: number  // 予測着地 = (生産性 × 残稼働日数) + 獲得件数
+  gapToTarget: number           // 目標までの残件数 = 計画件数 - 予測着地
+  gapToTargetActual: number     // 現時点での残件数 = 計画件数 - 現在獲得
   // 曜日別集計
   byDow: DowStats[]
-  // 月間着地予想
-  forecastAcquisitions: number
+  // 計画
+  planCases: number
+  planWorkingDays: number
 }
 
 export type DowStats = {
   dow: number
   dowJa: string
-  planDays: number
+  planDays: number    // 月間計画稼働日数を曜日比率で按分
   actualDays: number
   acquisitions: number
   productivity: number
   remainingWork: number
   landingForecast: number
   workRatio: number
-  dailyTargetCases: number
 }
 
 export function calcMonthlyStats(
@@ -56,6 +57,9 @@ export function calcMonthlyStats(
   planWorkingDays: number,
   yearMonth: string
 ): MonthlyStats {
+  const today = new Date().toISOString().split('T')[0]
+  const days = getDaysArray(yearMonth)
+
   const workingRecords = records.filter(r =>
     r.attendance_status === '稼働' || r.work_status === '稼働'
   )
@@ -68,7 +72,19 @@ export function calcMonthlyStats(
   const actualWorkingDays = workingRecords.length
   const totalWorkingHours = records.reduce((s, r) => s + (r.working_hours || 0), 0)
 
+  // 生産性 = 実績獲得 ÷ 実稼働日数
   const productivity = actualWorkingDays > 0 ? totalAcquisitions / actualWorkingDays : 0
+
+  // 残稼働日数 = 計画稼働日数 - 実稼働日数
+  const remainingWorkingDays = Math.max(0, planWorkingDays - actualWorkingDays)
+
+  // 予測着地 = (生産性 × 残稼働日数) + 現在獲得件数
+  const forecastAcquisitions = productivity * remainingWorkingDays + totalAcquisitions
+
+  // 目標までの残件数
+  const gapToTarget = planCases - forecastAcquisitions
+  const gapToTargetActual = planCases - totalAcquisitions
+
   const meetingRate = totalVisits > 0 ? totalNetMeetings / totalVisits : 0
   const ownerMeetingRate = totalNetMeetings > 0 ? totalOwnerMeetings / totalNetMeetings : 0
   const negotiationRate = totalOwnerMeetings > 0 ? totalNegotiations / totalOwnerMeetings : 0
@@ -85,21 +101,28 @@ export function calcMonthlyStats(
   const perCaseNegotiations = totalAcquisitions > 0 ? totalNegotiations / totalAcquisitions : 0
 
   // 曜日別集計
-  const days = getDaysArray(yearMonth)
+  // 計画稼働日数を曜日ごとの日数比率で按分
   const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土']
+  const totalCalendarDays = days.length
+
   const byDow: DowStats[] = [1, 2, 3, 4, 5, 6, 0].map(dow => {
-    const dowDays = days.filter(d => d.dow === dow)
+    const dowCalendarDays = days.filter(d => d.dow === dow).length
+    // 計画稼働日数を曜日の日数比率で按分
+    const planDays = planWorkingDays > 0
+      ? Math.round(planWorkingDays * dowCalendarDays / totalCalendarDays)
+      : dowCalendarDays
+
     const dowRecords = records.filter(r => {
       const d = days.find(dd => dd.dateStr === r.record_date)
       return d?.dow === dow
     })
     const dowWorking = dowRecords.filter(r => r.attendance_status === '稼働' || r.work_status === '稼働')
     const acq = dowRecords.reduce((s, r) => s + (r.acquisitions || 0), 0)
-    const planDays = dowDays.length
     const actualDays = dowWorking.length
     const prod = actualDays > 0 ? acq / actualDays : 0
-    const remaining = planDays - actualDays
+    const remaining = Math.max(0, planDays - actualDays)
     const landing = acq + prod * remaining
+
     return {
       dow,
       dowJa: DOW_LABELS[dow],
@@ -110,21 +133,18 @@ export function calcMonthlyStats(
       remainingWork: remaining,
       landingForecast: landing,
       workRatio: planDays > 0 ? actualDays / planDays : 0,
-      dailyTargetCases: planWorkingDays > 0 ? planCases / planWorkingDays : 0,
     }
   })
-
-  // 月間着地予想 = 曜日別着地の合計
-  const forecastAcquisitions = byDow.reduce((s, d) => s + d.landingForecast, 0)
 
   return {
     totalVisits, totalNetMeetings, totalOwnerMeetings, totalNegotiations, totalAcquisitions,
     avgVisits, avgNetMeetings, avgOwnerMeetings, avgNegotiations,
     perCaseVisits, perCaseMeetings, perCaseOwnerMeetings, perCaseNegotiations,
-    actualWorkingDays, totalWorkingHours,
+    actualWorkingDays, remainingWorkingDays, totalWorkingHours,
     productivity, meetingRate, ownerMeetingRate, negotiationRate, acquisitionRate,
+    forecastAcquisitions, gapToTarget, gapToTargetActual,
     byDow,
-    forecastAcquisitions,
+    planCases, planWorkingDays,
   }
 }
 
