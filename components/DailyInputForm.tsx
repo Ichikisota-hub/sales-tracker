@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase, DailyRecord, MonthlyPlan } from '@/lib/supabase'
-import { getDaysArray } from '@/lib/dateUtils'
+import { getDaysArray, localToday } from '@/lib/dateUtils'
 
 const WORK_STATUSES = ['稼働', '休日', '同行', '有休', '研修', '出張']
 const HOURS = [3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10]
@@ -19,7 +19,7 @@ const COUNTERS = [
 
 export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
   const days = getDaysArray(yearMonth)
-  const today = new Date().toISOString().split('T')[0]
+  const today = localToday()
   const defaultDay = days.find(d => d.dateStr === today) || days[0]
 
   const [selectedDate, setSelectedDate] = useState(defaultDay.dateStr)

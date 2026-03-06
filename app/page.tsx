@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase, SalesRep } from '@/lib/supabase'
-import { getMonthList, formatYearMonth } from '@/lib/dateUtils'
+import { getMonthList, formatYearMonth, localYearMonth } from '@/lib/dateUtils'
 import SheetView from '@/components/SheetView'
 import AnalysisView from '@/components/AnalysisView'
 import RepSettings from '@/components/RepSettings'
@@ -12,10 +12,7 @@ import OverallView from '@/components/OverallView'
 export default function Home() {
   const [reps, setReps] = useState<SalesRep[]>([])
   const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null)
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
-    const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  })
+  const [selectedMonth, setSelectedMonth] = useState<string>(localYearMonth)
   const [activeTab, setActiveTab] = useState<'form' | 'sheet' | 'analysis' | 'overall' | 'settings'>('form')
   const [loading, setLoading] = useState(true)
 
