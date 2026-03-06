@@ -7,7 +7,6 @@ import { calcMonthlyStats, pct, round1, MonthlyStats } from '@/lib/calcUtils'
 type Props = { repId: string; repName: string; yearMonth: string }
 
 export default function AnalysisView({ repId, repName, yearMonth }: Props) {
-  const [records, setRecords] = useState<DailyRecord[]>([])
   const [plan, setPlan] = useState<MonthlyPlan | null>(null)
   const [stats, setStats] = useState<MonthlyStats | null>(null)
 
@@ -15,117 +14,98 @@ export default function AnalysisView({ repId, repName, yearMonth }: Props) {
 
   async function loadData() {
     const [y, m] = yearMonth.split('-')
-    const { data: recData } = await supabase
-      .from('daily_records').select('*')
-      .eq('sales_rep_id', repId)
-      .gte('record_date', `${y}-${m}-01`)
-      .lte('record_date', `${y}-${m}-31`)
-    const { data: planData } = await supabase
-      .from('monthly_plans').select('*')
+    const { data: recData } = await supabase.from('daily_records').select('*')
+      .eq('sales_rep_id', repId).gte('record_date', `${y}-${m}-01`).lte('record_date', `${y}-${m}-31`)
+    const { data: planData } = await supabase.from('monthly_plans').select('*')
       .eq('sales_rep_id', repId).eq('year_month', yearMonth).single()
     const recs = recData || []
-    setRecords(recs)
     setPlan(planData || null)
     setStats(calcMonthlyStats(recs, planData?.plan_cases || 0, planData?.plan_working_days || 0, yearMonth))
   }
 
-  if (!stats) return <div className="p-4 text-xs text-gray-400">読み込み中...</div>
+  if (!stats) return <div className="p-6 text-center text-slate-400 text-sm">読み込み中...</div>
 
-  const forecastColor = stats.forecastAcquisitions >= stats.planCases ? 'bg-green-600' : 'bg-red-600'
-  const gapColor = stats.gapToTarget <= 0 ? 'text-green-600' : 'text-red-600'
+  const achieved = stats.forecastAcquisitions >= stats.planCases
+  const forecastBg = achieved ? 'bg-emerald-500' : 'bg-red-500'
 
   return (
-    <div className="space-y-4 max-w-2xl">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <h2 className="font-bold text-sm">{repName} — 稼働結果分析</h2>
-        <span className="text-xs text-gray-400">{yearMonth}</span>
-      </div>
+    <div className="space-y-3">
 
-      {/* 着地予想 + 目標まで */}
-      <div className="flex gap-3 flex-wrap">
-        {/* 月間着地予想 */}
-        <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col items-center justify-center min-w-[150px]">
-          <div className="text-xs font-bold text-gray-500 mb-2">月間着地予想</div>
-          <div className={`${forecastColor} text-white text-4xl font-black rounded-xl px-6 py-3 text-center`}>
-            {round1(stats.forecastAcquisitions)}
-          </div>
-          <div className="text-xs text-gray-400 mt-2">
-            (生産性{round1(stats.productivity)} × 残{stats.remainingWorkingDays}日) + {stats.totalAcquisitions}件
+      {/* ── 着地予想 + 目標まで ── */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className={`forecast-big ${forecastBg}`}>
+          <div className="forecast-big-label">月間着地予想</div>
+          <div className="forecast-big-num">{round1(stats.forecastAcquisitions)}</div>
+          <div style={{fontSize:10,opacity:.75,marginTop:4}}>
+            目標 {stats.planCases}件
           </div>
         </div>
-
-        {/* 目標まで */}
-        <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col items-center justify-center min-w-[150px]">
-          <div className="text-xs font-bold text-gray-500 mb-2">目標まで</div>
-          <div className={`text-4xl font-black ${gapColor}`}>
-            {stats.gapToTarget > 0 ? `あと ${round1(stats.gapToTarget)}件` : `達成見込み ✓`}
-          </div>
-          <div className="text-xs text-gray-400 mt-2">
-            目標{stats.planCases}件 — 着地予想{round1(stats.forecastAcquisitions)}件
-          </div>
-          <div className="text-xs text-gray-400 mt-1">
-            現時点の残件数: {stats.gapToTargetActual > 0 ? `${stats.gapToTargetActual}件` : '達成済み ✓'}
-          </div>
-        </div>
-
-        {/* 計画情報 */}
-        <div className="bg-white rounded-xl shadow-sm p-4 space-y-2 min-w-[160px]">
-          <div className="text-xs font-bold text-gray-500 mb-1">計画</div>
-          <div className="flex justify-between text-sm gap-4">
-            <span className="text-gray-600">計画件数</span>
-            <span className="font-bold text-red-600">{stats.planCases}件</span>
-          </div>
-          <div className="flex justify-between text-sm gap-4">
-            <span className="text-gray-600">計画稼働日数</span>
-            <span className="font-bold">{stats.planWorkingDays}日</span>
-          </div>
-          <div className="flex justify-between text-sm gap-4">
-            <span className="text-gray-600">実稼働日数</span>
-            <span className="font-bold">{stats.actualWorkingDays}日</span>
-          </div>
-          <div className="flex justify-between text-sm gap-4">
-            <span className="text-gray-600">残稼働日数</span>
-            <span className="font-bold text-blue-600">{stats.remainingWorkingDays}日</span>
-          </div>
-          <div className="flex justify-between text-sm gap-4">
-            <span className="text-gray-600">生産性</span>
-            <span className="font-bold">{round1(stats.productivity)}</span>
-          </div>
+        <div className={`forecast-big ${achieved ? 'bg-emerald-600' : 'bg-orange-500'}`}>
+          <div className="forecast-big-label">目標まで</div>
+          {achieved
+            ? <div className="forecast-big-num" style={{fontSize:32}}>達成<br />見込み</div>
+            : <div className="forecast-big-num">あと<br /><span style={{fontSize:40}}>{round1(stats.gapToTarget)}</span><span style={{fontSize:18}}>件</span></div>
+          }
         </div>
       </div>
 
-      {/* 月間サマリー */}
-      <div className="bg-white rounded-xl shadow-sm p-4">
-        <div className="text-xs font-bold text-gray-500 mb-3">月間サマリー</div>
-        <div className="grid grid-cols-3 gap-3 text-center">
+      {/* ── 計算内訳 ── */}
+      <div className="mobile-card">
+        <div className="mobile-card-label">着地予想の内訳</div>
+        <div className="text-xs text-slate-500 bg-slate-50 rounded-xl p-3 leading-relaxed">
+          <span className="font-bold text-slate-700">予測着地</span> = (生産性 <span className="font-bold text-blue-600">{round1(stats.productivity)}</span> × 残稼働 <span className="font-bold text-blue-600">{stats.remainingWorkingDays}日</span>) + 現在獲得 <span className="font-bold text-blue-600">{stats.totalAcquisitions}件</span>
+          <div className="mt-1 font-bold text-slate-700 text-sm">= {round1(stats.forecastAcquisitions)}件</div>
+        </div>
+      </div>
+
+      {/* ── 稼働サマリー ── */}
+      <div className="mobile-card">
+        <div className="mobile-card-label">稼働サマリー</div>
+        <div className="stat-grid">
           {[
-            { label: '生産性', value: round1(stats.productivity), sub: '獲得÷実稼働日数' },
-            { label: '対面率', value: pct(stats.meetingRate), sub: 'ネット÷訪問' },
-            { label: '主権対面率', value: pct(stats.ownerMeetingRate), sub: '主権÷ネット' },
-            { label: '商談率', value: pct(stats.negotiationRate), sub: '商談÷主権' },
-            { label: '獲得率', value: pct(stats.acquisitionRate), sub: '獲得÷商談' },
-            { label: '稼働時間', value: `${stats.totalWorkingHours}h`, sub: '合計' },
-          ].map(item => (
-            <div key={item.label} className="bg-gray-50 rounded-lg p-2">
-              <div className="text-xs text-gray-500">{item.label}</div>
-              <div className="text-lg font-bold text-gray-800">{item.value}</div>
-              <div className="text-xs text-gray-400">{item.sub}</div>
+            { label: '生産性', value: round1(stats.productivity), sub: '獲得÷実稼働' },
+            { label: '実稼働日数', value: `${stats.actualWorkingDays}日`, sub: `計画${stats.planWorkingDays}日` },
+            { label: '残稼働日数', value: `${stats.remainingWorkingDays}日`, sub: '計画-実績' },
+            { label: '稼働時間', value: `${stats.totalWorkingHours}h`, sub: '累計' },
+          ].map(s => (
+            <div key={s.label} className="stat-card">
+              <div className="stat-card-label">{s.label}</div>
+              <div className="stat-card-value">{s.value}</div>
+              <div className="stat-card-sub">{s.sub}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* 行動量 */}
-      <div className="bg-white rounded-xl shadow-sm p-4">
-        <div className="text-xs font-bold text-gray-500 mb-3">行動量</div>
+      {/* ── 各種率 ── */}
+      <div className="mobile-card">
+        <div className="mobile-card-label">各種率</div>
+        <div className="stat-grid">
+          {[
+            { label: '対面率', value: pct(stats.meetingRate), sub: 'ネット÷訪問' },
+            { label: '主権対面率', value: pct(stats.ownerMeetingRate), sub: '主権÷ネット' },
+            { label: '商談率', value: pct(stats.negotiationRate), sub: '商談÷主権' },
+            { label: '獲得率', value: pct(stats.acquisitionRate), sub: '獲得÷商談' },
+          ].map(s => (
+            <div key={s.label} className="stat-card">
+              <div className="stat-card-label">{s.label}</div>
+              <div className="stat-card-value" style={{fontSize:17}}>{s.value}</div>
+              <div className="stat-card-sub">{s.sub}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── 行動量 ── */}
+      <div className="mobile-card">
+        <div className="mobile-card-label">行動量</div>
         <table className="sheet-table w-full">
           <thead>
             <tr>
-              <th className="bg-gray-100 text-left px-2"></th>
+              <th className="bg-slate-100 text-left px-2"></th>
               <th className="header-blue">訪問</th>
-              <th className="header-blue">ネット対面</th>
-              <th className="header-blue">主権対面</th>
+              <th className="header-blue">ネット</th>
+              <th className="header-blue">主権</th>
               <th className="header-blue">商談</th>
               <th className="header-blue">獲得</th>
             </tr>
@@ -133,99 +113,87 @@ export default function AnalysisView({ repId, repName, yearMonth }: Props) {
           <tbody>
             <tr>
               <td className="bg-blue-50 font-semibold text-left px-2">合計</td>
-              <td>{stats.totalVisits}</td>
-              <td>{stats.totalNetMeetings}</td>
-              <td>{stats.totalOwnerMeetings}</td>
-              <td>{stats.totalNegotiations}</td>
-              <td className="font-bold">{stats.totalAcquisitions}</td>
+              <td>{stats.totalVisits}</td><td>{stats.totalNetMeetings}</td>
+              <td>{stats.totalOwnerMeetings}</td><td>{stats.totalNegotiations}</td>
+              <td className="font-bold text-blue-700">{stats.totalAcquisitions}</td>
             </tr>
             <tr>
               <td className="bg-blue-50 font-semibold text-left px-2">1日Ave</td>
-              <td>{round1(stats.avgVisits)}</td>
-              <td>{round1(stats.avgNetMeetings)}</td>
-              <td>{round1(stats.avgOwnerMeetings)}</td>
-              <td>{round1(stats.avgNegotiations)}</td>
+              <td>{round1(stats.avgVisits)}</td><td>{round1(stats.avgNetMeetings)}</td>
+              <td>{round1(stats.avgOwnerMeetings)}</td><td>{round1(stats.avgNegotiations)}</td>
               <td>—</td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      {/* 1件取る為には */}
-      <div className="bg-white rounded-xl shadow-sm p-4">
-        <div className="text-xs font-bold text-gray-500 mb-3">1件獲得するために必要な行動量</div>
+      {/* ── 1件取る為には ── */}
+      <div className="mobile-card">
+        <div className="mobile-card-label">1件獲得に必要な行動量</div>
         <table className="sheet-table w-full">
           <thead>
             <tr>
-              <th className="header-blue">訪問</th>
-              <th className="header-blue">ネット対面</th>
-              <th className="header-blue">主権対面</th>
-              <th className="header-blue">商談</th>
-              <th className="header-blue">獲得</th>
+              <th className="header-blue">訪問</th><th className="header-blue">ネット</th>
+              <th className="header-blue">主権</th><th className="header-blue">商談</th>
+              <th className="header-green">獲得</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>{round1(stats.perCaseVisits)}</td>
-              <td>{round1(stats.perCaseMeetings)}</td>
-              <td>{round1(stats.perCaseOwnerMeetings)}</td>
-              <td>{round1(stats.perCaseNegotiations)}</td>
-              <td className="font-bold text-green-600">1</td>
+              <td>{round1(stats.perCaseVisits)}</td><td>{round1(stats.perCaseMeetings)}</td>
+              <td>{round1(stats.perCaseOwnerMeetings)}</td><td>{round1(stats.perCaseNegotiations)}</td>
+              <td className="font-bold text-emerald-600">1</td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      {/* 曜日別集計 */}
-      <div className="bg-white rounded-xl shadow-sm p-4">
-        <div className="text-xs font-bold text-gray-500 mb-1">曜日別集計</div>
-        <div className="text-xs text-gray-400 mb-3">計画稼働日数は月間計画稼働日数({stats.planWorkingDays}日)を曜日比率で按分</div>
+      {/* ── 曜日別集計 ── */}
+      <div className="mobile-card">
+        <div className="mobile-card-label">曜日別集計</div>
+        <div className="text-xs text-slate-400 mb-2">計画稼働日数 {stats.planWorkingDays}日を曜日比率で按分</div>
         <div className="overflow-x-auto">
           <table className="sheet-table">
             <thead>
               <tr>
-                <th className="bg-gray-100 text-left px-2">項目</th>
+                <th className="bg-slate-100 text-left px-2" style={{minWidth:72}}>項目</th>
                 {stats.byDow.map(d => (
-                  <th key={d.dow} className={
-                    d.dow === 6 ? 'row-saturday text-blue-700' :
-                    d.dow === 0 ? 'row-sunday text-red-600' : 'bg-gray-50'
-                  }>{d.dowJa}</th>
+                  <th key={d.dow} className={d.dow===6?'row-saturday':d.dow===0?'row-sunday':'bg-slate-50'}
+                    style={{color: d.dow===6?'#1d4ed8':d.dow===0?'#dc2626':'inherit'}}>
+                    {d.dowJa}
+                  </th>
                 ))}
-                <th className="header-orange">TTL</th>
+                <th className="header-orange">計</th>
               </tr>
             </thead>
             <tbody>
               {[
-                { label: '計画稼働日数', key: 'planDays' as const },
-                { label: '実稼働数', key: 'actualDays' as const },
-                { label: '獲得数', key: 'acquisitions' as const },
-                { label: '生産性', key: 'productivity' as const },
-                { label: '残稼働', key: 'remainingWork' as const },
-                { label: '着地予想', key: 'landingForecast' as const },
-                { label: '稼働割合', key: 'workRatio' as const },
+                {label:'計画稼働', key:'planDays' as const},
+                {label:'実稼働', key:'actualDays' as const},
+                {label:'獲得数', key:'acquisitions' as const},
+                {label:'生産性', key:'productivity' as const},
+                {label:'残稼働', key:'remainingWork' as const},
+                {label:'着地予想', key:'landingForecast' as const},
+                {label:'稼働割合', key:'workRatio' as const},
               ].map(row => (
                 <tr key={row.label}>
-                  <td className="bg-gray-50 text-left px-2 font-medium whitespace-nowrap">{row.label}</td>
+                  <td className="bg-slate-50 text-left px-2 font-medium whitespace-nowrap">{row.label}</td>
                   {stats.byDow.map(d => (
-                    <td key={d.dow} className={
-                      d.dow === 6 ? 'row-saturday' : d.dow === 0 ? 'row-sunday' : ''
-                    }>
-                      {row.key === 'workRatio'
-                        ? pct(d[row.key])
-                        : row.key === 'productivity' || row.key === 'landingForecast'
-                          ? round1(d[row.key] as number)
-                          : d[row.key]}
+                    <td key={d.dow} className={d.dow===6?'row-saturday':d.dow===0?'row-sunday':''}>
+                      {row.key==='workRatio' ? pct(d[row.key])
+                       : row.key==='productivity'||row.key==='landingForecast' ? round1(d[row.key] as number)
+                       : d[row.key]}
                     </td>
                   ))}
                   <td className="font-bold">
-                    {row.key === 'planDays'        ? stats.planWorkingDays :
-                     row.key === 'actualDays'      ? stats.actualWorkingDays :
-                     row.key === 'acquisitions'    ? stats.totalAcquisitions :
-                     row.key === 'productivity'    ? round1(stats.productivity) :
-                     row.key === 'remainingWork'   ? stats.remainingWorkingDays :
-                     row.key === 'landingForecast' ? round1(stats.forecastAcquisitions) :
-                     row.key === 'workRatio'       ? pct(stats.planWorkingDays > 0 ? stats.actualWorkingDays / stats.planWorkingDays : 0) :
-                     ''}
+                    {row.key==='planDays' ? stats.planWorkingDays
+                    :row.key==='actualDays' ? stats.actualWorkingDays
+                    :row.key==='acquisitions' ? stats.totalAcquisitions
+                    :row.key==='productivity' ? round1(stats.productivity)
+                    :row.key==='remainingWork' ? stats.remainingWorkingDays
+                    :row.key==='landingForecast' ? round1(stats.forecastAcquisitions)
+                    :row.key==='workRatio' ? pct(stats.planWorkingDays>0?stats.actualWorkingDays/stats.planWorkingDays:0)
+                    :''}
                   </td>
                 </tr>
               ))}
