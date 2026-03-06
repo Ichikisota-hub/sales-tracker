@@ -228,20 +228,31 @@ export default function AnalysisView({ repId, repName, yearMonth }: Props) {
               <th className="header-green">実稼働数</th>
               <th className="header-green">残稼働</th>
               <th className="header-green">稼働時間</th>
-              <th className="header-green">対面率</th>
-              <th className="header-green">主権対面率</th>
-              <th className="header-green">商談率</th>
-              <th className="header-green">獲得率</th>
             </tr></thead>
             <tbody><tr>
               <td className="font-bold">{round1(stats.productivity)}</td>
               <td>{stats.actualWorkingDays}日</td>
               <td className="text-blue-600 font-bold">{stats.remainingWorkingDays}日</td>
               <td>{stats.totalWorkingHours}h</td>
-              <td>{pct(stats.meetingRate)}</td>
-              <td>{pct(stats.ownerMeetingRate)}</td>
-              <td>{pct(stats.negotiationRate)}</td>
-              <td>{pct(stats.acquisitionRate)}</td>
+            </tr></tbody>
+          </table>
+        </div>
+
+        {/* 各種率 */}
+        <div className="bg-white rounded shadow-sm p-2 mb-2 inline-block align-top ml-2">
+          <div className="text-xs font-bold text-slate-500 mb-1">各種率</div>
+          <table className="sheet-table">
+            <thead><tr>
+              <th className="header-green">対面率</th>
+              <th className="header-green">主権対面率</th>
+              <th className="header-green">商談率</th>
+              <th className="header-green">獲得率</th>
+            </tr></thead>
+            <tbody><tr>
+              <td>{pct(stats.meetingRate)}<div className="text-slate-400" style={{fontSize:9}}>対面÷訪問</div></td>
+              <td>{pct(stats.ownerMeetingRate)}<div className="text-slate-400" style={{fontSize:9}}>主権÷対面</div></td>
+              <td>{pct(stats.negotiationRate)}<div className="text-slate-400" style={{fontSize:9}}>商談÷対面</div></td>
+              <td>{pct(stats.acquisitionRate)}<div className="text-slate-400" style={{fontSize:9}}>獲得÷商談</div></td>
             </tr></tbody>
           </table>
         </div>
