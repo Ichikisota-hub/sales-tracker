@@ -22,19 +22,23 @@ export default function OverallView({ yearMonth }: Props) {
     setLoading(true)
     const [y, m] = yearMonth.split('-')
 
-    const { data: reps } = await supabase.from('sales_reps').select('*').order('display_order')
+    const [{ data: reps }, { data: allRecords }, { data: allPlans }, schedRes] = await Promise.all([
+      supabase.from('sales_reps').select('*').order('display_order'),
+      supabase.from('daily_records').select('*')
+        .gte('record_date', `${y}-${m}-01`).lte('record_date', `${y}-${m}-31`),
+      supabase.from('monthly_plans').select('*').eq('year_month', yearMonth),
+      fetch(`/api/schedule?yearMonth=${yearMonth}`).then(r => r.json()).catch(() => null),
+    ])
+
     if (!reps) { setLoading(false); return }
 
-    const { data: allRecords } = await supabase.from('daily_records').select('*')
-      .gte('record_date', `${y}-${m}-01`).lte('record_date', `${y}-${m}-31`)
-
-    const { data: allPlans } = await supabase.from('monthly_plans').select('*')
-      .eq('year_month', yearMonth)
+    const scheduleMap: Record<string, string[]> = schedRes?.schedule || {}
 
     const result: RepStats[] = reps.map(rep => {
       const records = (allRecords || []).filter(r => r.sales_rep_id === rep.id)
       const plan = (allPlans || []).find(p => p.sales_rep_id === rep.id)
-      const stats = calcMonthlyStats(records, plan?.plan_cases || 0, plan?.plan_working_days || 0, yearMonth)
+      const schedWorkingDays = scheduleMap[rep.name] || []
+      const stats = calcMonthlyStats(records, plan?.plan_cases || 0, plan?.plan_working_days || 0, yearMonth, schedWorkingDays)
       return { rep, stats }
     })
 

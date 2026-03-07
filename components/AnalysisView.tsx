@@ -65,11 +65,17 @@ export default function AnalysisView({ repId, repName, yearMonth }: Props) {
 
   async function loadData() {
     const [y, m] = yearMonth.split('-')
-    const { data: recData } = await supabase.from('daily_records').select('*')
-      .eq('sales_rep_id', repId).gte('record_date', `${y}-${m}-01`).lte('record_date', `${y}-${m}-31`)
-    const { data: planData } = await supabase.from('monthly_plans').select('*')
-      .eq('sales_rep_id', repId).eq('year_month', yearMonth).single()
-    setStats(calcMonthlyStats(recData || [], planData?.plan_cases || 0, planData?.plan_working_days || 0, yearMonth))
+    const [{ data: recData }, { data: planData }, schedRes] = await Promise.all([
+      supabase.from('daily_records').select('*')
+        .eq('sales_rep_id', repId).gte('record_date', `${y}-${m}-01`).lte('record_date', `${y}-${m}-31`),
+      supabase.from('monthly_plans').select('*')
+        .eq('sales_rep_id', repId).eq('year_month', yearMonth).single(),
+      fetch(`/api/schedule?yearMonth=${yearMonth}`).then(r => r.json()).catch(() => null),
+    ])
+    // scheduleから担当者名で稼働日リストを取得
+    const scheduleMap: Record<string, string[]> = schedRes?.schedule || {}
+    const schedWorkingDays = scheduleMap[repName] || []
+    setStats(calcMonthlyStats(recData || [], planData?.plan_cases || 0, planData?.plan_working_days || 0, yearMonth, schedWorkingDays))
   }
 
   if (!stats) return <div className="p-6 text-center text-slate-400 text-sm">読み込み中...</div>

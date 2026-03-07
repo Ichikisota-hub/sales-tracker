@@ -2,39 +2,31 @@ import { DailyRecord } from './supabase'
 import { getDaysArray } from './dateUtils'
 
 export type MonthlyStats = {
-  // 行動量合計
   totalVisits: number
   totalNetMeetings: number
   totalOwnerMeetings: number
   totalNegotiations: number
   totalAcquisitions: number
-  // 平均（稼働日あたり）
   avgVisits: number
   avgNetMeetings: number
   avgOwnerMeetings: number
   avgNegotiations: number
-  // 1件取るためには
   perCaseVisits: number
   perCaseMeetings: number
   perCaseOwnerMeetings: number
   perCaseNegotiations: number
-  // 月間稼働
   actualWorkingDays: number
-  remainingWorkingDays: number  // 残稼働日数 = 計画 - 実績
+  remainingWorkingDays: number
   totalWorkingHours: number
-  // 生産性・率
-  productivity: number       // 生産性 = 実績獲得 ÷ 実稼働日数
+  productivity: number
   meetingRate: number
   ownerMeetingRate: number
   negotiationRate: number
   acquisitionRate: number
-  // 着地予想
-  forecastAcquisitions: number  // 予測着地 = (生産性 × 残稼働日数) + 獲得件数
-  gapToTarget: number           // 目標までの残件数 = 計画件数 - 予測着地
-  gapToTargetActual: number     // 現時点での残件数 = 計画件数 - 現在獲得
-  // 曜日別集計
+  forecastAcquisitions: number
+  gapToTarget: number
+  gapToTargetActual: number
   byDow: DowStats[]
-  // 計画
   planCases: number
   planWorkingDays: number
 }
@@ -42,7 +34,7 @@ export type MonthlyStats = {
 export type DowStats = {
   dow: number
   dowJa: string
-  planDays: number    // 月間計画稼働日数を曜日比率で按分
+  planDays: number
   actualDays: number
   acquisitions: number
   productivity: number
@@ -55,54 +47,58 @@ export function calcMonthlyStats(
   records: DailyRecord[],
   planCases: number,
   planWorkingDays: number,
-  yearMonth: string
+  yearMonth: string,
+  // Googleシートから取得した稼働予定日リスト（省略時は work_status にフォールバック）
+  scheduleWorkingDays?: string[]
 ): MonthlyStats {
   const today = new Date().toISOString().split('T')[0]
   const days = getDaysArray(yearMonth)
 
-  // 実稼働: attendance_status のみで判定（work_status は使わない）
+  // 実稼働: attendance_status === '稼働' のみ
   const workingRecords = records.filter(r => r.attendance_status === '稼働')
-
-  const totalVisits = records.reduce((s, r) => s + (r.visits || 0), 0)
-  const totalNetMeetings = records.reduce((s, r) => s + (r.net_meetings || 0), 0)
+  const totalVisits        = records.reduce((s, r) => s + (r.visits || 0), 0)
+  const totalNetMeetings   = records.reduce((s, r) => s + (r.net_meetings || 0), 0)
   const totalOwnerMeetings = records.reduce((s, r) => s + (r.owner_meetings || 0), 0)
-  const totalNegotiations = records.reduce((s, r) => s + (r.negotiations || 0), 0)
-  const totalAcquisitions = records.reduce((s, r) => s + (r.acquisitions || 0), 0)
-  const actualWorkingDays = workingRecords.length
-  const totalWorkingHours = records.reduce((s, r) => s + (r.working_hours || 0), 0)
+  const totalNegotiations  = records.reduce((s, r) => s + (r.negotiations || 0), 0)
+  const totalAcquisitions  = records.reduce((s, r) => s + (r.acquisitions || 0), 0)
+  const actualWorkingDays  = workingRecords.length
+  const totalWorkingHours  = records.reduce((s, r) => s + (r.working_hours || 0), 0)
 
-  // 生産性 = 実績獲得 ÷ 実稼働日数
   const productivity = actualWorkingDays > 0 ? totalAcquisitions / actualWorkingDays : 0
 
-  // 残稼働日数 = 閲覧日(today)以降の日付で work_status === '稼働' の日数
-  const futureDates = days.filter(d => d.dateStr >= today).map(d => d.dateStr)
-  const remainingWorkingDays = records.filter(r =>
-    futureDates.includes(r.record_date) && r.work_status === '稼働'
-  ).length
+  // 残稼働日数: today以降の日付に限定
+  const futureDates = new Set(days.filter(d => d.dateStr >= today).map(d => d.dateStr))
 
-  // 予測着地 = (生産性 × 残稼働日数) + 現在獲得件数
+  let remainingWorkingDays: number
+  if (scheduleWorkingDays && scheduleWorkingDays.length > 0) {
+    // Googleシートのデータ: today以降で稼働予定の日数
+    remainingWorkingDays = scheduleWorkingDays.filter(d => futureDates.has(d)).length
+  } else {
+    // フォールバック: work_status === '稼働' の日数
+    remainingWorkingDays = records.filter(r =>
+      futureDates.has(r.record_date) && r.work_status === '稼働'
+    ).length
+  }
+
   const forecastAcquisitions = productivity * remainingWorkingDays + totalAcquisitions
+  const gapToTarget          = planCases - forecastAcquisitions
+  const gapToTargetActual    = planCases - totalAcquisitions
 
-  // 目標までの残件数
-  const gapToTarget = planCases - forecastAcquisitions
-  const gapToTargetActual = planCases - totalAcquisitions
+  const meetingRate      = totalVisits > 0       ? totalNetMeetings    / totalVisits       : 0
+  const ownerMeetingRate = totalNetMeetings > 0  ? totalOwnerMeetings  / totalNetMeetings  : 0
+  const negotiationRate  = totalNetMeetings > 0  ? totalNegotiations   / totalNetMeetings  : 0
+  const acquisitionRate  = totalNegotiations > 0 ? totalAcquisitions   / totalNegotiations : 0
 
-  const meetingRate      = totalVisits > 0          ? totalNetMeetings    / totalVisits          : 0
-  const ownerMeetingRate = totalNetMeetings > 0     ? totalOwnerMeetings  / totalNetMeetings     : 0
-  const negotiationRate  = totalNetMeetings > 0     ? totalNegotiations   / totalNetMeetings     : 0
-  const acquisitionRate  = totalNegotiations > 0    ? totalAcquisitions   / totalNegotiations    : 0
-
-  const avgVisits = actualWorkingDays > 0 ? totalVisits / actualWorkingDays : 0
-  const avgNetMeetings = actualWorkingDays > 0 ? totalNetMeetings / actualWorkingDays : 0
+  const avgVisits        = actualWorkingDays > 0 ? totalVisits        / actualWorkingDays : 0
+  const avgNetMeetings   = actualWorkingDays > 0 ? totalNetMeetings   / actualWorkingDays : 0
   const avgOwnerMeetings = actualWorkingDays > 0 ? totalOwnerMeetings / actualWorkingDays : 0
-  const avgNegotiations = actualWorkingDays > 0 ? totalNegotiations / actualWorkingDays : 0
+  const avgNegotiations  = actualWorkingDays > 0 ? totalNegotiations  / actualWorkingDays : 0
 
-  const perCaseVisits = totalAcquisitions > 0 ? totalVisits / totalAcquisitions : 0
-  const perCaseMeetings = totalAcquisitions > 0 ? totalNetMeetings / totalAcquisitions : 0
+  const perCaseVisits        = totalAcquisitions > 0 ? totalVisits        / totalAcquisitions : 0
+  const perCaseMeetings      = totalAcquisitions > 0 ? totalNetMeetings   / totalAcquisitions : 0
   const perCaseOwnerMeetings = totalAcquisitions > 0 ? totalOwnerMeetings / totalAcquisitions : 0
-  const perCaseNegotiations = totalAcquisitions > 0 ? totalNegotiations / totalAcquisitions : 0
+  const perCaseNegotiations  = totalAcquisitions > 0 ? totalNegotiations  / totalAcquisitions : 0
 
-  // 曜日別集計（実稼働は attendance_status のみ）
   const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土']
   const totalCalendarDays = days.length
 
@@ -116,16 +112,20 @@ export function calcMonthlyStats(
       const d = days.find(dd => dd.dateStr === r.record_date)
       return d?.dow === dow
     })
-    // 曜日別残稼働: today以降で work_status === '稼働' の日
-    const dowFutureDates = days.filter(d => d.dow === dow && d.dateStr >= today).map(d => d.dateStr)
+    const dowFutureDates = new Set(days.filter(d => d.dow === dow && d.dateStr >= today).map(d => d.dateStr))
     const dowWorking = dowRecords.filter(r => r.attendance_status === '稼働')
-    const acq = dowRecords.reduce((s, r) => s + (r.acquisitions || 0), 0)
+    const acq        = dowRecords.reduce((s, r) => s + (r.acquisitions || 0), 0)
     const actualDays = dowWorking.length
-    const prod = actualDays > 0 ? acq / actualDays : 0
-    const remaining = records.filter(r =>
-      dowFutureDates.includes(r.record_date) && r.work_status === '稼働'
-    ).length
-    const landing = acq + prod * remaining
+    const prod       = actualDays > 0 ? acq / actualDays : 0
+
+    let remaining: number
+    if (scheduleWorkingDays && scheduleWorkingDays.length > 0) {
+      remaining = scheduleWorkingDays.filter(d => dowFutureDates.has(d)).length
+    } else {
+      remaining = records.filter(r =>
+        dowFutureDates.has(r.record_date) && r.work_status === '稼働'
+      ).length
+    }
 
     return {
       dow,
@@ -135,7 +135,7 @@ export function calcMonthlyStats(
       acquisitions: acq,
       productivity: prod,
       remainingWork: remaining,
-      landingForecast: landing,
+      landingForecast: acq + prod * remaining,
       workRatio: planDays > 0 ? actualDays / planDays : 0,
     }
   })
