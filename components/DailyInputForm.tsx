@@ -141,7 +141,7 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
   }
 
   const selectedDay = days.find(d => d.dateStr === selectedDate)
-  const isWorking = record.attendance_status === '稼働' || record.work_status === '稼働'
+  const isWorking = record.attendance_status === '稼働'
   const idx = days.findIndex(d => d.dateStr === selectedDate)
   const isToday = selectedDate === today
 

@@ -60,9 +60,8 @@ export function calcMonthlyStats(
   const today = new Date().toISOString().split('T')[0]
   const days = getDaysArray(yearMonth)
 
-  const workingRecords = records.filter(r =>
-    r.attendance_status === '稼働' || r.work_status === '稼働'
-  )
+  // 実稼働: attendance_status のみで判定（work_status は使わない）
+  const workingRecords = records.filter(r => r.attendance_status === '稼働')
 
   const totalVisits = records.reduce((s, r) => s + (r.visits || 0), 0)
   const totalNetMeetings = records.reduce((s, r) => s + (r.net_meetings || 0), 0)
@@ -75,8 +74,11 @@ export function calcMonthlyStats(
   // 生産性 = 実績獲得 ÷ 実稼働日数
   const productivity = actualWorkingDays > 0 ? totalAcquisitions / actualWorkingDays : 0
 
-  // 残稼働日数 = 計画稼働日数 - 実稼働日数
-  const remainingWorkingDays = Math.max(0, planWorkingDays - actualWorkingDays)
+  // 残稼働日数 = 閲覧日(today)以降の日付で work_status === '稼働' の日数
+  const futureDates = days.filter(d => d.dateStr >= today).map(d => d.dateStr)
+  const remainingWorkingDays = records.filter(r =>
+    futureDates.includes(r.record_date) && r.work_status === '稼働'
+  ).length
 
   // 予測着地 = (生産性 × 残稼働日数) + 現在獲得件数
   const forecastAcquisitions = productivity * remainingWorkingDays + totalAcquisitions
@@ -85,10 +87,10 @@ export function calcMonthlyStats(
   const gapToTarget = planCases - forecastAcquisitions
   const gapToTargetActual = planCases - totalAcquisitions
 
-  const meetingRate      = totalVisits > 0          ? totalNetMeetings    / totalVisits          : 0  // 対面率     = 対面数 ÷ 訪問数
-  const ownerMeetingRate = totalNetMeetings > 0     ? totalOwnerMeetings  / totalNetMeetings     : 0  // 主権対面率 = 主権対面数 ÷ 対面数
-  const negotiationRate  = totalNetMeetings > 0     ? totalNegotiations   / totalNetMeetings     : 0  // 商談率     = 商談数 ÷ 対面数
-  const acquisitionRate  = totalNegotiations > 0    ? totalAcquisitions   / totalNegotiations    : 0  // 獲得率     = 獲得数 ÷ 商談数
+  const meetingRate      = totalVisits > 0          ? totalNetMeetings    / totalVisits          : 0
+  const ownerMeetingRate = totalNetMeetings > 0     ? totalOwnerMeetings  / totalNetMeetings     : 0
+  const negotiationRate  = totalNetMeetings > 0     ? totalNegotiations   / totalNetMeetings     : 0
+  const acquisitionRate  = totalNegotiations > 0    ? totalAcquisitions   / totalNegotiations    : 0
 
   const avgVisits = actualWorkingDays > 0 ? totalVisits / actualWorkingDays : 0
   const avgNetMeetings = actualWorkingDays > 0 ? totalNetMeetings / actualWorkingDays : 0
@@ -100,14 +102,12 @@ export function calcMonthlyStats(
   const perCaseOwnerMeetings = totalAcquisitions > 0 ? totalOwnerMeetings / totalAcquisitions : 0
   const perCaseNegotiations = totalAcquisitions > 0 ? totalNegotiations / totalAcquisitions : 0
 
-  // 曜日別集計
-  // 計画稼働日数を曜日ごとの日数比率で按分
+  // 曜日別集計（実稼働は attendance_status のみ）
   const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土']
   const totalCalendarDays = days.length
 
   const byDow: DowStats[] = [1, 2, 3, 4, 5, 6, 0].map(dow => {
     const dowCalendarDays = days.filter(d => d.dow === dow).length
-    // 計画稼働日数を曜日の日数比率で按分
     const planDays = planWorkingDays > 0
       ? Math.round(planWorkingDays * dowCalendarDays / totalCalendarDays)
       : dowCalendarDays
@@ -116,11 +116,15 @@ export function calcMonthlyStats(
       const d = days.find(dd => dd.dateStr === r.record_date)
       return d?.dow === dow
     })
-    const dowWorking = dowRecords.filter(r => r.attendance_status === '稼働' || r.work_status === '稼働')
+    // 曜日別残稼働: today以降で work_status === '稼働' の日
+    const dowFutureDates = days.filter(d => d.dow === dow && d.dateStr >= today).map(d => d.dateStr)
+    const dowWorking = dowRecords.filter(r => r.attendance_status === '稼働')
     const acq = dowRecords.reduce((s, r) => s + (r.acquisitions || 0), 0)
     const actualDays = dowWorking.length
     const prod = actualDays > 0 ? acq / actualDays : 0
-    const remaining = Math.max(0, planDays - actualDays)
+    const remaining = records.filter(r =>
+      dowFutureDates.includes(r.record_date) && r.work_status === '稼働'
+    ).length
     const landing = acq + prod * remaining
 
     return {

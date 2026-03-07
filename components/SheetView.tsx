@@ -196,7 +196,7 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
           <tbody>
             {days.map((d, idx) => {
               const rec = records[d.dateStr] || getRow(d.dateStr)
-              const isWorking = rec.attendance_status === '稼働' || rec.work_status === '稼働'
+              const isWorking = rec.attendance_status === '稼働'
               if (isWorking) cumAcq += Number(rec.acquisitions) || 0
               const progress = calcProgress(idx, days.length, plan?.plan_cases || 0, cumAcq)
               const weekend = d.dow === 0 || d.dow === 6
