@@ -265,7 +265,7 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
               <td className={totals.acquisitions-(plan?.plan_cases||0)>=0?'progress-positive':'progress-negative'}>
                 {totals.acquisitions-(plan?.plan_cases||0)}
               </td>
-              <td>{totals.workingDays}</td>
+              <td>{plan?.plan_working_days||0}</td>
               <td>{totals.workingDays}</td>
               <td>{totals.workingHours}</td>
               <td style={{borderLeft:'2px solid #333'}}>{totals.visits}</td>
