@@ -213,6 +213,7 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
                   <td className={progress>0?'progress-positive':progress<0?'progress-negative':'progress-zero'}>
                     {isWorking ? progress : ''}
                   </td>
+                  {/* 計画稼働（月初入力・入力欄） */}
                   <td className="bg-blue-50">
                     <select value={rec.work_status||''} onChange={e => handleChange(d.dateStr,'work_status',e.target.value)}
                       className="text-xs w-full bg-transparent border-none outline-none cursor-pointer" style={{minWidth:48}}>
@@ -220,6 +221,7 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
                       {WORK_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
                     </select>
                   </td>
+                  {/* 出勤状態（実稼働・入力欄） */}
                   <td style={{background:'#4472c4',color:'white'}}>
                     <select value={rec.attendance_status||''} onChange={e => handleChange(d.dateStr,'attendance_status',e.target.value)}
                       className="text-xs w-full border-none outline-none cursor-pointer bg-transparent text-white" style={{minWidth:48}}>
