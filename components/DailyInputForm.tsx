@@ -10,12 +10,36 @@ const HOURS = [3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10]
 type Props = { repId: string; repName: string; yearMonth: string }
 
 const COUNTERS = [
-  { label: '訪問',      field: 'visits'        as keyof DailyRecord, plus: 'counter-btn-plus-blue' },
-  { label: 'ネット対面', field: 'net_meetings'   as keyof DailyRecord, plus: 'counter-btn-plus-indigo' },
-  { label: '主権対面',   field: 'owner_meetings' as keyof DailyRecord, plus: 'counter-btn-plus-purple' },
-  { label: '商談',      field: 'negotiations'   as keyof DailyRecord, plus: 'counter-btn-plus-orange' },
-  { label: '獲得',      field: 'acquisitions'   as keyof DailyRecord, plus: 'counter-btn-plus-green' },
+  { label: '訪問',       field: 'visits'         as keyof DailyRecord, plus: 'counter-btn-plus-blue' },
+  { label: 'ネット対面', field: 'net_meetings'    as keyof DailyRecord, plus: 'counter-btn-plus-indigo' },
+  { label: '主権対面',   field: 'owner_meetings'  as keyof DailyRecord, plus: 'counter-btn-plus-purple' },
+  { label: '商談',       field: 'negotiations'    as keyof DailyRecord, plus: 'counter-btn-plus-orange' },
+  { label: '獲得',       field: 'acquisitions'    as keyof DailyRecord, plus: 'counter-btn-plus-green' },
 ]
+
+// localStorage キー（担当者×日付で一意）
+function draftKey(repId: string, dateStr: string) {
+  return `draft__${repId}__${dateStr}`
+}
+
+function loadDraft(repId: string, dateStr: string): Partial<DailyRecord> | null {
+  try {
+    const raw = localStorage.getItem(draftKey(repId, dateStr))
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function saveDraft(repId: string, dateStr: string, record: Partial<DailyRecord>) {
+  try {
+    localStorage.setItem(draftKey(repId, dateStr), JSON.stringify(record))
+  } catch {}
+}
+
+function clearDraft(repId: string, dateStr: string) {
+  try {
+    localStorage.removeItem(draftKey(repId, dateStr))
+  } catch {}
+}
 
 export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
   const days = getDaysArray(yearMonth)
@@ -25,11 +49,17 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
   const [selectedDate, setSelectedDate] = useState(defaultDay.dateStr)
   const [plan, setPlan] = useState<MonthlyPlan | null>(null)
   const [record, setRecord] = useState<Partial<DailyRecord>>({})
+  const [hasDraft, setHasDraft] = useState(false)
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { loadPlan() }, [repId, yearMonth])
-  useEffect(() => { loadRecord() }, [repId, selectedDate])
+
+  // 日付 or 担当者が変わったら読み込み直し
+  useEffect(() => {
+    setSaved(false)
+    loadRecord()
+  }, [repId, selectedDate])
 
   async function loadPlan() {
     const { data } = await supabase.from('monthly_plans').select('*')
@@ -38,13 +68,24 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
   }
 
   async function loadRecord() {
-    setSaved(false)
+    // 1. まずDBから取得
     const { data } = await supabase.from('daily_records').select('*')
       .eq('sales_rep_id', repId).eq('record_date', selectedDate).single()
-    setRecord(data || {
+
+    const dbRecord: Partial<DailyRecord> = data || {
       work_status: '', attendance_status: '', working_hours: 0,
       visits: 0, net_meetings: 0, owner_meetings: 0, negotiations: 0, acquisitions: 0,
-    })
+    }
+
+    // 2. ローカルに未保存の下書きがあればそちらを優先
+    const draft = loadDraft(repId, selectedDate)
+    if (draft) {
+      setRecord(draft)
+      setHasDraft(true)
+    } else {
+      setRecord(dbRecord)
+      setHasDraft(false)
+    }
   }
 
   async function handleSave() {
@@ -53,6 +94,9 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
       ...record, sales_rep_id: repId, record_date: selectedDate,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'sales_rep_id,record_date' })
+    // 保存成功したら下書きを削除
+    clearDraft(repId, selectedDate)
+    setHasDraft(false)
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
@@ -65,32 +109,68 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
       { onConflict: 'sales_rep_id,year_month' })
   }
 
+  // フィールド変更 → stateとlocalStorage両方に保存
   function set(field: keyof DailyRecord, value: string | number) {
-    setRecord(prev => ({ ...prev, [field]: value }))
+    setRecord(prev => {
+      const next = { ...prev, [field]: value }
+      saveDraft(repId, selectedDate, next)
+      setHasDraft(true)
+      return next
+    })
     setSaved(false)
   }
 
   function increment(field: keyof DailyRecord) {
-    setRecord(prev => ({ ...prev, [field]: ((prev[field] as number) || 0) + 1 }))
+    setRecord(prev => {
+      const next = { ...prev, [field]: ((prev[field] as number) || 0) + 1 }
+      saveDraft(repId, selectedDate, next)
+      setHasDraft(true)
+      return next
+    })
     setSaved(false)
   }
 
   function decrement(field: keyof DailyRecord) {
-    setRecord(prev => ({ ...prev, [field]: Math.max(0, ((prev[field] as number) || 0) - 1) }))
+    setRecord(prev => {
+      const next = { ...prev, [field]: Math.max(0, ((prev[field] as number) || 0) - 1) }
+      saveDraft(repId, selectedDate, next)
+      setHasDraft(true)
+      return next
+    })
     setSaved(false)
   }
 
   const selectedDay = days.find(d => d.dateStr === selectedDate)
   const isWorking = record.attendance_status === '稼働' || record.work_status === '稼働'
   const idx = days.findIndex(d => d.dateStr === selectedDate)
+  const isToday = selectedDate === today
 
   return (
     <div>
 
+      {/* ── 担当者ヘッダー（大きく目立つ） ── */}
+      <div className="mobile-card" style={{background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)'}}>
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white text-xl font-black flex-shrink-0">
+            {repName.charAt(0)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-slate-400 font-medium">入力中の担当者</div>
+            <div className="text-xl font-black text-white truncate">{repName}</div>
+          </div>
+          {isToday && (
+            <span className="text-xs font-bold bg-blue-500 text-white px-2 py-1 rounded-full flex-shrink-0">今日</span>
+          )}
+        </div>
+      </div>
+
       {/* ── 日付ナビ ── */}
       <div className="mobile-card">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-bold text-slate-400">{repName}</span>
+          {hasDraft && !saved && (
+            <span className="text-xs font-bold text-amber-500">📝 未保存の入力あり</span>
+          )}
+          {!hasDraft && <span className="text-xs text-slate-300">　</span>}
           {selectedDay && (
             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
               selectedDay.dow === 0 ? 'bg-red-100 text-red-600' :
@@ -213,7 +293,7 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
           disabled={saving}
           className={`save-btn ${saved ? 'save-btn-saved' : saving ? 'save-btn-saving' : 'save-btn-default'}`}
         >
-          {saved ? '✓ 保存しました！' : saving ? '保存中...' : '保存する'}
+          {saved ? '✓ 保存しました！' : saving ? '保存中...' : hasDraft ? '💾 保存する（未保存あり）' : '保存する'}
         </button>
       </div>
     </div>
