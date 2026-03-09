@@ -5,22 +5,18 @@ import { supabase, SalesRep } from '@/lib/supabase'
 import { calcMonthlyStats, round1, MonthlyStats } from '@/lib/calcUtils'
 
 type Props = { yearMonth: string }
-
 type RepStats = { rep: SalesRep; stats: MonthlyStats }
-type AreaStat = { pref: string; city: string; count: number; reps: string[] }
 
 export default function OverallView({ yearMonth }: Props) {
   const [data, setData] = useState<RepStats[]>([])
   const [loading, setLoading] = useState(true)
   const [sortKey, setSortKey] = useState<'name' | 'forecast' | 'acquisitions' | 'productivity'>('forecast')
-  const [areaStats, setAreaStats] = useState<AreaStat[]>([])
 
   useEffect(() => { loadAll() }, [yearMonth])
 
   async function loadAll() {
     setLoading(true)
     const [y, m] = yearMonth.split('-')
-
     const [{ data: reps }, { data: allRecords }, { data: allPlans }, schedRes] = await Promise.all([
       supabase.from('sales_reps').select('*').order('display_order'),
       supabase.from('daily_records').select('*')
@@ -28,11 +24,8 @@ export default function OverallView({ yearMonth }: Props) {
       supabase.from('monthly_plans').select('*').eq('year_month', yearMonth),
       fetch(`/api/schedule?yearMonth=${yearMonth}`).then(r => r.json()).catch(() => null),
     ])
-
     if (!reps) { setLoading(false); return }
-
     const scheduleMap: Record<string, string[]> = schedRes?.schedule || {}
-
     const result: RepStats[] = reps.map(rep => {
       const records = (allRecords || []).filter(r => r.sales_rep_id === rep.id)
       const plan = (allPlans || []).find(p => p.sales_rep_id === rep.id)
@@ -40,26 +33,6 @@ export default function OverallView({ yearMonth }: Props) {
       const stats = calcMonthlyStats(records, plan?.plan_cases || 0, plan?.plan_working_days || 0, yearMonth, schedWorkingDays)
       return { rep, stats }
     })
-
-    // エリア別成約集計
-    const areaMap: Record<string, { count: number; repSet: Set<string> }> = {}
-    ;(allRecords || []).forEach(r => {
-      if ((r.acquisitions || 0) <= 0) return
-      if (!r.area_pref && !r.area_city) return
-      const key = `${r.area_pref || ''}__${r.area_city || ''}`
-      if (!areaMap[key]) areaMap[key] = { count: 0, repSet: new Set() }
-      areaMap[key].count += Number(r.acquisitions)
-      const rep = reps.find(rep => rep.id === r.sales_rep_id)
-      if (rep) areaMap[key].repSet.add(rep.name)
-    })
-    const areaSorted: AreaStat[] = Object.entries(areaMap)
-      .map(([key, val]) => {
-        const [pref, city] = key.split('__')
-        return { pref, city, count: val.count, reps: Array.from(val.repSet) }
-      })
-      .sort((a, b) => b.count - a.count)
-    setAreaStats(areaSorted)
-
     setData(result)
     setLoading(false)
   }
@@ -80,6 +53,12 @@ export default function OverallView({ yearMonth }: Props) {
   const teamWorking = data.reduce((s, d) => s + d.stats.actualWorkingDays, 0)
   const teamProductivity = teamWorking > 0 ? teamAcq / teamWorking : 0
 
+  // 獲得件数ランキング（降順）
+  const acqRanking = [...data]
+    .filter(d => d.stats.totalAcquisitions > 0)
+    .sort((a, b) => b.stats.totalAcquisitions - a.stats.totalAcquisitions)
+  const maxAcq = acqRanking[0]?.stats.totalAcquisitions || 1
+
   const SortBtn = ({ k, label }: { k: typeof sortKey; label: string }) => (
     <button onClick={() => setSortKey(k)}
       className={`text-xs px-2 py-1 rounded font-medium transition-colors ${
@@ -88,17 +67,21 @@ export default function OverallView({ yearMonth }: Props) {
     >{label}</button>
   )
 
-  // エリアカードの色
-  const MEDAL = ['🥇', '🥈', '🥉']
+  const RANK_COLORS = [
+    { bg: 'linear-gradient(135deg,#f59e0b,#ef4444)', text: 'text-yellow-100', bar: 'linear-gradient(90deg,#f59e0b,#ef4444)' },
+    { bg: 'linear-gradient(135deg,#64748b,#94a3b8)', text: 'text-slate-100', bar: 'linear-gradient(90deg,#64748b,#94a3b8)' },
+    { bg: 'linear-gradient(135deg,#92400e,#b45309)', text: 'text-amber-100', bar: 'linear-gradient(90deg,#92400e,#b45309)' },
+  ]
 
   return (
     <div>
       {/* ===== MOBILE ===== */}
       <div className="md:hidden space-y-3">
+
         {/* チームサマリー */}
         <div className="mobile-card">
           <div className="mobile-card-label">チーム合計</div>
-          <div className="grid grid-cols-2 gap-2 mb-2">
+          <div className="grid grid-cols-2 gap-2">
             <div className={`rounded-xl p-3 text-center text-white ${teamForecast >= teamPlan ? 'bg-emerald-500' : 'bg-red-500'}`}>
               <div className="text-xs font-bold opacity-80">全体着地予想</div>
               <div className="text-3xl font-black leading-tight">{round1(teamForecast)}</div>
@@ -112,87 +95,97 @@ export default function OverallView({ yearMonth }: Props) {
           </div>
         </div>
 
-        {/* エリア別成約ランキング */}
-        <div className="mobile-card overflow-hidden" style={{background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)'}}>
-          <div className="text-xs font-bold text-blue-300 mb-3 tracking-widest uppercase">📍 エリア別成約ランキング</div>
+        {/* 獲得件数ランキング */}
+        <div className="rounded-2xl overflow-hidden" style={{background:'linear-gradient(160deg,#0f172a 0%,#1e1b4b 100%)'}}>
+          <div className="px-4 pt-4 pb-1">
+            <div className="text-xs font-bold text-indigo-300 tracking-widest uppercase mb-1">🏆 獲得件数ランキング</div>
+            <div className="text-xs text-slate-500 mb-4">{yearMonth.replace('-','年')}月 現在</div>
 
-          {areaStats.length === 0 ? (
-            <div className="text-xs text-slate-500 text-center py-4">稼働エリアを入力すると表示されます</div>
-          ) : (
-            <>
-              {/* TOP3 表彰台 */}
-              {areaStats.length >= 1 && (
-                <div className="flex items-end justify-center gap-2 mb-4">
-                  {/* 2位 */}
-                  {areaStats[1] && (
-                    <div className="flex-1 flex flex-col items-center">
-                      <div className="text-2xl mb-1">🥈</div>
-                      <div className="w-full rounded-t-xl bg-slate-400 py-3 px-2 text-center" style={{minHeight:64}}>
-                        <div className="text-lg font-black text-white leading-tight">{areaStats[1].count}<span className="text-xs font-normal opacity-70">件</span></div>
-                        <div className="text-xs text-slate-200 font-bold truncate">{areaStats[1].city || areaStats[1].pref || '未設定'}</div>
-                        <div className="text-xs text-slate-300 truncate">{areaStats[1].pref}</div>
-                      </div>
-                    </div>
-                  )}
-                  {/* 1位 */}
-                  <div className="flex-1 flex flex-col items-center" style={{transform:'scale(1.08)'}}>
-                    <div className="text-3xl mb-1">🥇</div>
-                    <div className="w-full rounded-t-xl py-4 px-2 text-center" style={{minHeight:80, background:'linear-gradient(135deg,#f59e0b,#ef4444)'}}>
-                      <div className="text-2xl font-black text-white leading-tight">{areaStats[0].count}<span className="text-sm font-normal opacity-80">件</span></div>
-                      <div className="text-sm text-yellow-100 font-black truncate">{areaStats[0].city || areaStats[0].pref || '未設定'}</div>
-                      <div className="text-xs text-yellow-200 truncate">{areaStats[0].pref}</div>
-                    </div>
-                  </div>
-                  {/* 3位 */}
-                  {areaStats[2] && (
-                    <div className="flex-1 flex flex-col items-center">
-                      <div className="text-2xl mb-1">🥉</div>
-                      <div className="w-full rounded-t-xl bg-amber-700 py-2 px-2 text-center" style={{minHeight:52}}>
-                        <div className="text-base font-black text-white leading-tight">{areaStats[2].count}<span className="text-xs font-normal opacity-70">件</span></div>
-                        <div className="text-xs text-amber-200 font-bold truncate">{areaStats[2].city || areaStats[2].pref || '未設定'}</div>
-                        <div className="text-xs text-amber-300 truncate">{areaStats[2].pref}</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* 4位以下 */}
-              {areaStats.length > 3 && (
-                <div className="space-y-1.5">
-                  {areaStats.slice(3, 10).map((a, i) => {
-                    const rank = i + 4
-                    const maxCount = areaStats[0].count
-                    const pct = maxCount > 0 ? (a.count / maxCount) * 100 : 0
-                    return (
-                      <div key={i} className="flex items-center gap-2">
-                        <span className="text-xs font-black text-slate-400 w-4 text-center">{rank}</span>
-                        <div className="flex-1 relative">
-                          <div className="absolute inset-0 rounded-lg opacity-30" style={{width:`${pct}%`, background:'linear-gradient(90deg,#3b82f6,#6366f1)'}} />
-                          <div className="relative flex items-center justify-between px-2 py-1.5 rounded-lg border border-slate-700">
-                            <span className="text-xs font-bold text-slate-200 truncate">
-                              {a.pref && a.city ? `${a.pref}›${a.city}` : a.pref || a.city || '未設定'}
-                            </span>
-                            <span className="text-sm font-black text-blue-300 ml-2">{a.count}<span className="text-xs font-normal text-slate-500">件</span></span>
+            {acqRanking.length === 0 ? (
+              <div className="text-xs text-slate-600 text-center py-6">まだデータがありません</div>
+            ) : (
+              <>
+                {/* TOP3 表彰台 */}
+                {acqRanking.length >= 1 && (
+                  <div className="flex items-end justify-center gap-2 mb-5">
+                    {/* 2位 */}
+                    {acqRanking[1] ? (
+                      <div className="flex flex-col items-center flex-1">
+                        <div className="text-2xl mb-1">🥈</div>
+                        <div className="text-xs text-slate-400 font-bold mb-1 truncate w-full text-center">
+                          {acqRanking[1].rep.name}
+                        </div>
+                        <div className="w-full rounded-t-xl text-center py-3"
+                          style={{background: RANK_COLORS[1].bg, minHeight: 64}}>
+                          <div className="text-2xl font-black text-white leading-tight">
+                            {acqRanking[1].stats.totalAcquisitions}
                           </div>
+                          <div className="text-xs text-slate-200 opacity-80">件</div>
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
-              )}
+                    ) : <div className="flex-1" />}
 
-              {/* 担当者内訳（1位） */}
-              <div className="mt-3 pt-3 border-t border-slate-700">
-                <div className="text-xs text-slate-500 mb-1">🏆 1位の担当者</div>
-                <div className="flex flex-wrap gap-1">
-                  {areaStats[0].reps.map((r, i) => (
-                    <span key={i} className="text-xs bg-yellow-500 text-yellow-900 font-bold px-2 py-0.5 rounded-full">{r}</span>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
+                    {/* 1位 */}
+                    <div className="flex flex-col items-center flex-1" style={{transform:'scale(1.1)', transformOrigin:'bottom center'}}>
+                      <div className="text-3xl mb-1">🥇</div>
+                      <div className="text-sm text-yellow-300 font-black mb-1 truncate w-full text-center">
+                        {acqRanking[0].rep.name}
+                      </div>
+                      <div className="w-full rounded-t-xl text-center py-4"
+                        style={{background: RANK_COLORS[0].bg, minHeight: 84}}>
+                        <div className="text-4xl font-black text-white leading-tight">
+                          {acqRanking[0].stats.totalAcquisitions}
+                        </div>
+                        <div className="text-sm text-yellow-200 opacity-80">件</div>
+                      </div>
+                    </div>
+
+                    {/* 3位 */}
+                    {acqRanking[2] ? (
+                      <div className="flex flex-col items-center flex-1">
+                        <div className="text-2xl mb-1">🥉</div>
+                        <div className="text-xs text-slate-400 font-bold mb-1 truncate w-full text-center">
+                          {acqRanking[2].rep.name}
+                        </div>
+                        <div className="w-full rounded-t-xl text-center py-2"
+                          style={{background: RANK_COLORS[2].bg, minHeight: 52}}>
+                          <div className="text-xl font-black text-white leading-tight">
+                            {acqRanking[2].stats.totalAcquisitions}
+                          </div>
+                          <div className="text-xs text-amber-200 opacity-80">件</div>
+                        </div>
+                      </div>
+                    ) : <div className="flex-1" />}
+                  </div>
+                )}
+
+                {/* 4位以下 バー */}
+                {acqRanking.length > 3 && (
+                  <div className="space-y-2 pb-4">
+                    {acqRanking.slice(3).map((d, i) => {
+                      const pct = (d.stats.totalAcquisitions / maxAcq) * 100
+                      return (
+                        <div key={d.rep.id} className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500 font-black w-5 text-center">{i + 4}</span>
+                          <div className="flex-1 relative rounded-lg overflow-hidden border border-slate-700/50" style={{height:32}}>
+                            <div className="absolute inset-0 bg-slate-800/60 rounded-lg" />
+                            <div className="absolute inset-y-0 left-0 rounded-lg"
+                              style={{width:`${pct}%`, background:'linear-gradient(90deg,#3730a3,#6366f1)', opacity:0.7}} />
+                            <div className="relative h-full flex items-center justify-between px-3">
+                              <span className="text-xs font-bold text-slate-200">{d.rep.name}</span>
+                              <span className="text-sm font-black text-indigo-300">
+                                {d.stats.totalAcquisitions}<span className="text-xs font-normal text-slate-500 ml-0.5">件</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
         {/* 並び替え */}
@@ -241,7 +234,6 @@ export default function OverallView({ yearMonth }: Props) {
                   <div className="text-lg font-black text-blue-600">{round1(stats.productivity)}</div>
                 </div>
               </div>
-              {/* 1日あたり必要件数 */}
               {hasData && !achieved && neededPerDay !== null && (
                 <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-lg px-3 py-1.5 mb-2">
                   <span className="text-xs text-orange-700 font-medium">残{stats.remainingWorkingDays}日で達成するには</span>
@@ -266,76 +258,72 @@ export default function OverallView({ yearMonth }: Props) {
 
       {/* ===== PC ===== */}
       <div className="hidden md:block">
-        <div className="text-xs font-bold text-slate-600 mb-2">全体着地 — {yearMonth}</div>
+        <div className="text-xs font-bold text-slate-600 mb-3">全体着地 — {yearMonth}</div>
 
-        <div className="flex gap-2 mb-3 flex-wrap items-start">
+        <div className="flex gap-3 mb-4 flex-wrap items-start">
           {/* チーム合計 */}
-          <div className={`${teamForecast >= teamPlan ? 'bg-emerald-500' : 'bg-red-600'} text-white rounded px-4 py-2 text-center`}>
+          <div className={`${teamForecast >= teamPlan ? 'bg-emerald-500' : 'bg-red-600'} text-white rounded-xl px-5 py-3 text-center`}>
             <div className="text-xs font-bold opacity-80">チーム着地予想</div>
-            <div className="text-3xl font-black leading-tight">{round1(teamForecast)}</div>
+            <div className="text-4xl font-black leading-tight">{round1(teamForecast)}</div>
             <div className="text-xs opacity-70">目標 {teamPlan}件</div>
           </div>
-          <div className="bg-slate-700 text-white rounded px-4 py-2 text-center">
+          <div className="bg-slate-700 text-white rounded-xl px-5 py-3 text-center">
             <div className="text-xs font-bold opacity-80">現在獲得合計</div>
-            <div className="text-3xl font-black leading-tight">{teamAcq}</div>
+            <div className="text-4xl font-black leading-tight">{teamAcq}</div>
             <div className="text-xs opacity-70">チーム生産性 {round1(teamProductivity)}</div>
           </div>
 
-          {/* エリア別ランキング（PC） */}
-          {areaStats.length > 0 && (
-            <div className="rounded-xl overflow-hidden min-w-[260px]" style={{background:'linear-gradient(135deg,#0f172a,#1e3a5f)'}}>
-              <div className="px-4 pt-3 pb-1">
-                <div className="text-xs font-bold text-blue-300 tracking-widest uppercase mb-2">📍 エリア別成約ランキング</div>
-                {/* TOP3 */}
-                <div className="flex items-end gap-1 justify-center mb-2">
-                  {areaStats[1] && (
-                    <div className="flex flex-col items-center flex-1">
-                      <div className="text-xl">🥈</div>
-                      <div className="w-full rounded-t-lg bg-slate-500 text-center py-2 px-1">
-                        <div className="text-base font-black text-white">{areaStats[1].count}<span className="text-xs opacity-60">件</span></div>
-                        <div className="text-xs text-slate-200 font-bold truncate">{areaStats[1].city || areaStats[1].pref || '?'}</div>
-                      </div>
-                    </div>
-                  )}
-                  <div className="flex flex-col items-center flex-1" style={{transform:'scale(1.1)', transformOrigin:'bottom'}}>
-                    <div className="text-2xl">🥇</div>
-                    <div className="w-full rounded-t-lg text-center py-3 px-1" style={{background:'linear-gradient(135deg,#f59e0b,#ef4444)'}}>
-                      <div className="text-xl font-black text-white">{areaStats[0].count}<span className="text-sm opacity-70">件</span></div>
-                      <div className="text-xs text-yellow-100 font-black truncate">{areaStats[0].city || areaStats[0].pref || '?'}</div>
-                    </div>
-                  </div>
-                  {areaStats[2] && (
-                    <div className="flex flex-col items-center flex-1">
-                      <div className="text-xl">🥉</div>
-                      <div className="w-full rounded-t-lg bg-amber-700 text-center py-1.5 px-1">
-                        <div className="text-sm font-black text-white">{areaStats[2].count}<span className="text-xs opacity-60">件</span></div>
-                        <div className="text-xs text-amber-200 font-bold truncate">{areaStats[2].city || areaStats[2].pref || '?'}</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                {/* 4位以下 */}
-                {areaStats.slice(3, 6).map((a, i) => {
-                  const maxCount = areaStats[0].count
-                  const pct = maxCount > 0 ? (a.count / maxCount) * 100 : 0
-                  return (
-                    <div key={i} className="flex items-center gap-1.5 mb-1">
-                      <span className="text-xs text-slate-400 w-4 text-center font-black">{i+4}</span>
-                      <div className="flex-1 relative rounded overflow-hidden border border-slate-700">
-                        <div className="absolute inset-0 rounded opacity-25" style={{width:`${pct}%`, background:'linear-gradient(90deg,#3b82f6,#6366f1)'}} />
-                        <div className="relative flex justify-between items-center px-2 py-1">
-                          <span className="text-xs text-slate-300 font-bold truncate">{a.pref && a.city ? `${a.pref}›${a.city}` : a.pref || a.city || '?'}</span>
-                          <span className="text-xs font-black text-blue-300 ml-1">{a.count}件</span>
+          {/* 獲得件数ランキング（PC横並び） */}
+          {acqRanking.length > 0 && (
+            <div className="rounded-xl overflow-hidden flex-1 min-w-[320px]" style={{background:'linear-gradient(160deg,#0f172a,#1e1b4b)'}}>
+              <div className="px-4 py-3">
+                <div className="text-xs font-bold text-indigo-300 tracking-widest uppercase mb-3">🏆 獲得件数ランキング</div>
+                <div className="space-y-2">
+                  {acqRanking.map((d, i) => {
+                    const pct = (d.stats.totalAcquisitions / maxAcq) * 100
+                    const isTop3 = i < 3
+                    const barBg = i === 0
+                      ? 'linear-gradient(90deg,#f59e0b,#ef4444)'
+                      : i === 1
+                      ? 'linear-gradient(90deg,#64748b,#94a3b8)'
+                      : i === 2
+                      ? 'linear-gradient(90deg,#92400e,#b45309)'
+                      : 'linear-gradient(90deg,#3730a3,#6366f1)'
+                    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null
+                    return (
+                      <div key={d.rep.id} className="flex items-center gap-2">
+                        <span className="w-7 text-center text-sm flex-shrink-0">
+                          {medal || <span className="text-xs text-slate-500 font-black">{i+1}</span>}
+                        </span>
+                        <div className="flex-1 relative rounded-lg overflow-hidden border border-slate-700/40"
+                          style={{height: isTop3 ? 34 : 28}}>
+                          <div className="absolute inset-0 bg-slate-800/50" />
+                          <div className="absolute inset-y-0 left-0 rounded-lg transition-all"
+                            style={{width:`${pct}%`, background: barBg, opacity: 0.85}} />
+                          <div className="relative h-full flex items-center justify-between px-3">
+                            <span className={`font-black truncate ${isTop3 ? 'text-sm text-white' : 'text-xs text-slate-300'}`}>
+                              {d.rep.name}
+                            </span>
+                            <span className={`font-black ml-2 flex-shrink-0 ${
+                              i === 0 ? 'text-yellow-300 text-xl' :
+                              i === 1 ? 'text-slate-200 text-lg' :
+                              i === 2 ? 'text-amber-300 text-base' :
+                              'text-indigo-300 text-sm'
+                            }`}>
+                              {d.stats.totalAcquisitions}
+                              <span className="text-xs font-normal opacity-60 ml-0.5">件</span>
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
             </div>
           )}
 
-          <div className="flex gap-1 ml-2 self-center">
+          <div className="flex gap-1 self-center">
             <span className="text-xs text-slate-400 self-center mr-1">並び替え:</span>
             <SortBtn k="name" label="順番" />
             <SortBtn k="forecast" label="着地予想↓" />
@@ -367,8 +355,7 @@ export default function OverallView({ yearMonth }: Props) {
                 const achieved = stats.forecastAcquisitions >= stats.planCases
                 const hasData = stats.planCases > 0 || stats.totalAcquisitions > 0
                 const neededPerDay = (!achieved && stats.remainingWorkingDays > 0)
-                  ? stats.gapToTargetActual / stats.remainingWorkingDays
-                  : null
+                  ? stats.gapToTargetActual / stats.remainingWorkingDays : null
                 return (
                   <tr key={rep.id} className={!hasData ? 'opacity-40' : ''}>
                     <td className="text-left px-2 font-medium bg-gray-50 whitespace-nowrap">{rep.name}</td>
@@ -407,51 +394,6 @@ export default function OverallView({ yearMonth }: Props) {
             </tbody>
           </table>
         </div>
-
-        {/* PC用エリア別詳細 */}
-        {areaStats.length > 0 && (
-          <div className="mt-4 rounded-xl overflow-hidden" style={{background:'linear-gradient(135deg,#0f172a,#1e3a5f)'}}>
-            <div className="px-5 py-4">
-              <div className="text-sm font-bold text-blue-300 tracking-widest uppercase mb-4">📍 エリア別成約 全ランキング</div>
-              <div className="space-y-2">
-                {areaStats.map((a, i) => {
-                  const maxCount = areaStats[0].count
-                  const pct = maxCount > 0 ? (a.count / maxCount) * 100 : 0
-                  const isTop = i === 0
-                  const bgGrad = i === 0
-                    ? 'linear-gradient(90deg,#f59e0b,#ef4444)'
-                    : i === 1
-                    ? 'linear-gradient(90deg,#64748b,#94a3b8)'
-                    : i === 2
-                    ? 'linear-gradient(90deg,#92400e,#b45309)'
-                    : 'linear-gradient(90deg,#1e40af,#3b82f6)'
-                  return (
-                    <div key={i} className="flex items-center gap-3">
-                      <span className="text-lg w-7 text-center flex-shrink-0">
-                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : <span className="text-xs text-slate-400 font-black">{i+1}</span>}
-                      </span>
-                      <div className="flex-1 relative rounded-lg overflow-hidden" style={{height: isTop ? 36 : 30}}>
-                        <div className="absolute inset-0 rounded-lg opacity-20 bg-slate-700" />
-                        <div className="absolute inset-y-0 left-0 rounded-lg transition-all" style={{width:`${pct}%`, background: bgGrad, opacity: 0.8}} />
-                        <div className="relative h-full flex items-center justify-between px-3">
-                          <div className="flex items-center gap-2">
-                            <span className={`font-black text-white truncate ${isTop ? 'text-sm' : 'text-xs'}`}>
-                              {a.pref && a.city ? `${a.pref} › ${a.city}` : a.pref || a.city || '未設定'}
-                            </span>
-                            <span className="text-xs text-slate-400 truncate hidden lg:block">{a.reps.join('・')}</span>
-                          </div>
-                          <span className={`font-black flex-shrink-0 ml-2 ${isTop ? 'text-yellow-300 text-lg' : 'text-blue-300 text-sm'}`}>
-                            {a.count}<span className="text-xs font-normal opacity-60">件</span>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

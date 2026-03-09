@@ -10,14 +10,23 @@ import DailyInputForm from '@/components/DailyInputForm'
 import OverallView from '@/components/OverallView'
 import ScheduleSubmitForm from '@/components/ScheduleSubmitForm'
 
+function getNextMonth(ym: string): string {
+  const [y, m] = ym.split('-').map(Number)
+  const d = new Date(y, m, 1) // mは1始まりだがDate(y,m,1)でmが0始まりなので翌月になる
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
 export default function Home() {
   const [reps, setReps] = useState<SalesRep[]>([])
   const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null)
   const [selectedMonth, setSelectedMonth] = useState<string>(localYearMonth)
+  const [scheduleMonth, setScheduleMonth] = useState<string>(getNextMonth(localYearMonth))
   const [activeTab, setActiveTab] = useState<'form' | 'schedule' | 'sheet' | 'analysis' | 'overall' | 'settings'>('form')
   const [loading, setLoading] = useState(true)
 
   const months = getMonthList(24)
+  // 予定タブ用: 今月 + 翌月（常に2択）
+  const scheduleMonthOptions = [localYearMonth, getNextMonth(localYearMonth)]
 
   useEffect(() => { loadReps() }, [])
 
@@ -52,15 +61,39 @@ export default function Home() {
         <div className="flex items-center gap-2 mb-2">
           <span className="top-nav-title">origin-dx 数値管理</span>
           <div className="flex-1" />
-          <select
-            value={selectedMonth}
-            onChange={e => setSelectedMonth(e.target.value)}
-            className="bg-slate-700 text-white text-xs font-semibold rounded-lg px-2 py-1.5 border-none outline-none cursor-pointer"
-          >
-            {months.map(m => (
-              <option key={m} value={m}>{formatYearMonth(m)}</option>
-            ))}
-          </select>
+
+          {/* 予定タブ以外: 通常の月選択 */}
+          {activeTab !== 'schedule' && (
+            <select
+              value={selectedMonth}
+              onChange={e => setSelectedMonth(e.target.value)}
+              className="bg-slate-700 text-white text-xs font-semibold rounded-lg px-2 py-1.5 border-none outline-none cursor-pointer"
+            >
+              {months.map(m => (
+                <option key={m} value={m}>{formatYearMonth(m)}</option>
+              ))}
+            </select>
+          )}
+
+          {/* 予定タブ: 今月・翌月の2択 */}
+          {activeTab === 'schedule' && (
+            <div className="flex gap-1">
+              {scheduleMonthOptions.map(m => (
+                <button
+                  key={m}
+                  onClick={() => setScheduleMonth(m)}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                    scheduleMonth === m
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  }`}
+                >
+                  {m === localYearMonth ? `今月 (${formatYearMonth(m)})` : `翌月 (${formatYearMonth(m)})`}
+                </button>
+              ))}
+            </div>
+          )}
+
           <select
             value={selectedRep?.id ?? ''}
             onChange={e => {
@@ -93,7 +126,7 @@ export default function Home() {
           <DailyInputForm repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />
         )}
         {activeTab === 'schedule' && selectedRep && (
-          <ScheduleSubmitForm repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />
+          <ScheduleSubmitForm repId={selectedRep.id} repName={selectedRep.name} yearMonth={scheduleMonth} />
         )}
         {activeTab === 'sheet' && selectedRep && (
           <SheetView repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />

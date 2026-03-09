@@ -202,6 +202,7 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
               <th className="header-red" style={{minWidth:50}}>主権<br/>対面</th>
               <th className="header-red" style={{minWidth:40}}>商談</th>
               <th className="header-red" style={{minWidth:40}}>獲得</th>
+              <th className="bg-teal-100 text-teal-700" style={{minWidth:80}}>エリア</th>
               <th className="bg-gray-100" style={{minWidth:30}}></th>
             </tr>
           </thead>
@@ -264,6 +265,11 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
                     <input type="number" min={0} value={rec.acquisitions||''} placeholder="0"
                       onChange={e => handleChange(d.dateStr,'acquisitions',e.target.value)} />
                   </td>
+                  <td className="bg-teal-50 text-xs text-center text-teal-700 font-medium" style={{whiteSpace:'nowrap'}}>
+                    {rec.area_pref || rec.area_city
+                      ? `${rec.area_pref || ''}${rec.area_city ? ' ' + rec.area_city : ''}`
+                      : isWorking ? '—' : ''}
+                  </td>
                   <td className="bg-gray-50"></td>
                 </tr>
               )
@@ -283,6 +289,7 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
               <td>{totals.ownerMeetings}</td>
               <td>{totals.negotiations}</td>
               <td>{totals.acquisitions}</td>
+              <td></td>
               <td></td>
             </tr>
           </tbody>
