@@ -181,10 +181,10 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
               >
                 {/* 日付 + ステータス選択 */}
                 <div className="flex items-center gap-2 mb-2">
-                  <div className={`text-sm font-black w-14 flex-shrink-0 ${
+                  <div className={`text-sm font-black w-16 flex-shrink-0 ${
                     d.dow === 0 ? 'text-red-500' : d.dow === 6 ? 'text-blue-500' : 'text-slate-700'
                   }`}>
-                    {d.month}/{d.day}（{d.dowJa}）
+                    {d.dateStr.slice(5).replace('-', '/')}（{d.dowJa}）
                   </div>
                   <div className="flex gap-1 flex-wrap flex-1">
                     {WORK_STATUSES.map(s => (
