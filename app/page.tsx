@@ -19,14 +19,14 @@ function getNextMonth(ym: string): string {
 export default function Home() {
   const [reps, setReps] = useState<SalesRep[]>([])
   const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null)
-  const [selectedMonth, setSelectedMonth] = useState<string>(localYearMonth)
-  const [scheduleMonth, setScheduleMonth] = useState<string>(getNextMonth(localYearMonth))
+  const [selectedMonth, setSelectedMonth] = useState<string>(localYearMonth())
+  const [scheduleMonth, setScheduleMonth] = useState<string>(getNextMonth(localYearMonth()))
   const [activeTab, setActiveTab] = useState<'form' | 'schedule' | 'sheet' | 'analysis' | 'overall' | 'settings'>('form')
   const [loading, setLoading] = useState(true)
 
   const months = getMonthList(24)
   // 予定タブ用: 今月 + 翌月（常に2択）
-  const scheduleMonthOptions = [localYearMonth, getNextMonth(localYearMonth)]
+  const scheduleMonthOptions = [localYearMonth(), getNextMonth(localYearMonth())]
 
   useEffect(() => { loadReps() }, [])
 
@@ -88,7 +88,7 @@ export default function Home() {
                       : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                   }`}
                 >
-                  {m === localYearMonth ? `今月 (${formatYearMonth(m)})` : `翌月 (${formatYearMonth(m)})`}
+                  {m === localYearMonth() ? `今月 (${formatYearMonth(m)})` : `翌月 (${formatYearMonth(m)})`}
                 </button>
               ))}
             </div>
