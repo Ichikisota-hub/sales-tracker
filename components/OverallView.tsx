@@ -113,31 +113,87 @@ export default function OverallView({ yearMonth }: Props) {
         </div>
 
         {/* エリア別成約ランキング */}
-        {areaStats.length > 0 && (
-          <div className="mobile-card">
-            <div className="mobile-card-label">📍 エリア別成約ランキング</div>
-            <div className="space-y-2">
-              {areaStats.slice(0, 10).map((a, i) => (
-                <div key={i} className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
-                  <span className="text-base w-6 flex-shrink-0">{MEDAL[i] || `${i+1}`}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-slate-800 truncate">
-                      {a.pref && a.city ? `${a.pref} › ${a.city}` : a.pref || a.city || '未設定'}
+        <div className="mobile-card overflow-hidden" style={{background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)'}}>
+          <div className="text-xs font-bold text-blue-300 mb-3 tracking-widest uppercase">📍 エリア別成約ランキング</div>
+
+          {areaStats.length === 0 ? (
+            <div className="text-xs text-slate-500 text-center py-4">稼働エリアを入力すると表示されます</div>
+          ) : (
+            <>
+              {/* TOP3 表彰台 */}
+              {areaStats.length >= 1 && (
+                <div className="flex items-end justify-center gap-2 mb-4">
+                  {/* 2位 */}
+                  {areaStats[1] && (
+                    <div className="flex-1 flex flex-col items-center">
+                      <div className="text-2xl mb-1">🥈</div>
+                      <div className="w-full rounded-t-xl bg-slate-400 py-3 px-2 text-center" style={{minHeight:64}}>
+                        <div className="text-lg font-black text-white leading-tight">{areaStats[1].count}<span className="text-xs font-normal opacity-70">件</span></div>
+                        <div className="text-xs text-slate-200 font-bold truncate">{areaStats[1].city || areaStats[1].pref || '未設定'}</div>
+                        <div className="text-xs text-slate-300 truncate">{areaStats[1].pref}</div>
+                      </div>
                     </div>
-                    <div className="text-xs text-slate-500 truncate">{a.reps.join('・')}</div>
+                  )}
+                  {/* 1位 */}
+                  <div className="flex-1 flex flex-col items-center" style={{transform:'scale(1.08)'}}>
+                    <div className="text-3xl mb-1">🥇</div>
+                    <div className="w-full rounded-t-xl py-4 px-2 text-center" style={{minHeight:80, background:'linear-gradient(135deg,#f59e0b,#ef4444)'}}>
+                      <div className="text-2xl font-black text-white leading-tight">{areaStats[0].count}<span className="text-sm font-normal opacity-80">件</span></div>
+                      <div className="text-sm text-yellow-100 font-black truncate">{areaStats[0].city || areaStats[0].pref || '未設定'}</div>
+                      <div className="text-xs text-yellow-200 truncate">{areaStats[0].pref}</div>
+                    </div>
                   </div>
-                  <div className="text-lg font-black text-blue-700 flex-shrink-0">{a.count}<span className="text-xs font-normal text-slate-400">件</span></div>
+                  {/* 3位 */}
+                  {areaStats[2] && (
+                    <div className="flex-1 flex flex-col items-center">
+                      <div className="text-2xl mb-1">🥉</div>
+                      <div className="w-full rounded-t-xl bg-amber-700 py-2 px-2 text-center" style={{minHeight:52}}>
+                        <div className="text-base font-black text-white leading-tight">{areaStats[2].count}<span className="text-xs font-normal opacity-70">件</span></div>
+                        <div className="text-xs text-amber-200 font-bold truncate">{areaStats[2].city || areaStats[2].pref || '未設定'}</div>
+                        <div className="text-xs text-amber-300 truncate">{areaStats[2].pref}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {areaStats.length === 0 && (
-          <div className="mobile-card">
-            <div className="mobile-card-label">📍 エリア別成約ランキング</div>
-            <div className="text-xs text-slate-400 text-center py-3">稼働エリアを入力すると表示されます</div>
-          </div>
-        )}
+              )}
+
+              {/* 4位以下 */}
+              {areaStats.length > 3 && (
+                <div className="space-y-1.5">
+                  {areaStats.slice(3, 10).map((a, i) => {
+                    const rank = i + 4
+                    const maxCount = areaStats[0].count
+                    const pct = maxCount > 0 ? (a.count / maxCount) * 100 : 0
+                    return (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="text-xs font-black text-slate-400 w-4 text-center">{rank}</span>
+                        <div className="flex-1 relative">
+                          <div className="absolute inset-0 rounded-lg opacity-30" style={{width:`${pct}%`, background:'linear-gradient(90deg,#3b82f6,#6366f1)'}} />
+                          <div className="relative flex items-center justify-between px-2 py-1.5 rounded-lg border border-slate-700">
+                            <span className="text-xs font-bold text-slate-200 truncate">
+                              {a.pref && a.city ? `${a.pref}›${a.city}` : a.pref || a.city || '未設定'}
+                            </span>
+                            <span className="text-sm font-black text-blue-300 ml-2">{a.count}<span className="text-xs font-normal text-slate-500">件</span></span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* 担当者内訳（1位） */}
+              <div className="mt-3 pt-3 border-t border-slate-700">
+                <div className="text-xs text-slate-500 mb-1">🏆 1位の担当者</div>
+                <div className="flex flex-wrap gap-1">
+                  {areaStats[0].reps.map((r, i) => (
+                    <span key={i} className="text-xs bg-yellow-500 text-yellow-900 font-bold px-2 py-0.5 rounded-full">{r}</span>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* 並び替え */}
         <div className="flex gap-2 flex-wrap">
@@ -227,18 +283,54 @@ export default function OverallView({ yearMonth }: Props) {
 
           {/* エリア別ランキング（PC） */}
           {areaStats.length > 0 && (
-            <div className="bg-white border border-slate-200 rounded px-3 py-2 min-w-[220px]">
-              <div className="text-xs font-bold text-slate-600 mb-1">📍 エリア別成約TOP</div>
-              <div className="space-y-1">
-                {areaStats.slice(0, 5).map((a, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs">
-                    <span className="w-4">{MEDAL[i] || `${i+1}`}</span>
-                    <span className="flex-1 text-slate-700 font-medium">
-                      {a.pref && a.city ? `${a.pref}›${a.city}` : a.pref || a.city || '未設定'}
-                    </span>
-                    <span className="font-black text-blue-700">{a.count}件</span>
+            <div className="rounded-xl overflow-hidden min-w-[260px]" style={{background:'linear-gradient(135deg,#0f172a,#1e3a5f)'}}>
+              <div className="px-4 pt-3 pb-1">
+                <div className="text-xs font-bold text-blue-300 tracking-widest uppercase mb-2">📍 エリア別成約ランキング</div>
+                {/* TOP3 */}
+                <div className="flex items-end gap-1 justify-center mb-2">
+                  {areaStats[1] && (
+                    <div className="flex flex-col items-center flex-1">
+                      <div className="text-xl">🥈</div>
+                      <div className="w-full rounded-t-lg bg-slate-500 text-center py-2 px-1">
+                        <div className="text-base font-black text-white">{areaStats[1].count}<span className="text-xs opacity-60">件</span></div>
+                        <div className="text-xs text-slate-200 font-bold truncate">{areaStats[1].city || areaStats[1].pref || '?'}</div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex flex-col items-center flex-1" style={{transform:'scale(1.1)', transformOrigin:'bottom'}}>
+                    <div className="text-2xl">🥇</div>
+                    <div className="w-full rounded-t-lg text-center py-3 px-1" style={{background:'linear-gradient(135deg,#f59e0b,#ef4444)'}}>
+                      <div className="text-xl font-black text-white">{areaStats[0].count}<span className="text-sm opacity-70">件</span></div>
+                      <div className="text-xs text-yellow-100 font-black truncate">{areaStats[0].city || areaStats[0].pref || '?'}</div>
+                    </div>
                   </div>
-                ))}
+                  {areaStats[2] && (
+                    <div className="flex flex-col items-center flex-1">
+                      <div className="text-xl">🥉</div>
+                      <div className="w-full rounded-t-lg bg-amber-700 text-center py-1.5 px-1">
+                        <div className="text-sm font-black text-white">{areaStats[2].count}<span className="text-xs opacity-60">件</span></div>
+                        <div className="text-xs text-amber-200 font-bold truncate">{areaStats[2].city || areaStats[2].pref || '?'}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {/* 4位以下 */}
+                {areaStats.slice(3, 6).map((a, i) => {
+                  const maxCount = areaStats[0].count
+                  const pct = maxCount > 0 ? (a.count / maxCount) * 100 : 0
+                  return (
+                    <div key={i} className="flex items-center gap-1.5 mb-1">
+                      <span className="text-xs text-slate-400 w-4 text-center font-black">{i+4}</span>
+                      <div className="flex-1 relative rounded overflow-hidden border border-slate-700">
+                        <div className="absolute inset-0 rounded opacity-25" style={{width:`${pct}%`, background:'linear-gradient(90deg,#3b82f6,#6366f1)'}} />
+                        <div className="relative flex justify-between items-center px-2 py-1">
+                          <span className="text-xs text-slate-300 font-bold truncate">{a.pref && a.city ? `${a.pref}›${a.city}` : a.pref || a.city || '?'}</span>
+                          <span className="text-xs font-black text-blue-300 ml-1">{a.count}件</span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -316,32 +408,48 @@ export default function OverallView({ yearMonth }: Props) {
           </table>
         </div>
 
-        {/* PC用エリア別詳細テーブル */}
+        {/* PC用エリア別詳細 */}
         {areaStats.length > 0 && (
-          <div className="mt-4 bg-white rounded shadow-sm p-3">
-            <div className="text-xs font-bold text-slate-600 mb-2">📍 エリア別成約詳細</div>
-            <table className="sheet-table">
-              <thead>
-                <tr>
-                  <th className="bg-gray-200 text-left px-2">順位</th>
-                  <th className="header-blue text-left px-2">都道府県</th>
-                  <th className="header-blue text-left px-2">市区町村</th>
-                  <th className="header-green">成約件数</th>
-                  <th className="bg-gray-100 text-left px-2">担当者</th>
-                </tr>
-              </thead>
-              <tbody>
-                {areaStats.map((a, i) => (
-                  <tr key={i}>
-                    <td className="text-center font-bold">{MEDAL[i] || i + 1}</td>
-                    <td className="text-left px-2">{a.pref || '—'}</td>
-                    <td className="text-left px-2">{a.city || '—'}</td>
-                    <td className="font-black text-blue-700">{a.count}</td>
-                    <td className="text-left px-2 text-xs text-slate-600">{a.reps.join('・')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-4 rounded-xl overflow-hidden" style={{background:'linear-gradient(135deg,#0f172a,#1e3a5f)'}}>
+            <div className="px-5 py-4">
+              <div className="text-sm font-bold text-blue-300 tracking-widest uppercase mb-4">📍 エリア別成約 全ランキング</div>
+              <div className="space-y-2">
+                {areaStats.map((a, i) => {
+                  const maxCount = areaStats[0].count
+                  const pct = maxCount > 0 ? (a.count / maxCount) * 100 : 0
+                  const isTop = i === 0
+                  const bgGrad = i === 0
+                    ? 'linear-gradient(90deg,#f59e0b,#ef4444)'
+                    : i === 1
+                    ? 'linear-gradient(90deg,#64748b,#94a3b8)'
+                    : i === 2
+                    ? 'linear-gradient(90deg,#92400e,#b45309)'
+                    : 'linear-gradient(90deg,#1e40af,#3b82f6)'
+                  return (
+                    <div key={i} className="flex items-center gap-3">
+                      <span className="text-lg w-7 text-center flex-shrink-0">
+                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : <span className="text-xs text-slate-400 font-black">{i+1}</span>}
+                      </span>
+                      <div className="flex-1 relative rounded-lg overflow-hidden" style={{height: isTop ? 36 : 30}}>
+                        <div className="absolute inset-0 rounded-lg opacity-20 bg-slate-700" />
+                        <div className="absolute inset-y-0 left-0 rounded-lg transition-all" style={{width:`${pct}%`, background: bgGrad, opacity: 0.8}} />
+                        <div className="relative h-full flex items-center justify-between px-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`font-black text-white truncate ${isTop ? 'text-sm' : 'text-xs'}`}>
+                              {a.pref && a.city ? `${a.pref} › ${a.city}` : a.pref || a.city || '未設定'}
+                            </span>
+                            <span className="text-xs text-slate-400 truncate hidden lg:block">{a.reps.join('・')}</span>
+                          </div>
+                          <span className={`font-black flex-shrink-0 ml-2 ${isTop ? 'text-yellow-300 text-lg' : 'text-blue-300 text-sm'}`}>
+                            {a.count}<span className="text-xs font-normal opacity-60">件</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         )}
       </div>

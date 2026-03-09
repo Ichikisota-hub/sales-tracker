@@ -3,9 +3,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getDaysArray } from '@/lib/dateUtils'
-import { KANSAI_AREAS, PREF_LIST } from '@/lib/areas'
 
-const WORK_STATUSES = ['稼働', '休日', '同行', '有休', '研修', '出張']
+const WORK_STATUSES = ['稼働', '休日', '同行']
 
 // 時刻選択肢（30分刻み）
 const TIMES: string[] = []
@@ -18,15 +17,14 @@ type Props = { repId: string; repName: string; yearMonth: string }
 
 type DaySchedule = {
   work_status: string
-  area_pref: string
-  area_city: string
   work_time_start: string
   work_time_end: string
 }
 
 const DEFAULT_DAY: DaySchedule = {
-  work_status: '休日', area_pref: '', area_city: '',
-  work_time_start: '', work_time_end: '',
+  work_status: '休日',
+  work_time_start: '',
+  work_time_end: '',
 }
 
 export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props) {
@@ -51,8 +49,6 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
     data?.forEach(r => {
       map[r.schedule_date] = {
         work_status: r.work_status || '休日',
-        area_pref: r.area_pref || '',
-        area_city: r.area_city || '',
         work_time_start: r.work_time_start || '',
         work_time_end: r.work_time_end || '',
       }
@@ -83,8 +79,8 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
       sales_rep_id: repId,
       schedule_date: d.dateStr,
       work_status: schedules[d.dateStr]?.work_status || '休日',
-      area_pref: schedules[d.dateStr]?.area_pref || '',
-      area_city: schedules[d.dateStr]?.area_city || '',
+      area_pref: '',
+      area_city: '',
       work_time_start: schedules[d.dateStr]?.work_time_start || '',
       work_time_end: schedules[d.dateStr]?.work_time_end || '',
       updated_at: new Date().toISOString(),
@@ -112,9 +108,6 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
     '稼働': 'bg-emerald-500 text-white',
     '休日': 'bg-slate-200 text-slate-500',
     '同行': 'bg-blue-400 text-white',
-    '有休': 'bg-purple-400 text-white',
-    '研修': 'bg-orange-400 text-white',
-    '出張': 'bg-pink-400 text-white',
   }
 
   return (
@@ -147,10 +140,10 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
               <span className={`text-xs font-bold w-6 text-center ${dow===0?'text-red-500':dow===6?'text-blue-500':'text-slate-600'}`}>
                 {DOW_LABELS[dow]}
               </span>
-              <div className="flex gap-1 flex-wrap flex-1">
+              <div className="flex gap-2">
                 {WORK_STATUSES.map(s => (
                   <button key={s} onClick={() => bulkSetDow(dow, s)}
-                    className={`text-xs px-2 py-1 rounded-lg font-medium transition-all ${
+                    className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
                       s === '稼働' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' :
                       s === '休日' ? 'bg-slate-100 text-slate-500 hover:bg-slate-200' :
                       'bg-blue-50 text-blue-600 hover:bg-blue-100'
@@ -170,33 +163,31 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
           {days.map(d => {
             const sched = schedules[d.dateStr] || DEFAULT_DAY
             const isWork = sched.work_status === '稼働'
-            const pref = sched.area_pref || ''
-            const city = sched.area_city || ''
-            const cities = pref ? (KANSAI_AREAS[pref] || []) : []
 
             return (
               <div key={d.dateStr}
                 className={`rounded-xl border p-3 transition-all ${
                   isWork ? 'border-emerald-200 bg-emerald-50' :
+                  sched.work_status === '同行' ? 'border-blue-200 bg-blue-50' :
                   d.dow === 0 ? 'border-red-100 bg-red-50' :
-                  d.dow === 6 ? 'border-blue-100 bg-blue-50' :
+                  d.dow === 6 ? 'border-blue-100 bg-blue-50/50' :
                   'border-slate-100 bg-slate-50'
                 }`}
               >
                 {/* 日付 + ステータス */}
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2">
                   <div className={`text-sm font-black w-16 flex-shrink-0 ${
                     d.dow === 0 ? 'text-red-500' : d.dow === 6 ? 'text-blue-500' : 'text-slate-700'
                   }`}>
                     {d.dateStr.slice(5).replace('-', '/')}（{d.dowJa}）
                   </div>
-                  <div className="flex gap-1 flex-wrap flex-1">
+                  <div className="flex gap-1.5 flex-1">
                     {WORK_STATUSES.map(s => (
                       <button key={s}
                         onClick={() => setDayField(d.dateStr, 'work_status', s)}
-                        className={`text-xs px-2 py-1 rounded-lg font-bold transition-all ${
+                        className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-all ${
                           sched.work_status === s
-                            ? STATUS_COLORS[s] || 'bg-slate-600 text-white'
+                            ? STATUS_COLORS[s]
                             : 'bg-white border border-slate-200 text-slate-400'
                         }`}
                       >{s}</button>
@@ -204,63 +195,33 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
                   </div>
                 </div>
 
-                {/* 稼働時のみ: 時間帯 + エリア */}
+                {/* 稼働時のみ: 時間帯 */}
                 {isWork && (
-                  <>
-                    {/* 稼働時間帯 */}
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="text-xs text-slate-500 font-medium w-16 flex-shrink-0">⏰ 時間帯</div>
-                      <select
-                        value={sched.work_time_start}
-                        onChange={e => setDayField(d.dateStr, 'work_time_start', e.target.value)}
-                        className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-300"
-                      >
-                        <option value="">開始</option>
-                        {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                      <span className="text-xs text-slate-400">〜</span>
-                      <select
-                        value={sched.work_time_end}
-                        onChange={e => setDayField(d.dateStr, 'work_time_end', e.target.value)}
-                        className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-300"
-                      >
-                        <option value="">終了</option>
-                        {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="text-xs text-slate-500 font-medium w-16 flex-shrink-0">⏰ 時間帯</div>
+                    <select
+                      value={sched.work_time_start}
+                      onChange={e => setDayField(d.dateStr, 'work_time_start', e.target.value)}
+                      className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-300"
+                    >
+                      <option value="">開始</option>
+                      {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <span className="text-xs text-slate-400 font-bold">〜</span>
+                    <select
+                      value={sched.work_time_end}
+                      onChange={e => setDayField(d.dateStr, 'work_time_end', e.target.value)}
+                      className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-300"
+                    >
+                      <option value="">終了</option>
+                      {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
                     {sched.work_time_start && sched.work_time_end && (
-                      <div className="text-xs font-bold text-emerald-700 bg-emerald-100 rounded-lg px-2 py-1 mb-2 inline-block">
-                        ⏰ {sched.work_time_start}〜{sched.work_time_end}
-                      </div>
+                      <span className="text-xs font-black text-emerald-700 bg-emerald-100 rounded-lg px-2 py-1 whitespace-nowrap">
+                        {sched.work_time_start}〜{sched.work_time_end}
+                      </span>
                     )}
-
-                    {/* エリア */}
-                    <div className="flex gap-2">
-                      <select
-                        value={pref}
-                        onChange={e => {
-                          setDayField(d.dateStr, 'area_pref', e.target.value)
-                          setDayField(d.dateStr, 'area_city', '')
-                        }}
-                        className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-300"
-                      >
-                        <option value="">府県を選択</option>
-                        {PREF_LIST.map(p => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                      <select
-                        value={city}
-                        onChange={e => setDayField(d.dateStr, 'area_city', e.target.value)}
-                        disabled={!pref}
-                        className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-300 disabled:bg-slate-100 disabled:text-slate-400"
-                      >
-                        <option value="">市区を選択</option>
-                        {cities.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    {pref && city && (
-                      <div className="mt-1 text-xs text-emerald-700 font-bold">📍 {pref} → {city}</div>
-                    )}
-                  </>
+                  </div>
                 )}
               </div>
             )
