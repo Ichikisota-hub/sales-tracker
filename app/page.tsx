@@ -8,12 +8,13 @@ import AnalysisView from '@/components/AnalysisView'
 import RepSettings from '@/components/RepSettings'
 import DailyInputForm from '@/components/DailyInputForm'
 import OverallView from '@/components/OverallView'
+import ScheduleSubmitForm from '@/components/ScheduleSubmitForm'
 
 export default function Home() {
   const [reps, setReps] = useState<SalesRep[]>([])
   const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null)
   const [selectedMonth, setSelectedMonth] = useState<string>(localYearMonth)
-  const [activeTab, setActiveTab] = useState<'form' | 'sheet' | 'analysis' | 'overall' | 'settings'>('form')
+  const [activeTab, setActiveTab] = useState<'form' | 'schedule' | 'sheet' | 'analysis' | 'overall' | 'settings'>('form')
   const [loading, setLoading] = useState(true)
 
   const months = getMonthList(24)
@@ -35,11 +36,12 @@ export default function Home() {
   }
 
   const tabs = [
-    { id: 'form',     label: '入力' },
-    { id: 'sheet',    label: '表' },
-    { id: 'analysis', label: '分析' },
-    { id: 'overall',  label: '全体' },
-    { id: 'settings', label: '設定' },
+    { id: 'form',     label: '入力',   icon: '✏️' },
+    { id: 'schedule', label: '予定',   icon: '📅' },
+    { id: 'sheet',    label: '表',     icon: '📋' },
+    { id: 'analysis', label: '分析',   icon: '📈' },
+    { id: 'overall',  label: '全体',   icon: '🏆' },
+    { id: 'settings', label: '設定',   icon: '⚙️' },
   ] as const
 
   return (
@@ -50,7 +52,6 @@ export default function Home() {
         <div className="flex items-center gap-2 mb-2">
           <span className="top-nav-title">origin-dx 数値管理</span>
           <div className="flex-1" />
-          {/* Month */}
           <select
             value={selectedMonth}
             onChange={e => setSelectedMonth(e.target.value)}
@@ -60,7 +61,6 @@ export default function Home() {
               <option key={m} value={m}>{formatYearMonth(m)}</option>
             ))}
           </select>
-          {/* Rep */}
           <select
             value={selectedRep?.id ?? ''}
             onChange={e => {
@@ -81,19 +81,19 @@ export default function Home() {
               onClick={() => setActiveTab(tab.id)}
               className={`tab-btn ${activeTab === tab.id ? 'tab-btn-active' : 'tab-btn-inactive'}`}
             >
-              {tab.id === 'form' ? '✏️ ' + tab.label :
-               tab.id === 'sheet' ? '📋 ' + tab.label :
-               tab.id === 'analysis' ? '📈 ' + tab.label :
-               tab.id === 'overall' ? '🏆 ' + tab.label : '⚙️ ' + tab.label}
+              {tab.icon} {tab.label}
             </button>
           ))}
         </div>
       </div>
 
       {/* Content */}
-      <div className={activeTab === 'form' ? 'p-3 pb-28' : activeTab === 'sheet' ? 'p-2' : 'p-3'}>
+      <div className={activeTab === 'form' || activeTab === 'schedule' ? 'p-3 pb-28' : activeTab === 'sheet' ? 'p-2' : 'p-3'}>
         {activeTab === 'form' && selectedRep && (
           <DailyInputForm repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />
+        )}
+        {activeTab === 'schedule' && selectedRep && (
+          <ScheduleSubmitForm repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />
         )}
         {activeTab === 'sheet' && selectedRep && (
           <SheetView repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />

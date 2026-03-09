@@ -23,6 +23,8 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
 
   const days = getDaysArray(yearMonth)
 
+  const [schedules, setSchedules] = useState<Record<string, string>>({})
+
   useEffect(() => {
     repIdRef.current = repId
     yearMonthRef.current = yearMonth
@@ -31,6 +33,7 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
     localRef.current = {}
     setRecords({})
     setPlan(null)
+    setSchedules({})
     setStatusMsg('')
     setErrorMsg('')
     load()
@@ -41,13 +44,17 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
     const ym = yearMonthRef.current
     const [y, m] = ym.split('-')
 
-    const [{ data: planData }, { data: recData }] = await Promise.all([
+    const [{ data: planData }, { data: recData }, { data: schedData }] = await Promise.all([
       supabase.from('monthly_plans').select('*')
         .eq('sales_rep_id', rid).eq('year_month', ym).single(),
       supabase.from('daily_records').select('*')
         .eq('sales_rep_id', rid)
         .gte('record_date', `${y}-${m}-01`)
-        .lte('record_date', `${y}-${m}-31`)
+        .lte('record_date', `${y}-${m}-31`),
+      supabase.from('work_schedules').select('schedule_date,work_status')
+        .eq('sales_rep_id', rid)
+        .gte('schedule_date', `${y}-${m}-01`)
+        .lte('schedule_date', `${y}-${m}-31`),
     ])
 
     if (repIdRef.current !== rid) return
@@ -58,6 +65,11 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
     recData?.forEach(r => { map[r.record_date] = r })
     localRef.current = map
     setRecords({ ...map })
+
+    // work_schedulesから計画稼働マップを作成
+    const schedMap: Record<string, string> = {}
+    schedData?.forEach(s => { schedMap[s.schedule_date] = s.work_status })
+    setSchedules(schedMap)
   }
 
   function getRow(dateStr: string): DailyRecord {
@@ -213,13 +225,9 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
                   <td className={progress>0?'progress-positive':progress<0?'progress-negative':'progress-zero'}>
                     {isWorking ? progress : ''}
                   </td>
-                  {/* 計画稼働（月初入力・入力欄） */}
-                  <td className="bg-blue-50">
-                    <select value={rec.work_status||''} onChange={e => handleChange(d.dateStr,'work_status',e.target.value)}
-                      className="text-xs w-full bg-transparent border-none outline-none cursor-pointer" style={{minWidth:48}}>
-                      <option value="">•</option>
-                      {WORK_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
-                    </select>
+                  {/* 計画稼働（work_schedulesから表示、入力禁止） */}
+                  <td className="bg-blue-50 text-xs text-center text-blue-700 font-medium">
+                    {schedules[d.dateStr] || rec.work_status || (weekend ? '•' : '')}
                   </td>
                   {/* 出勤状態（実稼働・入力欄） */}
                   <td style={{background:'#4472c4',color:'white'}}>

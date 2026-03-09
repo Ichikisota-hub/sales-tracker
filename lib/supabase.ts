@@ -34,5 +34,17 @@ export type DailyRecord = {
   owner_meetings: number
   negotiations: number
   acquisitions: number
+  area_pref: string
+  area_city: string
+  updated_at: string
+}
+
+export type WorkSchedule = {
+  id: string
+  sales_rep_id: string
+  schedule_date: string
+  work_status: string
+  area_pref: string
+  area_city: string
   updated_at: string
 }

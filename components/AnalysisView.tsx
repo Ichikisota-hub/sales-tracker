@@ -108,6 +108,44 @@ export default function AnalysisView({ repId, repName, yearMonth }: Props) {
             <div className="mt-1 font-bold text-slate-700">= {round1(stats.forecastAcquisitions)}件</div>
           </div>
         </div>
+
+        {/* ── 目標達成に必要な残り件数 ── */}
+        {!achieved && stats.remainingWorkingDays > 0 && (
+          <div className="mobile-card" style={{border:'2px solid #f97316', background:'#fff7ed'}}>
+            <div className="mobile-card-label" style={{color:'#ea580c'}}>🎯 目標達成に必要な残り件数</div>
+            <div className="space-y-2">
+              {/* 現在あと何件 */}
+              <div className="flex items-center justify-between bg-orange-100 rounded-xl px-4 py-3">
+                <div className="text-sm font-bold text-orange-800">今からあと何件取れば達成？</div>
+                <div className="text-3xl font-black text-orange-600">
+                  {Math.max(0, Math.ceil(stats.planCases - stats.totalAcquisitions))}<span className="text-base font-bold">件</span>
+                </div>
+              </div>
+              {/* 必要生産性 */}
+              {stats.remainingWorkingDays > 0 && (
+                <div className="flex items-center justify-between bg-white rounded-xl border border-orange-200 px-4 py-2">
+                  <div className="text-xs text-slate-600">残稼働で必要な1日あたりの件数</div>
+                  <div className="text-lg font-black text-red-600">
+                    {round1(Math.max(0, (stats.planCases - stats.totalAcquisitions) / stats.remainingWorkingDays))}
+                    <span className="text-xs font-normal text-slate-500"> 件/日</span>
+                  </div>
+                </div>
+              )}
+              <div className="text-xs text-slate-500 px-1">
+                現在獲得 <b>{stats.totalAcquisitions}件</b> ／ 目標 <b>{stats.planCases}件</b> ／ 残稼働 <b>{stats.remainingWorkingDays}日</b>
+              </div>
+            </div>
+          </div>
+        )}
+        {achieved && (
+          <div className="mobile-card" style={{border:'2px solid #22c55e', background:'#f0fdf4'}}>
+            <div className="text-center py-2">
+              <div className="text-2xl mb-1">🏆</div>
+              <div className="text-sm font-black text-emerald-700">目標達成見込み！</div>
+              <div className="text-xs text-emerald-600 mt-1">着地予想 {round1(stats.forecastAcquisitions)}件 ≥ 目標 {stats.planCases}件</div>
+            </div>
+          </div>
+        )}
         <div className="mobile-card">
           <div className="mobile-card-label">稼働サマリー</div>
           <div className="stat-grid">
@@ -218,6 +256,19 @@ export default function AnalysisView({ repId, repName, yearMonth }: Props) {
               : <div className="text-3xl font-black">あと{round1(stats.gapToTarget)}件</div>
             }
           </div>
+          {!achieved && (
+            <div className="bg-orange-50 border-2 border-orange-300 rounded px-4 py-2 text-center">
+              <div className="text-xs font-bold text-orange-600">🎯 今から必要な件数</div>
+              <div className="text-3xl font-black text-orange-700">
+                {Math.max(0, Math.ceil(stats.planCases - stats.totalAcquisitions))}件
+              </div>
+              {stats.remainingWorkingDays > 0 && (
+                <div className="text-xs text-orange-500 mt-0.5">
+                  必要生産性: {round1(Math.max(0, (stats.planCases - stats.totalAcquisitions) / stats.remainingWorkingDays))}件/日
+                </div>
+              )}
+            </div>
+          )}
           <div className="bg-white border border-slate-200 rounded px-3 py-2 text-xs text-slate-600 self-center">
             <span className="text-slate-400">計算式: </span>
             (生産性 <b>{round1(stats.productivity)}</b> × 残稼働 <b>{stats.remainingWorkingDays}日</b>) + 獲得 <b>{stats.totalAcquisitions}件</b> = <b>{round1(stats.forecastAcquisitions)}件</b>

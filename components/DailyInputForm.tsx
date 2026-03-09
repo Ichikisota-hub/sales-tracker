@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, DailyRecord, MonthlyPlan } from '@/lib/supabase'
 import { getDaysArray, localToday } from '@/lib/dateUtils'
+import { KANSAI_AREAS, PREF_LIST } from '@/lib/areas'
 
 const WORK_STATUSES = ['稼働', '休日', '同行', '有休', '研修', '出張']
 const HOURS = [3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10]
@@ -17,28 +18,16 @@ const COUNTERS = [
   { label: '獲得',       field: 'acquisitions'    as keyof DailyRecord, plus: 'counter-btn-plus-green' },
 ]
 
-// localStorage キー（担当者×日付で一意）
-function draftKey(repId: string, dateStr: string) {
-  return `draft__${repId}__${dateStr}`
-}
-
+function draftKey(repId: string, dateStr: string) { return `draft__${repId}__${dateStr}` }
 function loadDraft(repId: string, dateStr: string): Partial<DailyRecord> | null {
-  try {
-    const raw = localStorage.getItem(draftKey(repId, dateStr))
-    return raw ? JSON.parse(raw) : null
-  } catch { return null }
+  try { const raw = localStorage.getItem(draftKey(repId, dateStr)); return raw ? JSON.parse(raw) : null }
+  catch { return null }
 }
-
 function saveDraft(repId: string, dateStr: string, record: Partial<DailyRecord>) {
-  try {
-    localStorage.setItem(draftKey(repId, dateStr), JSON.stringify(record))
-  } catch {}
+  try { localStorage.setItem(draftKey(repId, dateStr), JSON.stringify(record)) } catch {}
 }
-
 function clearDraft(repId: string, dateStr: string) {
-  try {
-    localStorage.removeItem(draftKey(repId, dateStr))
-  } catch {}
+  try { localStorage.removeItem(draftKey(repId, dateStr)) } catch {}
 }
 
 export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
@@ -54,12 +43,7 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { loadPlan() }, [repId, yearMonth])
-
-  // 日付 or 担当者が変わったら読み込み直し
-  useEffect(() => {
-    setSaved(false)
-    loadRecord()
-  }, [repId, selectedDate])
+  useEffect(() => { setSaved(false); loadRecord() }, [repId, selectedDate])
 
   async function loadPlan() {
     const { data } = await supabase.from('monthly_plans').select('*')
@@ -68,24 +52,16 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
   }
 
   async function loadRecord() {
-    // 1. まずDBから取得
     const { data } = await supabase.from('daily_records').select('*')
       .eq('sales_rep_id', repId).eq('record_date', selectedDate).single()
-
     const dbRecord: Partial<DailyRecord> = data || {
       work_status: '', attendance_status: '', working_hours: 0,
       visits: 0, net_meetings: 0, owner_meetings: 0, negotiations: 0, acquisitions: 0,
+      area_pref: '', area_city: '',
     }
-
-    // 2. ローカルに未保存の下書きがあればそちらを優先
     const draft = loadDraft(repId, selectedDate)
-    if (draft) {
-      setRecord(draft)
-      setHasDraft(true)
-    } else {
-      setRecord(dbRecord)
-      setHasDraft(false)
-    }
+    if (draft) { setRecord(draft); setHasDraft(true) }
+    else { setRecord(dbRecord); setHasDraft(false) }
   }
 
   async function handleSave() {
@@ -94,7 +70,6 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
       ...record, sales_rep_id: repId, record_date: selectedDate,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'sales_rep_id,record_date' })
-    // 保存成功したら下書きを削除
     clearDraft(repId, selectedDate)
     setHasDraft(false)
     setSaving(false)
@@ -109,7 +84,6 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
       { onConflict: 'sales_rep_id,year_month' })
   }
 
-  // フィールド変更 → stateとlocalStorage両方に保存
   function set(field: keyof DailyRecord, value: string | number) {
     setRecord(prev => {
       const next = { ...prev, [field]: value }
@@ -145,10 +119,13 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
   const idx = days.findIndex(d => d.dateStr === selectedDate)
   const isToday = selectedDate === today
 
+  const selectedPref = (record as any).area_pref || ''
+  const selectedCity = (record as any).area_city || ''
+  const cityList = selectedPref ? (KANSAI_AREAS[selectedPref] || []) : []
+
   return (
     <div>
-
-      {/* ── 担当者ヘッダー（大きく目立つ） ── */}
+      {/* ── 担当者ヘッダー ── */}
       <div className="mobile-card" style={{background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)'}}>
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white text-xl font-black flex-shrink-0">
@@ -181,11 +158,7 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
         </div>
         <div className="date-nav">
           <button className="date-nav-btn" onClick={() => idx > 0 && setSelectedDate(days[idx - 1].dateStr)}>‹</button>
-          <select
-            value={selectedDate}
-            onChange={e => setSelectedDate(e.target.value)}
-            className="date-select"
-          >
+          <select value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="date-select">
             {days.map(d => (
               <option key={d.dateStr} value={d.dateStr}>
                 {d.day}日（{d.dowJa}）{d.dateStr === today ? '  ← 今日' : ''}
@@ -213,6 +186,48 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
         </div>
       </div>
 
+      {/* ── 稼働エリア（稼働時のみ） ── */}
+      {isWorking && (
+        <div className="mobile-card">
+          <div className="mobile-card-label">📍 稼働エリア</div>
+          <div className="flex gap-2">
+            {/* 都道府県 */}
+            <div className="flex-1">
+              <div className="text-xs text-slate-500 mb-1 font-medium">都道府県</div>
+              <select
+                value={selectedPref}
+                onChange={e => {
+                  set('area_pref' as any, e.target.value)
+                  set('area_city' as any, '')
+                }}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+              >
+                <option value="">選択してください</option>
+                {PREF_LIST.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            {/* 市区町村 */}
+            <div className="flex-1">
+              <div className="text-xs text-slate-500 mb-1 font-medium">市区町村・地区</div>
+              <select
+                value={selectedCity}
+                onChange={e => set('area_city' as any, e.target.value)}
+                disabled={!selectedPref}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100 disabled:text-slate-400"
+              >
+                <option value="">選択してください</option>
+                {cityList.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          {selectedPref && selectedCity && (
+            <div className="mt-2 text-xs font-bold text-blue-700 bg-blue-50 rounded-lg px-3 py-1.5">
+              📍 {selectedPref} → {selectedCity}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── 稼働時間 ── */}
       <div className="mobile-card">
         <div className="mobile-card-label">
@@ -221,9 +236,7 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
         </div>
         <div className="hour-grid">
           {HOURS.map(h => (
-            <button
-              key={h}
-              onClick={() => set('working_hours', h)}
+            <button key={h} onClick={() => set('working_hours', h)}
               className={`hour-btn ${record.working_hours === h ? 'hour-btn-active' : 'hour-btn-inactive'}`}
             >{h}h</button>
           ))}
@@ -240,13 +253,8 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
               <div key={field} className="counter-row">
                 <span className="counter-label">{label}</span>
                 <button className="counter-btn counter-btn-minus" onClick={() => decrement(field)}>−</button>
-                <input
-                  type="number" min={0}
-                  value={val === 0 ? '' : val}
-                  placeholder="0"
-                  onChange={e => set(field, parseInt(e.target.value) || 0)}
-                  className="counter-input"
-                />
+                <input type="number" min={0} value={val === 0 ? '' : val} placeholder="0"
+                  onChange={e => set(field, parseInt(e.target.value) || 0)} className="counter-input" />
                 <button className={`counter-btn ${plus}`} onClick={() => increment(field)}>＋</button>
               </div>
             )
@@ -264,22 +272,12 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
           <div key={field} className="plan-row">
             <span className="text-sm font-semibold text-slate-700">{label}</span>
             <div className="plan-stepper">
-              <button
-                className="plan-stepper-btn"
-                style={{background:'#f1f5f9', color:'#475569'}}
-                onClick={() => updatePlan(field, Math.max(0, (plan?.[field] || 0) - 1))}
-              >−</button>
-              <input
-                type="number" min={0}
-                value={plan?.[field] || 0}
-                onChange={e => updatePlan(field, parseInt(e.target.value) || 0)}
-                className="plan-input"
-              />
-              <button
-                className="plan-stepper-btn"
-                style={{background:'#dc2626', color:'white'}}
-                onClick={() => updatePlan(field, (plan?.[field] || 0) + 1)}
-              >＋</button>
+              <button className="plan-stepper-btn" style={{background:'#f1f5f9', color:'#475569'}}
+                onClick={() => updatePlan(field, Math.max(0, (plan?.[field] || 0) - 1))}>−</button>
+              <input type="number" min={0} value={plan?.[field] || 0}
+                onChange={e => updatePlan(field, parseInt(e.target.value) || 0)} className="plan-input" />
+              <button className="plan-stepper-btn" style={{background:'#dc2626', color:'white'}}
+                onClick={() => updatePlan(field, (plan?.[field] || 0) + 1)}>＋</button>
               <span className="text-sm text-slate-400 w-4">{unit}</span>
             </div>
           </div>
@@ -288,11 +286,8 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
 
       {/* ── 保存ボタン（固定） ── */}
       <div className="save-bar">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className={`save-btn ${saved ? 'save-btn-saved' : saving ? 'save-btn-saving' : 'save-btn-default'}`}
-        >
+        <button onClick={handleSave} disabled={saving}
+          className={`save-btn ${saved ? 'save-btn-saved' : saving ? 'save-btn-saving' : 'save-btn-default'}`}>
           {saved ? '✓ 保存しました！' : saving ? '保存中...' : hasDraft ? '💾 保存する（未保存あり）' : '保存する'}
         </button>
       </div>
