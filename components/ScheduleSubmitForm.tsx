@@ -7,22 +7,33 @@ import { KANSAI_AREAS, PREF_LIST } from '@/lib/areas'
 
 const WORK_STATUSES = ['稼働', '休日', '同行', '有休', '研修', '出張']
 
+// 時刻選択肢（30分刻み）
+const TIMES: string[] = []
+for (let h = 6; h <= 23; h++) {
+  TIMES.push(`${String(h).padStart(2,'0')}:00`)
+  TIMES.push(`${String(h).padStart(2,'0')}:30`)
+}
+
 type Props = { repId: string; repName: string; yearMonth: string }
 
 type DaySchedule = {
   work_status: string
   area_pref: string
   area_city: string
+  work_time_start: string
+  work_time_end: string
 }
 
-const DEFAULT_DAY: DaySchedule = { work_status: '休日', area_pref: '', area_city: '' }
+const DEFAULT_DAY: DaySchedule = {
+  work_status: '休日', area_pref: '', area_city: '',
+  work_time_start: '', work_time_end: '',
+}
 
 export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props) {
   const days = getDaysArray(yearMonth)
   const [schedules, setSchedules] = useState<Record<string, DaySchedule>>({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [selectedPref, setSelectedPref] = useState<Record<string, string>>({})
 
   useEffect(() => { loadSchedules() }, [repId, yearMonth])
 
@@ -36,20 +47,17 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
       .lte('schedule_date', `${y}-${m}-31`)
 
     const map: Record<string, DaySchedule> = {}
-    const prefMap: Record<string, string> = {}
-    days.forEach(d => {
-      map[d.dateStr] = { ...DEFAULT_DAY }
-    })
+    days.forEach(d => { map[d.dateStr] = { ...DEFAULT_DAY } })
     data?.forEach(r => {
       map[r.schedule_date] = {
         work_status: r.work_status || '休日',
         area_pref: r.area_pref || '',
         area_city: r.area_city || '',
+        work_time_start: r.work_time_start || '',
+        work_time_end: r.work_time_end || '',
       }
-      if (r.area_pref) prefMap[r.schedule_date] = r.area_pref
     })
     setSchedules(map)
-    setSelectedPref(prefMap)
   }
 
   function setDayField(dateStr: string, field: keyof DaySchedule, value: string) {
@@ -59,7 +67,6 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
     }))
   }
 
-  // 一括設定：週〇曜日をまとめて設定
   function bulkSetDow(dow: number, status: string) {
     setSchedules(prev => {
       const next = { ...prev }
@@ -78,14 +85,13 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
       work_status: schedules[d.dateStr]?.work_status || '休日',
       area_pref: schedules[d.dateStr]?.area_pref || '',
       area_city: schedules[d.dateStr]?.area_city || '',
+      work_time_start: schedules[d.dateStr]?.work_time_start || '',
+      work_time_end: schedules[d.dateStr]?.work_time_end || '',
       updated_at: new Date().toISOString(),
     }))
 
-    await supabase.from('work_schedules').upsert(rows, {
-      onConflict: 'sales_rep_id,schedule_date'
-    })
+    await supabase.from('work_schedules').upsert(rows, { onConflict: 'sales_rep_id,schedule_date' })
 
-    // monthly_plansのplan_working_daysを更新（稼働ステータスの日数）
     const workingCount = rows.filter(r => r.work_status === '稼働').length
     await supabase.from('monthly_plans').upsert({
       sales_rep_id: repId,
@@ -143,9 +149,7 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
               </span>
               <div className="flex gap-1 flex-wrap flex-1">
                 {WORK_STATUSES.map(s => (
-                  <button
-                    key={s}
-                    onClick={() => bulkSetDow(dow, s)}
+                  <button key={s} onClick={() => bulkSetDow(dow, s)}
                     className={`text-xs px-2 py-1 rounded-lg font-medium transition-all ${
                       s === '稼働' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' :
                       s === '休日' ? 'bg-slate-100 text-slate-500 hover:bg-slate-200' :
@@ -179,7 +183,7 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
                   'border-slate-100 bg-slate-50'
                 }`}
               >
-                {/* 日付 + ステータス選択 */}
+                {/* 日付 + ステータス */}
                 <div className="flex items-center gap-2 mb-2">
                   <div className={`text-sm font-black w-16 flex-shrink-0 ${
                     d.dow === 0 ? 'text-red-500' : d.dow === 6 ? 'text-blue-500' : 'text-slate-700'
@@ -188,8 +192,7 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
                   </div>
                   <div className="flex gap-1 flex-wrap flex-1">
                     {WORK_STATUSES.map(s => (
-                      <button
-                        key={s}
+                      <button key={s}
                         onClick={() => setDayField(d.dateStr, 'work_status', s)}
                         className={`text-xs px-2 py-1 rounded-lg font-bold transition-all ${
                           sched.work_status === s
@@ -201,33 +204,63 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
                   </div>
                 </div>
 
-                {/* エリア選択（稼働時のみ） */}
+                {/* 稼働時のみ: 時間帯 + エリア */}
                 {isWork && (
-                  <div className="flex gap-2 mt-1">
-                    <select
-                      value={pref}
-                      onChange={e => {
-                        setDayField(d.dateStr, 'area_pref', e.target.value)
-                        setDayField(d.dateStr, 'area_city', '')
-                      }}
-                      className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-300"
-                    >
-                      <option value="">府県を選択</option>
-                      {PREF_LIST.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                    <select
-                      value={city}
-                      onChange={e => setDayField(d.dateStr, 'area_city', e.target.value)}
-                      disabled={!pref}
-                      className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-300 disabled:bg-slate-100 disabled:text-slate-400"
-                    >
-                      <option value="">市区を選択</option>
-                      {cities.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                )}
-                {isWork && pref && city && (
-                  <div className="mt-1 text-xs text-emerald-700 font-bold">📍 {pref} → {city}</div>
+                  <>
+                    {/* 稼働時間帯 */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="text-xs text-slate-500 font-medium w-16 flex-shrink-0">⏰ 時間帯</div>
+                      <select
+                        value={sched.work_time_start}
+                        onChange={e => setDayField(d.dateStr, 'work_time_start', e.target.value)}
+                        className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-300"
+                      >
+                        <option value="">開始</option>
+                        {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <span className="text-xs text-slate-400">〜</span>
+                      <select
+                        value={sched.work_time_end}
+                        onChange={e => setDayField(d.dateStr, 'work_time_end', e.target.value)}
+                        className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-300"
+                      >
+                        <option value="">終了</option>
+                        {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    {sched.work_time_start && sched.work_time_end && (
+                      <div className="text-xs font-bold text-emerald-700 bg-emerald-100 rounded-lg px-2 py-1 mb-2 inline-block">
+                        ⏰ {sched.work_time_start}〜{sched.work_time_end}
+                      </div>
+                    )}
+
+                    {/* エリア */}
+                    <div className="flex gap-2">
+                      <select
+                        value={pref}
+                        onChange={e => {
+                          setDayField(d.dateStr, 'area_pref', e.target.value)
+                          setDayField(d.dateStr, 'area_city', '')
+                        }}
+                        className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-300"
+                      >
+                        <option value="">府県を選択</option>
+                        {PREF_LIST.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                      <select
+                        value={city}
+                        onChange={e => setDayField(d.dateStr, 'area_city', e.target.value)}
+                        disabled={!pref}
+                        className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-300 disabled:bg-slate-100 disabled:text-slate-400"
+                      >
+                        <option value="">市区を選択</option>
+                        {cities.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    {pref && city && (
+                      <div className="mt-1 text-xs text-emerald-700 font-bold">📍 {pref} → {city}</div>
+                    )}
+                  </>
                 )}
               </div>
             )
@@ -242,9 +275,7 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
           <span className="mx-2 text-slate-300">｜</span>
           提出すると「計画稼働」に反映されます
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
+        <button onClick={handleSave} disabled={saving}
           className={`save-btn ${saved ? 'save-btn-saved' : saving ? 'save-btn-saving' : 'save-btn-default'}`}
         >
           {saved ? '✓ 提出しました！計画稼働に反映済み' : saving ? '提出中...' : '📋 稼働予定を提出する'}
