@@ -47,14 +47,3 @@ export function getMonthList(count = 12): string[] {
   }
   return months
 }
-
-/** UTC ではなくローカルタイムゾーンで今日の yyyy-MM-dd を返す */
-export function localToday(): string {
-  const now = new Date()
-  return format(now, 'yyyy-MM-dd')
-}
-
-/** ローカルタイムゾーンで今月の yyyy-MM を返す */
-export function localYearMonth(): string {
-  return format(new Date(), 'yyyy-MM')
-}
