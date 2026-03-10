@@ -32,6 +32,7 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
   const [schedules, setSchedules] = useState<Record<string, DaySchedule>>({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => { loadSchedules() }, [repId, yearMonth])
 
@@ -75,30 +76,51 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
 
   async function handleSave() {
     setSaving(true)
-    const rows = days.map(d => ({
-      sales_rep_id: repId,
-      schedule_date: d.dateStr,
-      work_status: schedules[d.dateStr]?.work_status || '休日',
-      area_pref: '',
-      area_city: '',
-      work_time_start: schedules[d.dateStr]?.work_time_start || '',
-      work_time_end: schedules[d.dateStr]?.work_time_end || '',
-      updated_at: new Date().toISOString(),
-    }))
+    setSaveError('')
+    try {
+      const rows = days.map(d => ({
+        sales_rep_id: repId,
+        schedule_date: d.dateStr,
+        work_status: schedules[d.dateStr]?.work_status || '休日',
+        area_pref: '',
+        area_city: '',
+        work_time_start: schedules[d.dateStr]?.work_time_start || '',
+        work_time_end: schedules[d.dateStr]?.work_time_end || '',
+        updated_at: new Date().toISOString(),
+      }))
 
-    await supabase.from('work_schedules').upsert(rows, { onConflict: 'sales_rep_id,schedule_date' })
+      const { error: schedError } = await supabase
+        .from('work_schedules')
+        .upsert(rows, { onConflict: 'sales_rep_id,schedule_date' })
+      if (schedError) throw schedError
 
-    const workingCount = rows.filter(r => r.work_status === '稼働').length
-    await supabase.from('monthly_plans').upsert({
-      sales_rep_id: repId,
-      year_month: yearMonth,
-      plan_working_days: workingCount,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'sales_rep_id,year_month' })
+      const workingCount = rows.filter(r => r.work_status === '稼働').length
 
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+      // 既存のplan_casesを取得して保持する
+      const { data: existingPlan } = await supabase
+        .from('monthly_plans')
+        .select('plan_cases')
+        .eq('sales_rep_id', repId)
+        .eq('year_month', yearMonth)
+        .single()
+
+      const { error: planError } = await supabase.from('monthly_plans').upsert({
+        sales_rep_id: repId,
+        year_month: yearMonth,
+        plan_cases: existingPlan?.plan_cases || 0,
+        plan_working_days: workingCount,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'sales_rep_id,year_month' })
+      if (planError) throw planError
+
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      setSaveError(`保存に失敗しました: ${message}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const workingCount = days.filter(d => schedules[d.dateStr]?.work_status === '稼働').length
@@ -129,6 +151,13 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
           </div>
         </div>
       </div>
+
+      {/* エラー表示 */}
+      {saveError && (
+        <div className="mx-0 mt-2 p-3 bg-red-50 border border-red-300 rounded-xl text-xs text-red-700 font-medium">
+          ⚠️ {saveError}
+        </div>
+      )}
 
       {/* 一括設定 */}
       <div className="mobile-card">
