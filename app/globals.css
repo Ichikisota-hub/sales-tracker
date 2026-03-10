@@ -102,7 +102,7 @@ body {
 }
 
 .mobile-card-label {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -121,7 +121,7 @@ body {
 }
 
 .counter-label {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   color: #334155;
   width: 72px;
@@ -135,7 +135,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 700;
   flex-shrink: 0;
   cursor: pointer;
@@ -160,7 +160,7 @@ body {
 .counter-input {
   flex: 1;
   text-align: center;
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 900;
   color: #1e293b;
   border: 2px solid #e2e8f0;
@@ -191,9 +191,9 @@ body {
 }
 
 .status-btn {
-  padding: 12px 6px;
-  border-radius: 12px;
-  font-size: 13px;
+  padding: 16px 6px;
+  border-radius: 14px;
+  font-size: 18px;
   font-weight: 600;
   text-align: center;
   cursor: pointer;
@@ -225,9 +225,9 @@ body {
 }
 
 .hour-btn {
-  padding: 10px 4px;
-  border-radius: 10px;
-  font-size: 12px;
+  padding: 12px 4px;
+  border-radius: 12px;
+  font-size: 15px;
   font-weight: 600;
   text-align: center;
   cursor: pointer;
@@ -266,9 +266,9 @@ body {
 
 .save-btn {
   width: 100%;
-  padding: 16px;
-  border-radius: 14px;
-  font-size: 16px;
+  padding: 18px;
+  border-radius: 16px;
+  font-size: 19px;
   font-weight: 800;
   text-align: center;
   cursor: pointer;
@@ -313,9 +313,9 @@ body {
 .date-select {
   flex: 1;
   border: 2px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 8px 12px;
-  font-size: 14px;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 17px;
   font-weight: 600;
   text-align: center;
   background: white;
@@ -371,9 +371,9 @@ body {
 
 .tab-btn {
   flex: 1;
-  padding: 7px 4px;
+  padding: 8px 4px;
   border-radius: 8px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-align: center;
   cursor: pointer;
@@ -404,10 +404,10 @@ body {
 }
 
 .plan-stepper-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  font-size: 18px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  font-size: 22px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -421,9 +421,9 @@ body {
 .plan-stepper-btn:active { transform: scale(.9); }
 
 .plan-input {
-  width: 56px;
+  width: 68px;
   text-align: center;
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 900;
   border: 2px solid #e2e8f0;
   border-radius: 8px;

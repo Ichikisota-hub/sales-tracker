@@ -4,14 +4,17 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getDaysArray } from '@/lib/dateUtils'
 
-const WORK_STATUSES = ['稼働', '休日', '同行']
+// 稼働・休日のみ（同行削除）
+const WORK_STATUSES = ['稼働', '休日']
 
-// 時刻選択肢（30分刻み）
+// 時刻選択肢（9:00〜21:00、30分刻み）
 const TIMES: string[] = []
-for (let h = 6; h <= 23; h++) {
+for (let h = 9; h <= 21; h++) {
   TIMES.push(`${String(h).padStart(2,'0')}:00`)
-  TIMES.push(`${String(h).padStart(2,'0')}:30`)
+  if (h < 21) TIMES.push(`${String(h).padStart(2,'0')}:30`)
 }
+
+const LOCK_PASSWORD = 'Sota0707'
 
 type Props = { repId: string; repName: string; yearMonth: string }
 
@@ -27,12 +30,50 @@ const DEFAULT_DAY: DaySchedule = {
   work_time_end: '',
 }
 
+// 当月25日を超えているか判定
+function isAfter25th(yearMonth: string): boolean {
+  const today = new Date()
+  const [y, m] = yearMonth.split('-').map(Number)
+  // 対象月の前月の25日以降はロック（翌月分提出の場合：今月25日超）
+  // シンプルに：今日が25日より大きい && 今月が yearMonth の前月
+  const todayYear = today.getFullYear()
+  const todayMonth = today.getMonth() + 1
+  const todayDay = today.getDate()
+
+  // 対象が翌月 → 今月25日超えたらロック
+  // 対象が今月 → 同様に今月25日超えたらロック
+  const targetYear = y
+  const targetMonth = m
+  const currentMonth = todayYear * 12 + todayMonth
+  const targetMonthNum = targetYear * 12 + targetMonth
+
+  if (targetMonthNum > currentMonth) {
+    // 翌月分：今月25日超えたらロック
+    return todayDay > 25
+  } else if (targetMonthNum === currentMonth) {
+    // 今月分：今月25日超えたらロック
+    return todayDay > 25
+  }
+  // 過去月は常にロック
+  return true
+}
+
 export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props) {
   const days = getDaysArray(yearMonth)
   const [schedules, setSchedules] = useState<Record<string, DaySchedule>>({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [validationError, setValidationError] = useState('')
+
+  // パスワードロック
+  const locked = isAfter25th(yearMonth)
+  const [unlocked, setUnlocked] = useState(false)
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [passwordInput, setPasswordInput] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+
+  const isEditable = !locked || unlocked
 
   useEffect(() => { loadSchedules() }, [repId, yearMonth])
 
@@ -74,12 +115,32 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
     })
   }
 
+  function tryUnlock() {
+    if (passwordInput === LOCK_PASSWORD) {
+      setUnlocked(true)
+      setShowPasswordModal(false)
+      setPasswordInput('')
+      setPasswordError('')
+    } else {
+      setPasswordError('パスワードが違います')
+    }
+  }
+
   async function handleSave() {
+    // 稼働日の時間チェック（必須）
+    const missingTime = days.filter(d => {
+      const s = schedules[d.dateStr]
+      return s?.work_status === '稼働' && (!s.work_time_start || !s.work_time_end)
+    })
+    if (missingTime.length > 0) {
+      setValidationError(`稼働日の時間を全て入力してください（${missingTime.map(d => d.dateStr.slice(5).replace('-','/')).join('、')}）`)
+      return
+    }
+    setValidationError('')
+
     setSaving(true)
     setSaveError('')
     try {
-      // まずwork_schedulesのカラム存在を確認するためシンプルに送信
-      // area_pref/area_cityは任意カラムなので除外してまず動かす
       const rows = days.map(d => ({
         sales_rep_id: repId,
         schedule_date: d.dateStr,
@@ -95,25 +156,20 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
         throw new Error(schedError.message || schedError.details || JSON.stringify(schedError))
       }
 
-      // work_time_start/endを別途更新（カラムが存在する場合のみ）
+      // 時間帯を別途更新
       for (const d of days) {
         const s = schedules[d.dateStr]
-        if (s?.work_time_start || s?.work_time_end) {
+        if (s?.work_status === '稼働' && s.work_time_start && s.work_time_end) {
           await supabase
             .from('work_schedules')
-            .update({
-              work_time_start: s.work_time_start || '',
-              work_time_end: s.work_time_end || '',
-            })
+            .update({ work_time_start: s.work_time_start, work_time_end: s.work_time_end })
             .eq('sales_rep_id', repId)
             .eq('schedule_date', d.dateStr)
-          // エラーは無視（カラムがない場合でも続行）
         }
       }
 
       const workingCount = rows.filter(r => r.work_status === '稼働').length
 
-      // 既存のplan_casesを取得して保持する
       const { data: existingPlan } = await supabase
         .from('monthly_plans')
         .select('plan_cases')
@@ -154,56 +210,100 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
   const workingCount = days.filter(d => schedules[d.dateStr]?.work_status === '稼働').length
 
   const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土']
-  const STATUS_COLORS: Record<string, string> = {
-    '稼働': 'bg-emerald-500 text-white',
-    '休日': 'bg-slate-200 text-slate-500',
-    '同行': 'bg-blue-400 text-white',
-  }
 
   return (
     <div>
-      {/* ヘッダー */}
+      {/* ── ヘッダー ── */}
       <div className="mobile-card" style={{background: 'linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%)'}}>
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-blue-400 flex items-center justify-center text-white text-xl font-black flex-shrink-0">
+          <div className="w-14 h-14 rounded-full bg-blue-400 flex items-center justify-center text-white text-2xl font-black flex-shrink-0">
             {repName.charAt(0)}
           </div>
           <div className="flex-1">
-            <div className="text-xs text-blue-200 font-medium">稼働予定提出</div>
-            <div className="text-xl font-black text-white">{repName}</div>
-            <div className="text-xs text-blue-200 mt-0.5">{yearMonth.replace('-', '年')}月</div>
+            <div className="text-sm text-blue-200 font-medium">シフト提出</div>
+            <div className="text-2xl font-black text-white">{repName}</div>
+            <div className="text-sm text-blue-200 mt-0.5">{yearMonth.replace('-', '年')}月</div>
           </div>
           <div className="text-right">
-            <div className="text-2xl font-black text-emerald-400">{workingCount}</div>
-            <div className="text-xs text-blue-200">稼働予定日</div>
+            <div className="text-3xl font-black text-emerald-400">{workingCount}</div>
+            <div className="text-sm text-blue-200">稼働予定日</div>
           </div>
         </div>
       </div>
 
-      {/* エラー表示 */}
-      {saveError && (
-        <div className="mx-0 mt-2 p-3 bg-red-50 border border-red-300 rounded-xl text-xs text-red-700 font-medium">
-          ⚠️ {saveError}
+      {/* ── ロック表示 ── */}
+      {locked && !unlocked && (
+        <div className="mx-0 mt-2 p-4 bg-amber-50 border border-amber-300 rounded-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-base font-black text-amber-800">🔒 25日を過ぎたためロック中</div>
+              <div className="text-sm text-amber-600 mt-1">変更するにはパスワードが必要です</div>
+            </div>
+            <button onClick={() => { setShowPasswordModal(true); setPasswordError(''); setPasswordInput('') }}
+              className="bg-amber-500 text-white text-sm font-bold px-4 py-2 rounded-xl">
+              解除
+            </button>
+          </div>
         </div>
       )}
 
-      {/* 一括設定 */}
+      {/* ── パスワードモーダル ── */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div className="text-xl font-black text-slate-800 mb-2">🔑 パスワード入力</div>
+            <div className="text-sm text-slate-500 mb-4">シフト変更にはパスワードが必要です</div>
+            <input
+              type="password"
+              value={passwordInput}
+              onChange={e => setPasswordInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && tryUnlock()}
+              placeholder="パスワードを入力"
+              className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-lg mb-2 focus:outline-none focus:border-blue-400"
+              autoFocus
+            />
+            {passwordError && (
+              <div className="text-sm text-red-600 font-bold mb-3">⚠️ {passwordError}</div>
+            )}
+            <div className="flex gap-2">
+              <button onClick={() => setShowPasswordModal(false)}
+                className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-600 font-bold text-base">キャンセル</button>
+              <button onClick={tryUnlock}
+                className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-bold text-base">確認</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── エラー表示 ── */}
+      {saveError && (
+        <div className="mx-0 mt-2 p-3 bg-red-50 border border-red-300 rounded-xl text-sm text-red-700 font-medium">
+          ⚠️ {saveError}
+        </div>
+      )}
+      {validationError && (
+        <div className="mx-0 mt-2 p-3 bg-orange-50 border border-orange-300 rounded-xl text-sm text-orange-700 font-bold">
+          ⚠️ {validationError}
+        </div>
+      )}
+
+      {/* ── 一括設定 ── */}
       <div className="mobile-card">
-        <div className="mobile-card-label">⚡ 一括設定</div>
-        <div className="text-xs text-slate-500 mb-2">曜日ごとに一括でステータスを設定できます</div>
-        <div className="space-y-2">
+        <div className="mobile-card-label text-lg">⚡ 一括設定</div>
+        <div className="text-sm text-slate-500 mb-3">曜日ごとに一括でステータスを設定できます</div>
+        <div className="space-y-3">
           {[1,2,3,4,5,6,0].map(dow => (
-            <div key={dow} className="flex items-center gap-2">
-              <span className={`text-xs font-bold w-6 text-center ${dow===0?'text-red-500':dow===6?'text-blue-500':'text-slate-600'}`}>
+            <div key={dow} className="flex items-center gap-3">
+              <span className={`text-base font-black w-8 text-center ${dow===0?'text-red-500':dow===6?'text-blue-500':'text-slate-600'}`}>
                 {DOW_LABELS[dow]}
               </span>
               <div className="flex gap-2">
                 {WORK_STATUSES.map(s => (
-                  <button key={s} onClick={() => bulkSetDow(dow, s)}
-                    className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  <button key={s} onClick={() => isEditable && bulkSetDow(dow, s)}
+                    disabled={!isEditable}
+                    className={`text-sm px-4 py-2 rounded-xl font-bold transition-all disabled:opacity-50 ${
                       s === '稼働' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' :
-                      s === '休日' ? 'bg-slate-100 text-slate-500 hover:bg-slate-200' :
-                      'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                      'bg-slate-100 text-slate-500 hover:bg-slate-200'
                     }`}
                   >{s}</button>
                 ))}
@@ -213,71 +313,85 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
         </div>
       </div>
 
-      {/* 日別設定 */}
+      {/* ── 日別設定 ── */}
       <div className="mobile-card">
-        <div className="mobile-card-label">📅 日別設定</div>
-        <div className="space-y-2">
+        <div className="mobile-card-label text-lg">📅 日別設定</div>
+        <div className="space-y-3">
           {days.map(d => {
             const sched = schedules[d.dateStr] || DEFAULT_DAY
             const isWork = sched.work_status === '稼働'
+            const missingTime = isWork && (!sched.work_time_start || !sched.work_time_end)
 
             return (
               <div key={d.dateStr}
-                className={`rounded-xl border p-3 transition-all ${
-                  isWork ? 'border-emerald-200 bg-emerald-50' :
-                  sched.work_status === '同行' ? 'border-blue-200 bg-blue-50' :
-                  d.dow === 0 ? 'border-red-100 bg-red-50' :
-                  d.dow === 6 ? 'border-blue-100 bg-blue-50/50' :
-                  'border-slate-100 bg-slate-50'
+                className={`rounded-2xl border-2 p-3 transition-all ${
+                  isWork
+                    ? missingTime ? 'border-orange-300 bg-orange-50' : 'border-emerald-300 bg-emerald-50'
+                    : d.dow === 0 ? 'border-red-100 bg-red-50'
+                    : d.dow === 6 ? 'border-blue-100 bg-blue-50/50'
+                    : 'border-slate-100 bg-slate-50'
                 }`}
               >
                 {/* 日付 + ステータス */}
                 <div className="flex items-center gap-2">
-                  <div className={`text-sm font-black w-16 flex-shrink-0 ${
+                  <div className={`text-base font-black w-20 flex-shrink-0 ${
                     d.dow === 0 ? 'text-red-500' : d.dow === 6 ? 'text-blue-500' : 'text-slate-700'
                   }`}>
                     {d.dateStr.slice(5).replace('-', '/')}（{d.dowJa}）
                   </div>
-                  <div className="flex gap-1.5 flex-1">
+                  <div className="flex gap-2 flex-1">
                     {WORK_STATUSES.map(s => (
                       <button key={s}
-                        onClick={() => setDayField(d.dateStr, 'work_status', s)}
-                        className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-all ${
+                        onClick={() => isEditable && setDayField(d.dateStr, 'work_status', s)}
+                        disabled={!isEditable}
+                        className={`flex-1 py-2.5 rounded-xl text-base font-black transition-all disabled:opacity-50 ${
                           sched.work_status === s
-                            ? STATUS_COLORS[s]
-                            : 'bg-white border border-slate-200 text-slate-400'
+                            ? s === '稼働' ? 'bg-emerald-500 text-white shadow' : 'bg-slate-400 text-white shadow'
+                            : 'bg-white border-2 border-slate-200 text-slate-400'
                         }`}
                       >{s}</button>
                     ))}
                   </div>
                 </div>
 
-                {/* 稼働時のみ: 時間帯 */}
+                {/* 稼働時のみ: 時間帯（必須） */}
                 {isWork && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <div className="text-xs text-slate-500 font-medium w-16 flex-shrink-0">⏰ 時間帯</div>
-                    <select
-                      value={sched.work_time_start}
-                      onChange={e => setDayField(d.dateStr, 'work_time_start', e.target.value)}
-                      className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-300"
-                    >
-                      <option value="">開始</option>
-                      {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                    <span className="text-xs text-slate-400 font-bold">〜</span>
-                    <select
-                      value={sched.work_time_end}
-                      onChange={e => setDayField(d.dateStr, 'work_time_end', e.target.value)}
-                      className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-300"
-                    >
-                      <option value="">終了</option>
-                      {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                    {sched.work_time_start && sched.work_time_end && (
-                      <span className="text-xs font-black text-emerald-700 bg-emerald-100 rounded-lg px-2 py-1 whitespace-nowrap">
-                        {sched.work_time_start}〜{sched.work_time_end}
-                      </span>
-                    )}
+                  <div className="mt-3">
+                    <div className="flex items-center gap-1 mb-1">
+                      <span className="text-sm font-bold text-slate-600">⏰ 時間帯</span>
+                      <span className="text-xs text-red-500 font-bold">※必須</span>
+                      {missingTime && <span className="text-xs text-orange-600 font-bold ml-1">未入力</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={sched.work_time_start}
+                        onChange={e => isEditable && setDayField(d.dateStr, 'work_time_start', e.target.value)}
+                        disabled={!isEditable}
+                        className={`flex-1 text-base border-2 rounded-xl px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:opacity-50 ${
+                          missingTime && !sched.work_time_start ? 'border-orange-400' : 'border-slate-200'
+                        }`}
+                      >
+                        <option value="">開始時刻</option>
+                        {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <span className="text-base text-slate-400 font-bold flex-shrink-0">〜</span>
+                      <select
+                        value={sched.work_time_end}
+                        onChange={e => isEditable && setDayField(d.dateStr, 'work_time_end', e.target.value)}
+                        disabled={!isEditable}
+                        className={`flex-1 text-base border-2 rounded-xl px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:opacity-50 ${
+                          missingTime && !sched.work_time_end ? 'border-orange-400' : 'border-slate-200'
+                        }`}
+                      >
+                        <option value="">終了時刻</option>
+                        {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      {sched.work_time_start && sched.work_time_end && (
+                        <span className="text-sm font-black text-emerald-700 bg-emerald-100 rounded-xl px-2 py-2 whitespace-nowrap flex-shrink-0">
+                          {sched.work_time_start}〜{sched.work_time_end}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -286,18 +400,24 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
         </div>
       </div>
 
-      {/* 提出ボタン */}
+      {/* ── 提出ボタン ── */}
       <div className="save-bar">
-        <div className="text-center text-xs text-slate-500 mb-2">
-          稼働予定日数: <span className="font-black text-emerald-600 text-base">{workingCount}日</span>
+        <div className="text-center text-sm text-slate-500 mb-2">
+          稼働予定日数: <span className="font-black text-emerald-600 text-xl">{workingCount}日</span>
           <span className="mx-2 text-slate-300">｜</span>
           提出すると「計画稼働」に反映されます
         </div>
-        <button onClick={handleSave} disabled={saving}
-          className={`save-btn ${saved ? 'save-btn-saved' : saving ? 'save-btn-saving' : 'save-btn-default'}`}
-        >
-          {saved ? '✓ 提出しました！計画稼働に反映済み' : saving ? '提出中...' : '📋 稼働予定を提出する'}
-        </button>
+        {!isEditable ? (
+          <button onClick={() => { setShowPasswordModal(true); setPasswordError(''); setPasswordInput('') }}
+            className="save-btn save-btn-default text-lg">
+            🔒 ロック中 — タップして解除
+          </button>
+        ) : (
+          <button onClick={handleSave} disabled={saving}
+            className={`save-btn text-lg ${saved ? 'save-btn-saved' : saving ? 'save-btn-saving' : 'save-btn-default'}`}>
+            {saved ? '✓ 提出しました！計画稼働に反映済み' : saving ? '提出中...' : '📋 シフトを提出する'}
+          </button>
+        )}
       </div>
     </div>
   )

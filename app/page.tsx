@@ -18,8 +18,8 @@ function getNextMonth(ym: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-type MainTab = 'form' | 'schedule' | 'analysis' | 'overall' | 'area'
-type SubTab = 'sheet' | 'shift' | 'settings'
+type MainTab = 'form' | 'analysis' | 'overall' | 'area'
+type SubTab = 'shift_submit' | 'sheet' | 'shift' | 'settings'
 
 export default function Home() {
   const [reps, setReps] = useState<SalesRep[]>([])
@@ -37,7 +37,6 @@ export default function Home() {
 
   useEffect(() => { loadReps() }, [])
 
-  // サブメニュー外クリックで閉じる
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (subMenuRef.current && !subMenuRef.current.contains(e.target as Node)) {
@@ -56,7 +55,7 @@ export default function Home() {
 
   function openSubTab(tab: SubTab) {
     setActiveSubTab(tab)
-    setActiveTab('form') // mainタブのアクティブを外す
+    setActiveTab('form')
     setSubMenuOpen(false)
   }
 
@@ -75,22 +74,22 @@ export default function Home() {
 
   const mainTabs = [
     { id: 'form' as MainTab,     label: '入力',   icon: '✏️' },
-    { id: 'schedule' as MainTab, label: '予定',   icon: '📅' },
     { id: 'analysis' as MainTab, label: '分析',   icon: '📈' },
     { id: 'overall' as MainTab,  label: '全体',   icon: '🏆' },
     { id: 'area' as MainTab,     label: 'エリア', icon: '📍' },
   ]
 
   const subTabs = [
-    { id: 'shift' as SubTab,    label: 'シフト確認', icon: '📅' },
-    { id: 'sheet' as SubTab,    label: '表',         icon: '📋' },
-    { id: 'settings' as SubTab, label: '設定',       icon: '⚙️' },
+    { id: 'shift_submit' as SubTab, label: 'シフト提出', icon: '📅' },
+    { id: 'shift' as SubTab,       label: 'シフト確認', icon: '🗓️' },
+    { id: 'sheet' as SubTab,       label: '表',         icon: '📋' },
+    { id: 'settings' as SubTab,    label: '設定',       icon: '⚙️' },
   ]
 
   const currentTab = activeSubTab ?? activeTab
-  const isScheduleTab = currentTab === 'schedule'
-  const needsRep = ['form', 'schedule', 'sheet', 'analysis'].includes(currentTab)
-  const padContent = ['form', 'schedule'].includes(currentTab)
+  const isShiftSubmitTab = currentTab === 'shift_submit'
+  const needsRep = ['form', 'shift_submit', 'sheet', 'analysis'].includes(currentTab)
+  const padContent = ['form', 'shift_submit'].includes(currentTab)
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -98,10 +97,9 @@ export default function Home() {
         {/* Row 1: title + selectors */}
         <div className="flex items-center gap-2 mb-2">
           <span className="top-nav-title">origin-dx 数値管理</span>
-          <div className="flex-1" />
 
-          {/* 予定タブ: 今月・翌月ボタン */}
-          {isScheduleTab ? (
+          {/* シフト提出タブ: 今月・翌月ボタン */}
+          {isShiftSubmitTab ? (
             <div className="flex gap-1">
               {scheduleMonthOptions.map(m => (
                 <button key={m} onClick={() => setScheduleMonth(m)}
@@ -151,7 +149,6 @@ export default function Home() {
               ≡
             </button>
 
-            {/* ドロップダウン */}
             {subMenuOpen && (
               <div className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-50 min-w-[140px]">
                 {subTabs.map(tab => (
@@ -175,9 +172,6 @@ export default function Home() {
         {activeSubTab === null && activeTab === 'form' && selectedRep && (
           <DailyInputForm repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />
         )}
-        {activeSubTab === null && activeTab === 'schedule' && selectedRep && (
-          <ScheduleSubmitForm repId={selectedRep.id} repName={selectedRep.name} yearMonth={scheduleMonth} />
-        )}
         {activeSubTab === null && activeTab === 'analysis' && selectedRep && (
           <AnalysisView repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />
         )}
@@ -186,6 +180,9 @@ export default function Home() {
         )}
         {activeSubTab === null && activeTab === 'area' && (
           <AreaStatsView yearMonth={selectedMonth} />
+        )}
+        {activeSubTab === 'shift_submit' && selectedRep && (
+          <ScheduleSubmitForm repId={selectedRep.id} repName={selectedRep.name} yearMonth={scheduleMonth} />
         )}
         {activeSubTab === 'shift' && (
           <ShiftCalendarView yearMonth={scheduleMonth} />
