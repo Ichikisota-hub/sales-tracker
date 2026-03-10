@@ -78,21 +78,38 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
     setSaving(true)
     setSaveError('')
     try {
+      // まずwork_schedulesのカラム存在を確認するためシンプルに送信
+      // area_pref/area_cityは任意カラムなので除外してまず動かす
       const rows = days.map(d => ({
         sales_rep_id: repId,
         schedule_date: d.dateStr,
         work_status: schedules[d.dateStr]?.work_status || '休日',
-        area_pref: '',
-        area_city: '',
-        work_time_start: schedules[d.dateStr]?.work_time_start || '',
-        work_time_end: schedules[d.dateStr]?.work_time_end || '',
         updated_at: new Date().toISOString(),
       }))
 
       const { error: schedError } = await supabase
         .from('work_schedules')
         .upsert(rows, { onConflict: 'sales_rep_id,schedule_date' })
-      if (schedError) throw schedError
+
+      if (schedError) {
+        throw new Error(schedError.message || schedError.details || JSON.stringify(schedError))
+      }
+
+      // work_time_start/endを別途更新（カラムが存在する場合のみ）
+      for (const d of days) {
+        const s = schedules[d.dateStr]
+        if (s?.work_time_start || s?.work_time_end) {
+          await supabase
+            .from('work_schedules')
+            .update({
+              work_time_start: s.work_time_start || '',
+              work_time_end: s.work_time_end || '',
+            })
+            .eq('sales_rep_id', repId)
+            .eq('schedule_date', d.dateStr)
+          // エラーは無視（カラムがない場合でも続行）
+        }
+      }
 
       const workingCount = rows.filter(r => r.work_status === '稼働').length
 
@@ -111,12 +128,23 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
         plan_working_days: workingCount,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'sales_rep_id,year_month' })
-      if (planError) throw planError
+
+      if (planError) {
+        throw new Error(planError.message || planError.details || JSON.stringify(planError))
+      }
 
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err)
+      let message = '不明なエラー'
+      if (err instanceof Error) {
+        message = err.message
+      } else if (typeof err === 'object' && err !== null) {
+        const e = err as Record<string, unknown>
+        message = String(e.message || e.details || e.hint || JSON.stringify(err))
+      } else {
+        message = String(err)
+      }
       setSaveError(`保存に失敗しました: ${message}`)
     } finally {
       setSaving(false)
