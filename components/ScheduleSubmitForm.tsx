@@ -4,10 +4,9 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getDaysArray } from '@/lib/dateUtils'
 
-// 稼働・休日のみ（同行削除）
 const WORK_STATUSES = ['稼働', '休日']
 
-// 時刻選択肢（9:00〜21:00、30分刻み）
+// 9:00〜21:00、30分刻み
 const TIMES: string[] = []
 for (let h = 9; h <= 21; h++) {
   TIMES.push(`${String(h).padStart(2,'0')}:00`)
@@ -30,31 +29,15 @@ const DEFAULT_DAY: DaySchedule = {
   work_time_end: '',
 }
 
-// 当月25日を超えているか判定
 function isAfter25th(yearMonth: string): boolean {
   const today = new Date()
-  const [y, m] = yearMonth.split('-').map(Number)
-  // 対象月の前月の25日以降はロック（翌月分提出の場合：今月25日超）
-  // シンプルに：今日が25日より大きい && 今月が yearMonth の前月
+  const todayDay = today.getDate()
   const todayYear = today.getFullYear()
   const todayMonth = today.getMonth() + 1
-  const todayDay = today.getDate()
-
-  // 対象が翌月 → 今月25日超えたらロック
-  // 対象が今月 → 同様に今月25日超えたらロック
-  const targetYear = y
-  const targetMonth = m
+  const [y, m] = yearMonth.split('-').map(Number)
   const currentMonth = todayYear * 12 + todayMonth
-  const targetMonthNum = targetYear * 12 + targetMonth
-
-  if (targetMonthNum > currentMonth) {
-    // 翌月分：今月25日超えたらロック
-    return todayDay > 25
-  } else if (targetMonthNum === currentMonth) {
-    // 今月分：今月25日超えたらロック
-    return todayDay > 25
-  }
-  // 過去月は常にロック
+  const targetMonthNum = y * 12 + m
+  if (targetMonthNum >= currentMonth) return todayDay > 25
   return true
 }
 
@@ -66,7 +49,6 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
   const [saveError, setSaveError] = useState('')
   const [validationError, setValidationError] = useState('')
 
-  // パスワードロック
   const locked = isAfter25th(yearMonth)
   const [unlocked, setUnlocked] = useState(false)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
@@ -127,7 +109,6 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
   }
 
   async function handleSave() {
-    // 稼働日の時間チェック（必須）
     const missingTime = days.filter(d => {
       const s = schedules[d.dateStr]
       return s?.work_status === '稼働' && (!s.work_time_start || !s.work_time_end)
@@ -137,34 +118,39 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
       return
     }
     setValidationError('')
-
     setSaving(true)
     setSaveError('')
+
     try {
-      const rows = days.map(d => ({
-        sales_rep_id: repId,
-        schedule_date: d.dateStr,
-        work_status: schedules[d.dateStr]?.work_status || '休日',
-        updated_at: new Date().toISOString(),
-      }))
+      // work_time_start / work_time_end を含めて一括upsert
+      const rows = days.map(d => {
+        const s = schedules[d.dateStr] || DEFAULT_DAY
+        const isWork = s.work_status === '稼働'
+        return {
+          sales_rep_id: repId,
+          schedule_date: d.dateStr,
+          work_status: s.work_status || '休日',
+          work_time_start: isWork ? (s.work_time_start || '') : '',
+          work_time_end:   isWork ? (s.work_time_end   || '') : '',
+          updated_at: new Date().toISOString(),
+        }
+      })
 
       const { error: schedError } = await supabase
         .from('work_schedules')
         .upsert(rows, { onConflict: 'sales_rep_id,schedule_date' })
 
       if (schedError) {
-        throw new Error(schedError.message || schedError.details || JSON.stringify(schedError))
-      }
-
-      // 時間帯を別途更新
-      for (const d of days) {
-        const s = schedules[d.dateStr]
-        if (s?.work_status === '稼働' && s.work_time_start && s.work_time_end) {
-          await supabase
+        // work_time_* カラムが存在しない場合は除いて再試行
+        if (schedError.message?.includes('work_time') || schedError.code === '42703') {
+          const rowsNoTime = rows.map(({ work_time_start, work_time_end, ...rest }) => rest)
+          const { error: e2 } = await supabase
             .from('work_schedules')
-            .update({ work_time_start: s.work_time_start, work_time_end: s.work_time_end })
-            .eq('sales_rep_id', repId)
-            .eq('schedule_date', d.dateStr)
+            .upsert(rowsNoTime, { onConflict: 'sales_rep_id,schedule_date' })
+          if (e2) throw new Error(e2.message || JSON.stringify(e2))
+          setSaveError('⚠️ 時間は保存できませんでした。Supabaseで migration 004 を実行してください。')
+        } else {
+          throw new Error(schedError.message || schedError.details || JSON.stringify(schedError))
         }
       }
 
@@ -208,7 +194,6 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
   }
 
   const workingCount = days.filter(d => schedules[d.dateStr]?.work_status === '稼働').length
-
   const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土']
 
   return (
@@ -332,7 +317,6 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
                     : 'border-slate-100 bg-slate-50'
                 }`}
               >
-                {/* 日付 + ステータス */}
                 <div className="flex items-center gap-2">
                   <div className={`text-base font-black w-20 flex-shrink-0 ${
                     d.dow === 0 ? 'text-red-500' : d.dow === 6 ? 'text-blue-500' : 'text-slate-700'
