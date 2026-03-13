@@ -12,6 +12,8 @@ import ScheduleSubmitForm from '@/components/ScheduleSubmitForm'
 import ShiftCalendarView from '@/components/ShiftCalendarView'
 import AreaStatsView from '@/components/AreaStatsView'
 import StatusView from '@/components/StatusView'
+import ContractListView from '@/components/ContractListView'
+import ContractAddForm from '@/components/ContractAddForm'
 
 function getNextMonth(ym: string): string {
   const [y, m] = ym.split('-').map(Number)
@@ -19,10 +21,8 @@ function getNextMonth(ym: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-// メインタブ：入力 / 現状整理 / 分析 / 全体
 type MainTab = 'form' | 'status' | 'analysis' | 'overall'
-// サブメニュー：シフト提出 / シフト確認 / エリア / 表 / 設定
-type SubTab = 'shift_submit' | 'shift' | 'area' | 'sheet' | 'settings'
+type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'area' | 'sheet' | 'settings'
 
 export default function Home() {
   const [reps, setReps] = useState<SalesRep[]>([])
@@ -33,6 +33,7 @@ export default function Home() {
   const [subMenuOpen, setSubMenuOpen] = useState(false)
   const [activeSubTab, setActiveSubTab] = useState<SubTab | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showContractAdd, setShowContractAdd] = useState(false)
   const subMenuRef = useRef<HTMLDivElement>(null)
 
   const months = getMonthList(24)
@@ -76,18 +77,19 @@ export default function Home() {
   }
 
   const mainTabs = [
-    { id: 'form'     as MainTab, label: '入力',   icon: '✏️' },
+    { id: 'form'     as MainTab, label: '入力',    icon: '✏️' },
     { id: 'status'   as MainTab, label: '現状整理', icon: '📋' },
-    { id: 'analysis' as MainTab, label: '分析',   icon: '📈' },
-    { id: 'overall'  as MainTab, label: '全体',   icon: '🏆' },
+    { id: 'analysis' as MainTab, label: '分析',    icon: '📈' },
+    { id: 'overall'  as MainTab, label: '全体',    icon: '🏆' },
   ]
 
   const subTabs = [
+    { id: 'contracts'    as SubTab, label: '契約宅',    icon: '🏠' },
     { id: 'shift_submit' as SubTab, label: 'シフト提出', icon: '📅' },
     { id: 'shift'        as SubTab, label: 'シフト確認', icon: '🗓️' },
-    { id: 'area'         as SubTab, label: 'エリア',     icon: '📍' },
-    { id: 'sheet'        as SubTab, label: '表',         icon: '📊' },
-    { id: 'settings'     as SubTab, label: '設定',       icon: '⚙️' },
+    { id: 'area'         as SubTab, label: 'エリア',    icon: '📍' },
+    { id: 'sheet'        as SubTab, label: '表',        icon: '📊' },
+    { id: 'settings'     as SubTab, label: '設定',      icon: '⚙️' },
   ]
 
   const currentTab = activeSubTab ?? activeTab
@@ -98,7 +100,6 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-slate-100">
       <div className="top-nav">
-        {/* Row 1: title + selectors */}
         <div className="flex items-center gap-2 mb-2">
           <span className="top-nav-title">origin-dx 数値管理</span>
 
@@ -114,12 +115,12 @@ export default function Home() {
                 </button>
               ))}
             </div>
-          ) : (
+          ) : currentTab !== 'contracts' ? (
             <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
               className="bg-slate-700 text-white text-xs font-semibold rounded-lg px-2 py-1.5 border-none outline-none cursor-pointer">
               {months.map(m => <option key={m} value={m}>{formatYearMonth(m)}</option>)}
             </select>
-          )}
+          ) : null}
 
           {needsRep && (
             <select value={selectedRep?.id ?? ''} onChange={e => setSelectedRep(reps.find(r => r.id === e.target.value) || null)}
@@ -129,7 +130,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* Row 2: tabs + menu */}
         <div className="flex items-center gap-1">
           <div className="tab-bar flex-1">
             {mainTabs.map(tab => (
@@ -146,8 +146,7 @@ export default function Home() {
               className={`tab-btn flex-shrink-0 px-3 font-black text-base transition-all ${
                 activeSubTab ? 'tab-btn-active' : subMenuOpen ? 'bg-slate-600 text-white rounded-lg' : 'tab-btn-inactive'
               }`}
-              style={{minWidth:36}}
-            >
+              style={{minWidth:36}}>
               ≡
             </button>
 
@@ -183,6 +182,13 @@ export default function Home() {
         {activeSubTab === null && activeTab === 'overall' && (
           <OverallView yearMonth={selectedMonth} />
         )}
+        {activeSubTab === 'contracts' && (
+          <ContractListView
+            reps={reps}
+            selectedRepId={selectedRep?.id || null}
+            onAdd={() => setShowContractAdd(true)}
+          />
+        )}
         {activeSubTab === 'shift_submit' && selectedRep && (
           <ScheduleSubmitForm repId={selectedRep.id} repName={selectedRep.name} yearMonth={scheduleMonth} />
         )}
@@ -199,6 +205,20 @@ export default function Home() {
           <RepSettings reps={reps} onUpdate={loadReps} />
         )}
       </div>
+
+      {/* 契約宅追加モーダル */}
+      {showContractAdd && (
+        <ContractAddForm
+          reps={reps}
+          defaultRepId={selectedRep?.id}
+          onSaved={() => {
+            setShowContractAdd(false)
+            // ContractListViewをリフレッシュするためにキーを更新
+            openSubTab('contracts')
+          }}
+          onCancel={() => setShowContractAdd(false)}
+        />
+      )}
     </div>
   )
 }

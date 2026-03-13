@@ -48,3 +48,22 @@ export type WorkSchedule = {
   area_city: string
   updated_at: string
 }
+
+export type Contract = {
+  id: string
+  sales_rep_id: string
+  customer_name: string
+  phone: string
+  address: string
+  area_pref: string
+  area_city: string
+  wifi_provider: string
+  wifi_provider_other: string
+  acquired_date: string
+  construction_date: string | null
+  construction_called: boolean
+  status: string
+  notes: string
+  created_at: string
+  updated_at: string
+}
