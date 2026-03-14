@@ -57,8 +57,9 @@ export default function Home() {
     const { data } = await supabase.from('sales_reps').select('*').order('display_order')
     if (data) {
       setReps(data)
-      // 既に選択済みなら上書きしない（初回のみ先頭をセット）
-      setSelectedRep((prev: SalesRep | null) => prev ?? (data.length > 0 ? data[0] : null))
+      const savedId = localStorage.getItem('selectedRepId')
+      const saved = savedId ? data.find(r => r.id === savedId) : null
+      setSelectedRep((prev: SalesRep | null) => prev ?? saved ?? (data.length > 0 ? data[0] : null))
     }
     setLoading(false)
   }
@@ -130,7 +131,11 @@ export default function Home() {
           ) : null}
 
           {needsRep && (
-            <select value={selectedRep?.id ?? ''} onChange={e => setSelectedRep(reps.find(r => r.id === e.target.value) || null)}
+            <select value={selectedRep?.id ?? ''} onChange={e => {
+              const rep = reps.find(r => r.id === e.target.value) || null
+              setSelectedRep(rep)
+              if (rep) localStorage.setItem('selectedRepId', rep.id)
+            }}
               className="bg-slate-700 text-white text-xs font-semibold rounded-lg px-2 py-1.5 border-none outline-none cursor-pointer max-w-[110px]">
               {reps.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
