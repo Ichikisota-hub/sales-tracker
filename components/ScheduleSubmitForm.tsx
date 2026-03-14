@@ -15,6 +15,20 @@ for (let h = 9; h <= 21; h++) {
 
 const LOCK_PASSWORD = 'Sota0707'
 
+function snapTime(t: string): string {
+  if (!t) return ''
+  const [h, m] = t.split(':').map(Number)
+  const mins = h * 60 + m
+  let closest = TIMES[0]
+  let minDiff = Infinity
+  for (const tm of TIMES) {
+    const [th, tmm] = tm.split(':').map(Number)
+    const diff = Math.abs(mins - (th * 60 + tmm))
+    if (diff < minDiff) { minDiff = diff; closest = tm }
+  }
+  return closest
+}
+
 type Props = { repId: string; repName: string; yearMonth: string }
 
 type DaySchedule = {
@@ -48,6 +62,8 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [validationError, setValidationError] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<string | null>(null)
 
   const locked = isAfter25th(yearMonth)
   const [unlocked, setUnlocked] = useState(false)
@@ -193,6 +209,59 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
     }
   }
 
+  async function importFromSheet() {
+    setImporting(true)
+    setImportResult(null)
+    try {
+      // 稼働日データを取得
+      const schedRes = await fetch(`/api/schedule?yearMonth=${yearMonth}`)
+      const schedJson = await schedRes.json()
+      if (schedJson.error) { setImportResult(`エラー: ${schedJson.error}`); return }
+
+      const schedule: Record<string, string[]> = schedJson.schedule || {}
+      const norm = (s: string) => s.replace(/[\s　]/g, '')
+      const matchedKey =
+        Object.keys(schedule).find(k => k === repName) ||
+        Object.keys(schedule).find(k => norm(k) === norm(repName)) ||
+        Object.keys(schedule).find(k => norm(k).includes(norm(repName)) || norm(repName).includes(norm(k)))
+      const matchedDays = matchedKey ? schedule[matchedKey] : undefined
+      if (!matchedDays) { setImportResult(`「${repName}」のシフトデータが見つかりませんでした`); return }
+
+      // 時間データを取得（失敗しても稼働日は反映する）
+      let times: Record<string, { start: string; end: string }> = {}
+      try {
+        const timeRes = await fetch(`/api/schedule/time?yearMonth=${yearMonth}&repName=${encodeURIComponent(repName)}`)
+        if (timeRes.ok) {
+          const timeJson = await timeRes.json()
+          times = timeJson.times || {}
+        }
+      } catch {}
+
+      const workingSet = new Set(matchedDays)
+      setSchedules(prev => {
+        const next = { ...prev }
+        days.forEach(d => {
+          const isWork = workingSet.has(d.dateStr)
+          const t = times[d.dateStr]
+          next[d.dateStr] = {
+            ...(next[d.dateStr] || DEFAULT_DAY),
+            work_status: isWork ? '稼働' : '休日',
+            work_time_start: isWork && t?.start ? snapTime(t.start) : (isWork ? (next[d.dateStr]?.work_time_start || '') : ''),
+            work_time_end:   isWork && t?.end   ? snapTime(t.end)   : (isWork ? (next[d.dateStr]?.work_time_end   || '') : ''),
+          }
+        })
+        return next
+      })
+
+      const timeCount = Object.keys(times).filter(d => workingSet.has(d)).length
+      setImportResult(`${matchedDays.length}日分の稼働データを取得しました${timeCount > 0 ? `（${timeCount}日分の時間も反映）` : ''}`)
+    } catch (e: any) {
+      setImportResult(`エラー: ${e.message}`)
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const workingCount = days.filter(d => schedules[d.dateStr]?.work_status === '稼働').length
   const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -272,6 +341,26 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
         </div>
       )}
 
+      {/* ── スプレッドシートから取得 ── */}
+      <div className="mobile-card">
+        <div className="mobile-card-label text-lg">📊 スプレッドシートから取得</div>
+        <div className="text-sm text-slate-500 mb-3">Googleスプレッドシートの「月間表」から{repName}のシフトを自動入力します</div>
+        <button
+          onClick={importFromSheet}
+          disabled={importing || !isEditable}
+          className="w-full py-3 rounded-xl text-base font-bold transition-all bg-green-500 text-white hover:bg-green-600 disabled:opacity-50"
+        >
+          {importing ? '取得中...' : '📥 スプレッドシートから取得'}
+        </button>
+        {importResult && (
+          <div className={`mt-2 text-sm font-medium px-3 py-2 rounded-xl ${
+            importResult.startsWith('エラー') ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'
+          }`}>
+            {importResult}
+          </div>
+        )}
+      </div>
+
       {/* ── 一括設定 ── */}
       <div className="mobile-card">
         <div className="mobile-card-label text-lg">⚡ 一括設定</div>
@@ -341,10 +430,19 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
                 {/* 稼働時のみ: 時間帯（必須） */}
                 {isWork && (
                   <div className="mt-3">
-                    <div className="flex items-center gap-1 mb-1">
+                    <div className="flex items-center gap-1 mb-2">
                       <span className="text-sm font-bold text-slate-600">⏰ 時間帯</span>
                       <span className="text-xs text-red-500 font-bold">※必須</span>
                       {missingTime && <span className="text-xs text-orange-600 font-bold ml-1">未入力</span>}
+                      <button
+                        onClick={() => {
+                          if (!isEditable) return
+                          setDayField(d.dateStr, 'work_time_start', '09:00')
+                          setDayField(d.dateStr, 'work_time_end', '21:00')
+                        }}
+                        disabled={!isEditable}
+                        className="ml-auto text-xs font-black px-3 py-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition-all"
+                      >フル</button>
                     </div>
                     <div className="flex items-center gap-2">
                       <select

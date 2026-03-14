@@ -14,11 +14,14 @@ type ScheduleRow = {
   work_time_end: string
 }
 
+type BulkResult = { name: string; matched: string | null; days: number; status: string }
+
 export default function ShiftCalendarView({ yearMonth }: Props) {
   const [reps, setReps] = useState<SalesRep[]>([])
   const [schedules, setSchedules] = useState<ScheduleRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar')
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [bulkResults, setBulkResults] = useState<BulkResult[] | null>(null)
 
   const days = getDaysArray(yearMonth)
 
@@ -26,6 +29,7 @@ export default function ShiftCalendarView({ yearMonth }: Props) {
 
   async function loadAll() {
     setLoading(true)
+    setBulkResults(null)
     const [y, m] = yearMonth.split('-')
     const [{ data: repData }, { data: schedData }] = await Promise.all([
       supabase.from('sales_reps').select('*').order('display_order'),
@@ -38,180 +42,199 @@ export default function ShiftCalendarView({ yearMonth }: Props) {
     setLoading(false)
   }
 
+  async function handleBulkImport() {
+    setBulkLoading(true)
+    setBulkResults(null)
+    try {
+      const res = await fetch('/api/schedule/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ yearMonth }),
+      })
+      const json = await res.json()
+      if (json.error) { alert(`エラー: ${json.error}`); return }
+      setBulkResults(json.results)
+      await loadAll()
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
   if (loading) return <div className="p-6 text-center text-slate-400 text-sm">読み込み中...</div>
 
   const schedMap: Record<string, ScheduleRow> = {}
   schedules.forEach(s => { schedMap[`${s.sales_rep_id}__${s.schedule_date}`] = s })
+  const getRow = (repId: string, dateStr: string) => schedMap[`${repId}__${dateStr}`] || null
 
-  const getRow = (repId: string, dateStr: string): ScheduleRow | null =>
-    schedMap[`${repId}__${dateStr}`] || null
+  const activeReps = reps.filter(r => r.name && !r.name.startsWith('担当者'))
 
+  // 日付ごとの稼働人数
+  const countByDate: Record<string, number> = {}
+  days.forEach(d => {
+    countByDate[d.dateStr] = activeReps.filter(r => getRow(r.id, d.dateStr)?.work_status === '稼働').length
+  })
+  const maxCount = Math.max(...Object.values(countByDate), 1)
+
+  // 担当者ごとの稼働日数
   const workingDaysByRep: Record<string, number> = {}
-  reps.forEach(r => {
+  activeReps.forEach(r => {
     workingDaysByRep[r.id] = days.filter(d => getRow(r.id, d.dateStr)?.work_status === '稼働').length
   })
-
-  const workingCountByDate: Record<string, number> = {}
-  days.forEach(d => {
-    workingCountByDate[d.dateStr] = reps.filter(r => getRow(r.id, d.dateStr)?.work_status === '稼働').length
-  })
-  const maxWorking = Math.max(...Object.values(workingCountByDate), 1)
 
   return (
     <div>
       {/* ヘッダー */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div>
           <div className="font-black text-slate-800 text-lg">{yearMonth.replace('-', '年')}月 シフト確認</div>
-          <div className="text-xs text-slate-400 mt-0.5">稼働の場合は時間帯も表示されます</div>
+          <div className="text-xs text-slate-400 mt-0.5">提出済み: {activeReps.filter(r => workingDaysByRep[r.id] > 0).length} / {activeReps.length}人</div>
         </div>
-        <div className="flex gap-1">
-          <button onClick={() => setViewMode('calendar')}
-            className={`text-sm px-3 py-2 rounded-xl font-bold transition-all ${viewMode === 'calendar' ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
-            📅 カレンダー
-          </button>
-          <button onClick={() => setViewMode('list')}
-            className={`text-sm px-3 py-2 rounded-xl font-bold transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
-            📋 一覧
-          </button>
-        </div>
+        <button
+          onClick={handleBulkImport}
+          disabled={bulkLoading}
+          className="bg-green-500 text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-green-600 disabled:opacity-50 transition-all"
+        >
+          {bulkLoading ? '取得中...' : '📥 全員分一括取得'}
+        </button>
       </div>
 
-      {/* 凡例 */}
-      <div className="flex gap-2 mb-3 flex-wrap items-center">
-        <span className="bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full">稼働</span>
-        <span className="bg-slate-200 text-slate-500 text-xs font-bold px-3 py-1 rounded-full">休日</span>
-        <span className="text-xs text-slate-400 ml-1">※ 未提出は空白</span>
-      </div>
-
-      {/* ===== カレンダービュー ===== */}
-      {viewMode === 'calendar' && (
-        <div className="overflow-x-auto">
-          <table className="border-collapse" style={{minWidth: reps.length * 90 + 80}}>
-            <thead>
-              <tr>
-                <th className="sticky left-0 bg-slate-800 text-white px-2 py-2 text-left z-10 text-sm" style={{minWidth:72}}>日付</th>
-                {reps.map(r => (
-                  <th key={r.id} className="bg-slate-700 text-white px-2 py-2 text-center font-bold" style={{minWidth:88}}>
-                    <div className="text-sm truncate max-w-[84px]">{r.name}</div>
-                    <div className="text-emerald-400 font-black text-sm">{workingDaysByRep[r.id] || 0}日</div>
-                  </th>
-                ))}
-                <th className="bg-slate-600 text-white px-2 py-2 text-center text-sm" style={{minWidth:48}}>人数</th>
-              </tr>
-            </thead>
-            <tbody>
-              {days.map(d => {
-                const isWeekend = d.dow === 0 || d.dow === 6
-                const count = workingCountByDate[d.dateStr] || 0
-                const intensity = maxWorking > 0 ? count / maxWorking : 0
-                return (
-                  <tr key={d.dateStr} className={isWeekend ? 'bg-slate-50' : 'bg-white'}>
-                    <td className={`sticky left-0 px-2 py-1.5 font-bold border-b border-slate-100 z-10 text-sm ${
-                      isWeekend ? 'bg-slate-50' : 'bg-white'
-                    } ${d.dow === 0 ? 'text-red-500' : d.dow === 6 ? 'text-blue-500' : 'text-slate-700'}`}>
-                      {d.dateStr.slice(5).replace('-','/')} {d.dowJa}
-                    </td>
-                    {reps.map(r => {
-                      const row = getRow(r.id, d.dateStr)
-                      const status = row?.work_status || ''
-                      const hasTime = status === '稼働' && row?.work_time_start && row?.work_time_end
-                      return (
-                        <td key={r.id} className="border-b border-slate-100 text-center px-1 py-1">
-                          {status === '稼働' ? (
-                            <div className="bg-emerald-500 text-white rounded-lg font-black text-center px-1 py-1.5">
-                              <div className="text-sm">稼働</div>
-                              {hasTime ? (
-                                <div className="text-xs font-bold opacity-90 leading-tight mt-0.5">
-                                  <div>{row!.work_time_start}</div>
-                                  <div className="opacity-70">〜</div>
-                                  <div>{row!.work_time_end}</div>
-                                </div>
-                              ) : (
-                                <div className="text-xs opacity-60">時間未登録</div>
-                              )}
-                            </div>
-                          ) : status === '休日' ? (
-                            <div className="bg-slate-100 text-slate-400 rounded-lg text-center px-1 py-2">
-                              <div className="text-sm font-bold">休日</div>
-                            </div>
-                          ) : (
-                            <div className="text-slate-200 text-center text-lg">—</div>
-                          )}
-                        </td>
-                      )
-                    })}
-                    <td className="border-b border-slate-100 text-center px-1">
-                      {count > 0 ? (
-                        <div className="relative rounded-lg overflow-hidden" style={{height:24}}>
-                          <div className="absolute inset-0 rounded-lg"
-                            style={{width:`${intensity*100}%`, background:'linear-gradient(90deg,#10b981,#059669)', opacity:0.8}} />
-                          <div className="relative text-sm font-black text-emerald-900 text-center leading-6">{count}</div>
-                        </div>
-                      ) : <span className="text-slate-300 text-sm">0</span>}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+      {/* 一括取得結果 */}
+      {bulkResults && (
+        <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-xl">
+          <div className="text-sm font-bold text-green-700 mb-2">✅ 取得完了</div>
+          <div className="flex flex-wrap gap-2">
+            {bulkResults.map(r => (
+              <div key={r.name} className={`text-xs px-2 py-1 rounded-lg font-medium ${
+                r.status === 'ok' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+              }`}>
+                {r.name}{r.status === 'ok' ? ` ${r.days}日` : ' ✗'}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* ===== 一覧ビュー ===== */}
-      {viewMode === 'list' && (
-        <div className="space-y-3">
-          {reps.map(r => {
-            const workDays = days.filter(d => getRow(r.id, d.dateStr)?.work_status === '稼働')
-            const totalDays = workDays.length
-            if (totalDays === 0) return (
-              <div key={r.id} className="mobile-card opacity-40">
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-slate-300 flex items-center justify-center text-white font-black text-base">{r.name.charAt(0)}</div>
-                  <span className="font-bold text-slate-500 text-base">{r.name}</span>
-                  <span className="text-sm text-slate-400">未提出</span>
-                </div>
-              </div>
-            )
+      {/* 日別人数バー */}
+      <div className="mb-3 bg-white rounded-xl border border-slate-100 overflow-x-auto">
+        <div className="flex min-w-max">
+          <div className="w-16 flex-shrink-0 p-2 text-xs text-slate-400 font-bold flex items-end">人数</div>
+          {days.map(d => {
+            const count = countByDate[d.dateStr] || 0
+            const intensity = count / maxCount
+            const isWeekend = d.dow === 0 || d.dow === 6
             return (
-              <div key={r.id} className="mobile-card">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white font-black text-base">{r.name.charAt(0)}</div>
-                  <div className="flex-1">
-                    <span className="font-bold text-slate-800 text-base">{r.name}</span>
-                    <span className="text-sm text-slate-400 ml-2">稼働 {totalDays}日</span>
-                  </div>
+              <div key={d.dateStr} className="flex flex-col items-center" style={{ minWidth: 50 }}>
+                <div className="text-xs font-black text-slate-700 mb-1">{count > 0 ? count : ''}</div>
+                <div className="w-6 rounded-t-md transition-all" style={{
+                  height: 32,
+                  background: count === 0 ? '#f1f5f9' :
+                    `rgba(16,185,129,${0.3 + intensity * 0.7})`,
+                }} />
+                <div className={`text-[10px] font-bold mt-1 ${d.dow === 0 ? 'text-red-400' : d.dow === 6 ? 'text-blue-400' : 'text-slate-400'}`}>
+                  {d.day}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {workDays.map(d => {
-                    const row = getRow(r.id, d.dateStr)
-                    const hasTime = row?.work_time_start && row?.work_time_end
-                    return (
-                      <div key={d.dateStr}
-                        className={`rounded-xl text-center px-3 py-2 border-2 ${
-                          d.dow === 0 ? 'border-red-200 bg-red-50' :
-                          d.dow === 6 ? 'border-blue-200 bg-blue-50' :
-                          'border-emerald-200 bg-emerald-50'
-                        }`}>
-                        <div className={`text-sm font-black ${d.dow===0?'text-red-500':d.dow===6?'text-blue-500':'text-emerald-700'}`}>
-                          {d.dateStr.slice(5).replace('-','/')}({d.dowJa})
-                        </div>
-                        {hasTime ? (
-                          <div className="text-xs text-slate-600 font-bold mt-1 leading-tight">
-                            {row!.work_time_start}〜{row!.work_time_end}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-slate-300 mt-1">時間未登録</div>
-                        )}
-                      </div>
-                    )
-                  })}
+                <div className={`text-[9px] ${d.dow === 0 ? 'text-red-300' : d.dow === 6 ? 'text-blue-300' : 'text-slate-300'}`}>
+                  {d.dowJa}
                 </div>
               </div>
             )
           })}
         </div>
-      )}
+      </div>
+
+      {/* メインシフト表（担当者が行、日付が列） */}
+      <div className="bg-white rounded-xl border border-slate-100 overflow-x-auto">
+        <table className="border-collapse" style={{ minWidth: days.length * 52 + 120 }}>
+          <thead>
+            <tr className="bg-slate-800">
+              <th className="sticky left-0 bg-slate-800 z-10 px-3 py-2 text-left text-xs text-slate-300 font-bold" style={{ minWidth: 112 }}>担当者</th>
+              {days.map(d => (
+                <th key={d.dateStr} className="px-0 py-2 text-center" style={{ minWidth: 50 }}>
+                  <div className={`text-[11px] font-black ${d.dow === 0 ? 'text-red-400' : d.dow === 6 ? 'text-blue-400' : 'text-slate-300'}`}>
+                    {d.day}
+                  </div>
+                  <div className={`text-[9px] ${d.dow === 0 ? 'text-red-300' : d.dow === 6 ? 'text-blue-300' : 'text-slate-500'}`}>
+                    {d.dowJa}
+                  </div>
+                </th>
+              ))}
+              <th className="px-2 py-2 text-center text-xs text-emerald-400 font-bold whitespace-nowrap" style={{ minWidth: 44 }}>計</th>
+            </tr>
+          </thead>
+          <tbody>
+            {activeReps.map((rep, i) => {
+              const totalDays = workingDaysByRep[rep.id] || 0
+              const submitted = totalDays > 0
+              return (
+                <tr key={rep.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
+                  <td className={`sticky left-0 z-10 px-2 py-1.5 border-b border-slate-100 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
+                    <div className="flex items-center gap-1.5">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-black flex-shrink-0 ${submitted ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                        {rep.name.charAt(0)}
+                      </div>
+                      <span className={`text-xs font-bold truncate max-w-[72px] ${submitted ? 'text-slate-700' : 'text-slate-400'}`}>
+                        {rep.name}
+                      </span>
+                    </div>
+                  </td>
+                  {days.map(d => {
+                    const row = getRow(rep.id, d.dateStr)
+                    const status = row?.work_status || ''
+                    const isWeekend = d.dow === 0 || d.dow === 6
+                    return (
+                      <td key={d.dateStr} className={`border-b border-slate-100 text-center px-0 py-1 ${isWeekend ? 'bg-slate-50/80' : ''}`}
+                        style={{ minWidth: 50 }}>
+                        {status === '稼働' ? (
+                          <div className="flex flex-col items-center gap-0.5">
+                            <div className="mx-auto w-6 h-6 rounded-md bg-emerald-500 flex items-center justify-center">
+                              <span className="text-white font-black text-[9px]">稼</span>
+                            </div>
+                            {row?.work_time_start && row?.work_time_end && (
+                              <div className="text-[8px] text-emerald-600 font-bold leading-tight whitespace-nowrap">
+                                {row.work_time_start.slice(0,5)}
+                                <br/>〜{row.work_time_end.slice(0,5)}
+                              </div>
+                            )}
+                          </div>
+                        ) : status === '休日' ? (
+                          <div className="mx-auto w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center">
+                            <span className="text-slate-300 text-[9px]">休</span>
+                          </div>
+                        ) : (
+                          <div className="mx-auto w-6 h-6 flex items-center justify-center">
+                            <span className="text-slate-200 text-xs">—</span>
+                          </div>
+                        )}
+                      </td>
+                    )
+                  })}
+                  <td className="border-b border-slate-100 text-center px-1">
+                    <span className={`text-xs font-black ${totalDays > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
+                      {totalDays > 0 ? totalDays : '—'}
+                    </span>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 凡例 */}
+      <div className="flex gap-3 mt-3 flex-wrap text-xs text-slate-500 items-center">
+        <div className="flex items-center gap-1">
+          <div className="w-5 h-5 rounded-md bg-emerald-500 flex items-center justify-center"><span className="text-white font-black text-[8px]">稼</span></div>
+          <span>稼働</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-5 h-5 rounded-md bg-slate-100 flex items-center justify-center"><span className="text-slate-300 text-[8px]">休</span></div>
+          <span>休日</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-5 h-5 flex items-center justify-center text-slate-200 text-xs">—</div>
+          <span>未提出</span>
+        </div>
+      </div>
     </div>
   )
 }

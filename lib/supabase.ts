@@ -29,6 +29,8 @@ export type DailyRecord = {
   work_status: string
   attendance_status: string
   working_hours: number
+  work_time_start: string
+  work_time_end: string
   visits: number
   net_meetings: number
   owner_meetings: number
@@ -36,6 +38,7 @@ export type DailyRecord = {
   acquisitions: number
   area_pref: string
   area_city: string
+  area_list: { pref: string; city: string }[]
   updated_at: string
 }
 
@@ -44,6 +47,9 @@ export type WorkSchedule = {
   sales_rep_id: string
   schedule_date: string
   work_status: string
+  work_time_start: string
+  work_time_end: string
+  working_hours: number
   area_pref: string
   area_city: string
   updated_at: string

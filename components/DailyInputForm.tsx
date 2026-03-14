@@ -7,7 +7,21 @@ import { KANSAI_AREAS, PREF_LIST } from '@/lib/areas'
 
 // 稼働・休日のみ（同行・有休・研修・出張は削除）
 const WORK_STATUSES = ['稼働', '休日']
-const HOURS = [3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10]
+
+// 9:00〜21:00、30分刻み
+const TIMES: string[] = []
+for (let h = 9; h <= 21; h++) {
+  TIMES.push(`${String(h).padStart(2,'0')}:00`)
+  if (h < 21) TIMES.push(`${String(h).padStart(2,'0')}:30`)
+}
+
+function calcHours(start: string, end: string): number {
+  if (!start || !end) return 0
+  const [sh, sm] = start.split(':').map(Number)
+  const [eh, em] = end.split(':').map(Number)
+  const diff = (eh * 60 + em) - (sh * 60 + sm)
+  return diff > 0 ? Math.round(diff / 60 * 10) / 10 : 0
+}
 
 type Props = { repId: string; repName: string; yearMonth: string }
 
@@ -57,6 +71,7 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
       .eq('sales_rep_id', repId).eq('record_date', selectedDate).single()
     const dbRecord: Partial<DailyRecord> = data || {
       work_status: '', attendance_status: '', working_hours: 0,
+      work_time_start: '', work_time_end: '',
       visits: 0, net_meetings: 0, owner_meetings: 0, negotiations: 0, acquisitions: 0,
       area_pref: '', area_city: '',
     }
@@ -67,8 +82,13 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
 
   async function handleSave() {
     setSaving(true)
+    const start = (record as any).work_time_start || ''
+    const end = (record as any).work_time_end || ''
+    const computedHours = calcHours(start, end)
     await supabase.from('daily_records').upsert({
-      ...record, sales_rep_id: repId, record_date: selectedDate,
+      ...record,
+      working_hours: computedHours || record.working_hours || 0,
+      sales_rep_id: repId, record_date: selectedDate,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'sales_rep_id,record_date' })
     clearDraft(repId, selectedDate)
@@ -120,9 +140,35 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
   const idx = days.findIndex(d => d.dateStr === selectedDate)
   const isToday = selectedDate === today
 
-  const selectedPref = (record as any).area_pref || ''
-  const selectedCity = (record as any).area_city || ''
-  const cityList = selectedPref ? (KANSAI_AREAS[selectedPref] || []) : []
+  const acquisitions = (record.acquisitions as number) || 0
+  const areaCount = isWorking ? Math.max(1, acquisitions) : 0
+
+  // 表示するエリアリストを構築（保存済みリスト or レガシーフィールドから）
+  const storedList = (record.area_list as { pref: string; city: string }[] | undefined) || []
+  const areaList: { pref: string; city: string }[] = Array.from({ length: areaCount }, (_, i) => {
+    if (storedList[i]) return storedList[i]
+    if (i === 0) return { pref: (record as any).area_pref || '', city: (record as any).area_city || '' }
+    return { pref: '', city: '' }
+  })
+
+  function setAreaItem(idx: number, pref: string, city: string) {
+    const newList = areaList.map((a, i) => i === idx ? { pref, city } : a)
+    // 足りない場合は空で補完
+    while (newList.length <= idx) newList.push({ pref: '', city: '' })
+    newList[idx] = { pref, city }
+    setRecord(prev => {
+      const next = {
+        ...prev,
+        area_list: newList,
+        area_pref: newList[0]?.pref || '',
+        area_city: newList[0]?.city || '',
+      }
+      saveDraft(repId, selectedDate, next as Partial<DailyRecord>)
+      setHasDraft(true)
+      return next as Partial<DailyRecord>
+    })
+    setSaved(false)
+  }
 
   return (
     <div>
@@ -193,40 +239,63 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
       {/* ── 稼働エリア（稼働時のみ） ── */}
       {isWorking && (
         <div className="mobile-card">
-          <div className="mobile-card-label text-lg">📍 稼働エリア</div>
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <div className="text-sm text-slate-500 mb-1 font-medium">都道府県</div>
-              <select
-                value={selectedPref}
-                onChange={e => {
-                  set('area_pref' as any, e.target.value)
-                  set('area_city' as any, '')
-                }}
-                className="w-full border border-slate-200 rounded-xl px-3 py-3 text-base bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
-              >
-                <option value="">選択してください</option>
-                {PREF_LIST.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            <div className="flex-1">
-              <div className="text-sm text-slate-500 mb-1 font-medium">市区町村・地区</div>
-              <select
-                value={selectedCity}
-                onChange={e => set('area_city' as any, e.target.value)}
-                disabled={!selectedPref}
-                className="w-full border border-slate-200 rounded-xl px-3 py-3 text-base bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100 disabled:text-slate-400"
-              >
-                <option value="">選択してください</option>
-                {cityList.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
+          <div className="mobile-card-label text-lg">
+            📍 稼働エリア
+            {acquisitions > 1 && (
+              <span className="ml-2 text-sm font-bold text-blue-500 normal-case">獲得{acquisitions}件分</span>
+            )}
           </div>
-          {selectedPref && selectedCity && (
-            <div className="mt-2 text-sm font-bold text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
-              📍 {selectedPref} → {selectedCity}
-            </div>
-          )}
+          <div className="space-y-3">
+            {areaList.map((area, idx) => {
+              const cityOptions = area.pref ? (KANSAI_AREAS[area.pref] || []) : []
+              const prev = idx > 0 ? areaList[idx - 1] : null
+              return (
+                <div key={idx} className="rounded-xl border border-slate-200 p-3 bg-slate-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-black text-slate-600">
+                      {acquisitions > 1 ? `獲得 ${idx + 1}件目` : '稼働エリア'}
+                    </span>
+                    {idx > 0 && prev && prev.pref && (
+                      <button
+                        onClick={() => setAreaItem(idx, prev.pref, prev.city)}
+                        className="text-xs font-black px-3 py-1 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition-all"
+                      >同上</button>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <div className="text-xs text-slate-500 mb-1 font-medium">都道府県</div>
+                      <select
+                        value={area.pref}
+                        onChange={e => setAreaItem(idx, e.target.value, '')}
+                        className="w-full border border-slate-200 rounded-xl px-2 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      >
+                        <option value="">選択</option>
+                        {PREF_LIST.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-xs text-slate-500 mb-1 font-medium">市区町村・地区</div>
+                      <select
+                        value={area.city}
+                        onChange={e => setAreaItem(idx, area.pref, e.target.value)}
+                        disabled={!area.pref}
+                        className="w-full border border-slate-200 rounded-xl px-2 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100 disabled:text-slate-400"
+                      >
+                        <option value="">選択</option>
+                        {cityOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  {area.pref && area.city && (
+                    <div className="mt-2 text-xs font-bold text-blue-700 bg-blue-50 rounded-lg px-2 py-1.5">
+                      📍 {area.pref} → {area.city}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -234,15 +303,37 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
       <div className="mobile-card">
         <div className="mobile-card-label text-lg">
           稼働時間
-          {record.working_hours ? <span className="ml-2 text-blue-600 normal-case font-black text-xl">{record.working_hours}h</span> : null}
+          {(record as any).work_time_start && (record as any).work_time_end ? (
+            <span className="ml-2 text-blue-600 normal-case font-black text-xl">
+              {calcHours((record as any).work_time_start, (record as any).work_time_end)}h
+            </span>
+          ) : null}
         </div>
-        <div className="hour-grid">
-          {HOURS.map(h => (
-            <button key={h} onClick={() => set('working_hours', h)}
-              className={`hour-btn text-base font-bold ${record.working_hours === h ? 'hour-btn-active' : 'hour-btn-inactive'}`}
-            >{h}h</button>
-          ))}
+
+        <div className="flex items-center gap-2">
+          <select
+            value={(record as any).work_time_start || ''}
+            onChange={e => set('work_time_start' as any, e.target.value)}
+            className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-3 text-base bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+          >
+            <option value="">開始時刻</option>
+            {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <span className="text-base text-slate-400 font-bold flex-shrink-0">〜</span>
+          <select
+            value={(record as any).work_time_end || ''}
+            onChange={e => set('work_time_end' as any, e.target.value)}
+            className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-3 text-base bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+          >
+            <option value="">終了時刻</option>
+            {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
         </div>
+        {(record as any).work_time_start && (record as any).work_time_end && (
+          <div className="mt-2 text-sm font-bold text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
+            ⏰ {(record as any).work_time_start}〜{(record as any).work_time_end}（{calcHours((record as any).work_time_start, (record as any).work_time_end)}時間）
+          </div>
+        )}
       </div>
 
       {/* ── 行動量 ── */}
