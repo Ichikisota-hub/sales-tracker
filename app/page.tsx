@@ -14,6 +14,7 @@ import AreaStatsView from '@/components/AreaStatsView'
 import StatusView from '@/components/StatusView'
 import ContractListView from '@/components/ContractListView'
 import ContractAddForm from '@/components/ContractAddForm'
+import DailyShiftView from '@/components/DailyShiftView'
 
 function getNextMonth(ym: string): string {
   const [y, m] = ym.split('-').map(Number)
@@ -22,7 +23,7 @@ function getNextMonth(ym: string): string {
 }
 
 type MainTab = 'form' | 'status' | 'analysis' | 'overall'
-type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'area' | 'sheet' | 'settings'
+type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings'
 
 export default function Home() {
   const [reps, setReps] = useState<SalesRep[]>([])
@@ -34,6 +35,7 @@ export default function Home() {
   const [activeSubTab, setActiveSubTab] = useState<SubTab | null>(null)
   const [loading, setLoading] = useState(true)
   const [showContractAdd, setShowContractAdd] = useState(false)
+  const [contractRefreshKey, setContractRefreshKey] = useState(0)
   const subMenuRef = useRef<HTMLDivElement>(null)
 
   const months = getMonthList(24)
@@ -53,7 +55,11 @@ export default function Home() {
 
   async function loadReps() {
     const { data } = await supabase.from('sales_reps').select('*').order('display_order')
-    if (data) { setReps(data); if (data.length > 0) setSelectedRep(data[0]) }
+    if (data) {
+      setReps(data)
+      // 既に選択済みなら上書きしない（初回のみ先頭をセット）
+      setSelectedRep((prev: SalesRep | null) => prev ?? (data.length > 0 ? data[0] : null))
+    }
     setLoading(false)
   }
 
@@ -87,13 +93,14 @@ export default function Home() {
     { id: 'contracts'    as SubTab, label: '契約宅',    icon: '🏠' },
     { id: 'shift_submit' as SubTab, label: 'シフト提出', icon: '📅' },
     { id: 'shift'        as SubTab, label: 'シフト確認', icon: '🗓️' },
+    { id: 'daily_shift'  as SubTab, label: '日別稼働',   icon: '📆' },
     { id: 'area'         as SubTab, label: 'エリア',    icon: '📍' },
     { id: 'sheet'        as SubTab, label: '表',        icon: '📊' },
     { id: 'settings'     as SubTab, label: '設定',      icon: '⚙️' },
   ]
 
   const currentTab = activeSubTab ?? activeTab
-  const isShiftSubmitTab = currentTab === 'shift_submit'
+  const isShiftSubmitTab = currentTab === 'shift_submit' || currentTab === 'shift' || currentTab === 'daily_shift'
   const needsRep = ['form', 'status', 'shift_submit', 'sheet', 'analysis'].includes(currentTab)
   const padContent = ['form', 'shift_submit'].includes(currentTab)
 
@@ -184,6 +191,7 @@ export default function Home() {
         )}
         {activeSubTab === 'contracts' && (
           <ContractListView
+            key={contractRefreshKey}
             reps={reps}
             selectedRepId={selectedRep?.id || null}
             onAdd={() => setShowContractAdd(true)}
@@ -194,6 +202,9 @@ export default function Home() {
         )}
         {activeSubTab === 'shift' && (
           <ShiftCalendarView yearMonth={scheduleMonth} />
+        )}
+        {activeSubTab === 'daily_shift' && (
+          <DailyShiftView yearMonth={scheduleMonth} />
         )}
         {activeSubTab === 'area' && (
           <AreaStatsView yearMonth={selectedMonth} />
@@ -213,8 +224,7 @@ export default function Home() {
           defaultRepId={selectedRep?.id}
           onSaved={() => {
             setShowContractAdd(false)
-            // ContractListViewをリフレッシュするためにキーを更新
-            openSubTab('contracts')
+            setContractRefreshKey(k => k + 1)
           }}
           onCancel={() => setShowContractAdd(false)}
         />
