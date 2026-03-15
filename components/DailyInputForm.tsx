@@ -96,28 +96,29 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
       updated_at: new Date().toISOString(),
     }
 
-    const { error } = await supabase
+    let { error } = await supabase
       .from('daily_records')
       .upsert(payload, { onConflict: 'sales_rep_id,record_date' })
 
-    if (error) {
-      // area_list カラムが未作成の場合はそれを除いて再試行
-      if (error.message?.includes('area_list') || error.code === '42703') {
-        const { area_list, ...payloadNoAreaList } = payload
-        const { error: e2 } = await supabase
-          .from('daily_records')
-          .upsert(payloadNoAreaList, { onConflict: 'sales_rep_id,record_date' })
-        if (e2) {
-          setSaveError(`保存失敗: ${e2.message}`)
-          setSaving(false)
-          return
-        }
-        setSaveError('⚠️ エリアリストは未保存。Supabaseで migration 007 を実行してください。')
-      } else {
-        setSaveError(`保存失敗: ${error.message}`)
+    // カラム未作成の場合、該当フィールドを除いて再試行
+    if (error?.code === '42703' || error?.message?.includes('schema cache')) {
+      const { work_time_start, work_time_end, area_list, ...fallback } = payload
+      const { error: e2 } = await supabase
+        .from('daily_records')
+        .upsert(fallback, { onConflict: 'sales_rep_id,record_date' })
+      if (e2) {
+        setSaveError(`保存失敗: ${e2.message}`)
         setSaving(false)
         return
       }
+      setSaveError('⚠️ 一部未保存。Supabaseで以下を実行: ALTER TABLE daily_records ADD COLUMN IF NOT EXISTS work_time_start text DEFAULT \'\', ADD COLUMN IF NOT EXISTS work_time_end text DEFAULT \'\', ADD COLUMN IF NOT EXISTS area_list jsonb DEFAULT \'[]\';')
+      error = null
+    }
+
+    if (error) {
+      setSaveError(`保存失敗: ${error.message}`)
+      setSaving(false)
+      return
     }
 
     clearDraft(repId, selectedDate)
