@@ -56,6 +56,7 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
   const [hasDraft, setHasDraft] = useState(false)
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => { loadPlan() }, [repId, yearMonth])
   useEffect(() => { setSaved(false); loadRecord() }, [repId, selectedDate])
@@ -82,15 +83,43 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
 
   async function handleSave() {
     setSaving(true)
+    setSaveError('')
     const start = (record as any).work_time_start || ''
     const end = (record as any).work_time_end || ''
     const computedHours = calcHours(start, end)
-    await supabase.from('daily_records').upsert({
+
+    const payload: any = {
       ...record,
       working_hours: computedHours || record.working_hours || 0,
-      sales_rep_id: repId, record_date: selectedDate,
+      sales_rep_id: repId,
+      record_date: selectedDate,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'sales_rep_id,record_date' })
+    }
+
+    const { error } = await supabase
+      .from('daily_records')
+      .upsert(payload, { onConflict: 'sales_rep_id,record_date' })
+
+    if (error) {
+      // area_list カラムが未作成の場合はそれを除いて再試行
+      if (error.message?.includes('area_list') || error.code === '42703') {
+        const { area_list, ...payloadNoAreaList } = payload
+        const { error: e2 } = await supabase
+          .from('daily_records')
+          .upsert(payloadNoAreaList, { onConflict: 'sales_rep_id,record_date' })
+        if (e2) {
+          setSaveError(`保存失敗: ${e2.message}`)
+          setSaving(false)
+          return
+        }
+        setSaveError('⚠️ エリアリストは未保存。Supabaseで migration 007 を実行してください。')
+      } else {
+        setSaveError(`保存失敗: ${error.message}`)
+        setSaving(false)
+        return
+      }
+    }
+
     clearDraft(repId, selectedDate)
     setHasDraft(false)
     setSaving(false)
@@ -379,6 +408,11 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
 
       {/* ── 保存ボタン（固定） ── */}
       <div className="save-bar">
+        {saveError && (
+          <div className="mb-2 text-sm font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+            ⚠️ {saveError}
+          </div>
+        )}
         <button onClick={handleSave} disabled={saving}
           className={`save-btn text-lg ${saved ? 'save-btn-saved' : saving ? 'save-btn-saving' : 'save-btn-default'}`}>
           {saved ? '✓ 保存しました！' : saving ? '保存中...' : hasDraft ? '💾 保存する（未保存あり）' : '保存する'}
