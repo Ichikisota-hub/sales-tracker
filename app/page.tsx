@@ -109,7 +109,7 @@ export default function Home() {
     <div className="min-h-screen bg-slate-100">
       <div className="top-nav">
         <div className="flex items-center gap-2 mb-2">
-          <img src="/logo.png" alt="ORIGIN SALES REPORTING" className="h-8 w-auto" />
+          <img src="/logo.png" alt="ORIGIN SALES REPORTING" className="h-14 w-auto" />
 
           {isShiftSubmitTab ? (
             <div className="flex gap-1">
