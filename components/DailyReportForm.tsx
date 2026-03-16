@@ -155,34 +155,48 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
     setTimeout(() => { setSaved(false); setCopied(false) }, 3000)
   }
 
-  const Field = ({ label, value, onChange, placeholder, optional, hint, rows = 2 }: {
-    label: string
-    value: string
-    onChange: (v: string) => void
-    placeholder: string
-    optional?: boolean
-    hint?: string
-    rows?: number
-  }) => (
-    <div>
-      <div className="text-xs font-bold text-slate-600 mb-0.5">
-        {label}{optional && <span className="ml-1 text-slate-400 font-normal">（任意）</span>}
-      </div>
-      {hint && (
-        <div className="text-[11px] text-blue-600 font-medium bg-blue-50 rounded-lg px-2 py-1 mb-1 leading-relaxed">
-          💬 {hint}
-        </div>
-      )}
-      <textarea
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        rows={rows}
-        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white resize-none focus:outline-none focus:ring-2 focus:ring-emerald-300"
-      />
-    </div>
+  return (
+    <ReportCard
+      acquisitionCase={acquisitionCase} setAcquisitionCase={setAcquisitionCase}
+      lostCase={lostCase} setLostCase={setLostCase}
+      remainingWork={remainingWork} setRemainingWork={setRemainingWork}
+      goodPoints={goodPoints} setGoodPoints={setGoodPoints}
+      issues={issues} setIssues={setIssues}
+      improvements={improvements} setImprovements={setImprovements}
+      learnings={learnings} setLearnings={setLearnings}
+      gratitude={gratitude} setGratitude={setGratitude}
+      saving={saving} saved={saved}
+      onSaveAndCopy={handleSaveAndCopy}
+    />
   )
+}
 
+// ── コンポーネント外に切り出し（再レンダリングで消えるのを防ぐ） ──────────
+
+type CardProps = {
+  acquisitionCase: string; setAcquisitionCase: (v: string) => void
+  lostCase: string;        setLostCase: (v: string) => void
+  remainingWork: string;   setRemainingWork: (v: string) => void
+  goodPoints: string;      setGoodPoints: (v: string) => void
+  issues: string;          setIssues: (v: string) => void
+  improvements: string;    setImprovements: (v: string) => void
+  learnings: string;       setLearnings: (v: string) => void
+  gratitude: string;       setGratitude: (v: string) => void
+  saving: boolean; saved: boolean
+  onSaveAndCopy: () => void
+}
+
+function ReportCard({
+  acquisitionCase, setAcquisitionCase,
+  lostCase, setLostCase,
+  remainingWork, setRemainingWork,
+  goodPoints, setGoodPoints,
+  issues, setIssues,
+  improvements, setImprovements,
+  learnings, setLearnings,
+  gratitude, setGratitude,
+  saving, saved, onSaveAndCopy,
+}: CardProps) {
   return (
     <div className="mobile-card">
       <div className="mobile-card-label text-lg">📝 日報</div>
@@ -234,7 +248,7 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
         <Field label="👏 感謝・シェアしたいこと" value={gratitude}    onChange={setGratitude}    placeholder="（任意）チームへのシェアや感謝" optional />
 
         <button
-          onClick={handleSaveAndCopy}
+          onClick={onSaveAndCopy}
           disabled={saving}
           className={`w-full py-3 rounded-2xl font-black text-base transition-all shadow-md ${
             saved    ? 'bg-emerald-400 text-white' :
@@ -247,6 +261,36 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
            '📝 日報を作成する（保存＆コピー）'}
         </button>
       </div>
+    </div>
+  )
+}
+
+function Field({ label, value, onChange, placeholder, optional, hint, rows = 2 }: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+  optional?: boolean
+  hint?: string
+  rows?: number
+}) {
+  return (
+    <div>
+      <div className="text-xs font-bold text-slate-600 mb-0.5">
+        {label}{optional && <span className="ml-1 text-slate-400 font-normal">（任意）</span>}
+      </div>
+      {hint && (
+        <div className="text-[11px] text-blue-600 font-medium bg-blue-50 rounded-lg px-2 py-1 mb-1 leading-relaxed">
+          💬 {hint}
+        </div>
+      )}
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={rows}
+        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white resize-none focus:outline-none focus:ring-2 focus:ring-emerald-300"
+      />
     </div>
   )
 }
