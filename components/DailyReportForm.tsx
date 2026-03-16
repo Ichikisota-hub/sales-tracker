@@ -43,16 +43,31 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
   // 日付・担当者が変わるたびに既存データを読み込む
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
-        .from('daily_reports')
-        .select('*')
-        .eq('sales_rep_id', repId)
-        .eq('report_date', selectedDate)
-        .single()
+      const [reportData, scheduleData] = await Promise.all([
+        supabase
+          .from('daily_reports')
+          .select('*')
+          .eq('sales_rep_id', repId)
+          .eq('report_date', selectedDate)
+          .single(),
+        supabase
+          .from('work_schedules')
+          .select('schedule_date')
+          .eq('sales_rep_id', repId)
+          .eq('work_status', '稼働')
+          .gt('schedule_date', selectedDate)
+          .gte('schedule_date', `${selectedDate.slice(0, 7)}-01`)
+          .lte('schedule_date', `${selectedDate.slice(0, 7)}-31`),
+      ])
+
+      const remaining = scheduleData.data?.length ?? 0
+      const autoRemaining = `残${remaining}日`
+
+      const data = reportData.data
       if (data) {
         setAcquisitionCase(data.acquisition_case || '')
         setLostCase(data.lost_case || '')
-        setRemainingWork(data.remaining_work || '')
+        setRemainingWork(data.remaining_work || autoRemaining)
         setGoodPoints(data.good_points || '')
         setIssues(data.issues || '')
         setImprovements(data.improvements || '')
@@ -61,7 +76,7 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
       } else {
         setAcquisitionCase('')
         setLostCase('')
-        setRemainingWork('')
+        setRemainingWork(autoRemaining)
         setGoodPoints('')
         setIssues('')
         setImprovements('')
