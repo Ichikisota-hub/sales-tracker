@@ -58,7 +58,6 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
-  const [showReport, setShowReport] = useState(false)
 
   useEffect(() => { loadPlan() }, [repId, yearMonth])
   useEffect(() => { setSaved(false); loadRecord() }, [repId, selectedDate])
@@ -204,14 +203,6 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
 
   return (
     <div>
-      {showReport && (
-        <DailyReportForm
-          repName={repName}
-          selectedDate={selectedDate}
-          record={record}
-          onClose={() => setShowReport(false)}
-        />
-      )}
       {/* ── 担当者ヘッダー ── */}
       <div className="mobile-card" style={{background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)'}}>
         <div className="flex items-center gap-3">
@@ -395,6 +386,9 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
         </div>
       )}
 
+      {/* ── 日報 ── */}
+      <DailyReportForm repName={repName} selectedDate={selectedDate} record={record} />
+
       {/* ── 月初計画 ── */}
       <div className="mobile-card">
         <div className="mobile-card-label text-lg" style={{color:'#dc2626'}}>月初計画入力</div>
@@ -415,16 +409,6 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
             </div>
           </div>
         ))}
-      </div>
-
-      {/* ── 日報作成ボタン ── */}
-      <div className="px-3 pb-2">
-        <button
-          onClick={() => setShowReport(true)}
-          className="w-full py-3 rounded-2xl bg-indigo-600 text-white font-black text-base hover:bg-indigo-500 transition-all shadow-md"
-        >
-          📝 日報を作成する
-        </button>
       </div>
 
       {/* ── 保存ボタン（固定） ── */}
