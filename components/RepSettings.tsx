@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { supabase, SalesRep } from '@/lib/supabase'
+import { useEffect, useState } from 'react'
+import { supabase, SalesRep, Team } from '@/lib/supabase'
 
 type Props = { reps: SalesRep[]; onUpdate: () => void }
 
@@ -12,6 +12,24 @@ export default function RepSettings({ reps, onUpdate }: Props) {
   const [saved, setSaved] = useState(false)
   const [adding, setAdding] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+
+  const [teams, setTeams] = useState<Team[]>([])
+  const [newTeamName, setNewTeamName] = useState('')
+  const [addingTeam, setAddingTeam] = useState(false)
+  const [deleteTeamConfirm, setDeleteTeamConfirm] = useState<string | null>(null)
+  const [editingTeam, setEditingTeam] = useState<Record<string, string>>({})
+  const [savingTeam, setSavingTeam] = useState(false)
+  const [savedTeam, setSavedTeam] = useState(false)
+  const [repTeamEditing, setRepTeamEditing] = useState<Record<string, string | null>>({})
+  const [savingRepTeam, setSavingRepTeam] = useState(false)
+  const [savedRepTeam, setSavedRepTeam] = useState(false)
+
+  useEffect(() => { loadTeams() }, [])
+
+  async function loadTeams() {
+    const { data } = await supabase.from('teams').select('*').order('display_order')
+    setTeams(data || [])
+  }
 
   function handleChange(id: string, value: string) {
     setEditing(prev => ({ ...prev, [id]: value }))
@@ -51,8 +69,166 @@ export default function RepSettings({ reps, onUpdate }: Props) {
     onUpdate()
   }
 
+  async function addTeam() {
+    if (!newTeamName.trim()) return
+    setAddingTeam(true)
+    const maxOrder = teams.length > 0 ? Math.max(...teams.map(t => t.display_order)) : 0
+    await supabase.from('teams').insert({ name: newTeamName.trim(), display_order: maxOrder + 1 })
+    setNewTeamName('')
+    setAddingTeam(false)
+    await loadTeams()
+  }
+
+  async function deleteTeam(id: string) {
+    await supabase.from('teams').delete().eq('id', id)
+    setDeleteTeamConfirm(null)
+    await loadTeams()
+    onUpdate()
+  }
+
+  async function saveTeams() {
+    setSavingTeam(true)
+    for (const [id, name] of Object.entries(editingTeam)) {
+      if (name.trim()) {
+        await supabase.from('teams').update({ name: name.trim() }).eq('id', id)
+      }
+    }
+    setSavingTeam(false)
+    setSavedTeam(true)
+    setEditingTeam({})
+    await loadTeams()
+    setTimeout(() => setSavedTeam(false), 2000)
+  }
+
+  async function saveRepTeams() {
+    setSavingRepTeam(true)
+    for (const [repId, teamId] of Object.entries(repTeamEditing)) {
+      await supabase.from('sales_reps').update({ team_id: teamId || null }).eq('id', repId)
+    }
+    setSavingRepTeam(false)
+    setSavedRepTeam(true)
+    setRepTeamEditing({})
+    onUpdate()
+    setTimeout(() => setSavedRepTeam(false), 2000)
+  }
+
   return (
     <div className="max-w-md space-y-4">
+
+      {/* チーム管理 */}
+      <div className="bg-white rounded-xl shadow-sm p-4">
+        <h2 className="font-bold text-sm mb-1 text-gray-800">チーム管理</h2>
+        <p className="text-xs text-gray-400 mb-3">チームを作成・編集・削除できます</p>
+
+        <div className="space-y-2 mb-3">
+          {teams.map(team => (
+            <div key={team.id} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={editingTeam[team.id] !== undefined ? editingTeam[team.id] : team.name}
+                onChange={e => {
+                  setEditingTeam(prev => ({ ...prev, [team.id]: e.target.value }))
+                  setSavedTeam(false)
+                }}
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm flex-1 focus:outline-none focus:border-blue-400"
+              />
+              {deleteTeamConfirm === team.id ? (
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => deleteTeam(team.id)}
+                    className="text-xs bg-red-500 text-white px-2 py-1 rounded-lg font-medium hover:bg-red-600"
+                  >削除</button>
+                  <button
+                    onClick={() => setDeleteTeamConfirm(null)}
+                    className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-lg hover:bg-gray-200"
+                  >戻る</button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setDeleteTeamConfirm(team.id)}
+                  className="text-xs text-gray-300 hover:text-red-400 transition-colors px-1 font-bold text-lg leading-none"
+                  title="削除"
+                >×</button>
+              )}
+            </div>
+          ))}
+          {teams.length === 0 && <p className="text-xs text-gray-400">チームがまだありません</p>}
+        </div>
+
+        {teams.length > 0 && (
+          <div className="flex items-center gap-3 mb-3">
+            <button
+              onClick={saveTeams}
+              disabled={savingTeam || Object.keys(editingTeam).length === 0}
+              className="bg-blue-600 text-white text-xs px-4 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {savingTeam ? '保存中...' : '💾 保存'}
+            </button>
+            {savedTeam && <span className="text-green-600 text-xs font-medium">✓ 保存しました</span>}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newTeamName}
+            onChange={e => setNewTeamName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addTeam()}
+            placeholder="新しいチーム名..."
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:border-blue-400"
+          />
+          <button
+            onClick={addTeam}
+            disabled={addingTeam || !newTeamName.trim()}
+            className="bg-green-600 text-white text-sm px-4 py-2 rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+          >
+            {addingTeam ? '追加中...' : '＋ 追加'}
+          </button>
+        </div>
+      </div>
+
+      {/* チーム割り当て */}
+      {teams.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm p-4">
+          <h2 className="font-bold text-sm mb-1 text-gray-800">チーム割り当て</h2>
+          <p className="text-xs text-gray-400 mb-3">各担当者のチームを設定してください</p>
+
+          <div className="space-y-2 mb-4">
+            {reps.map(rep => {
+              const currentTeamId = repTeamEditing[rep.id] !== undefined
+                ? repTeamEditing[rep.id]
+                : (rep.team_id ?? '')
+              return (
+                <div key={rep.id} className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700 flex-1 truncate">{rep.name}</span>
+                  <select
+                    value={currentTeamId ?? ''}
+                    onChange={e => setRepTeamEditing(prev => ({ ...prev, [rep.id]: e.target.value || null }))}
+                    className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-blue-400"
+                  >
+                    <option value="">未所属</option>
+                    {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={saveRepTeams}
+              disabled={savingRepTeam || Object.keys(repTeamEditing).length === 0}
+              className="bg-blue-600 text-white text-xs px-4 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {savingRepTeam ? '保存中...' : '💾 保存'}
+            </button>
+            {savedRepTeam && <span className="text-green-600 text-xs font-medium">✓ 保存しました</span>}
+            {Object.keys(repTeamEditing).length > 0 && !savingRepTeam && (
+              <span className="text-orange-500 text-xs">{Object.keys(repTeamEditing).length}件の変更あり</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 担当者一覧・編集 */}
       <div className="bg-white rounded-xl shadow-sm p-4">
@@ -70,30 +246,23 @@ export default function RepSettings({ reps, onUpdate }: Props) {
                 className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm flex-1 focus:outline-none focus:border-blue-400"
                 placeholder={`担当者${i + 1}`}
               />
-              {/* 削除ボタン */}
               {deleteConfirm === rep.id ? (
                 <div className="flex gap-1">
                   <button
                     onClick={() => deleteRep(rep.id)}
                     className="text-xs bg-red-500 text-white px-2 py-1 rounded-lg font-medium hover:bg-red-600"
-                  >
-                    削除
-                  </button>
+                  >削除</button>
                   <button
                     onClick={() => setDeleteConfirm(null)}
                     className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-lg hover:bg-gray-200"
-                  >
-                    戻る
-                  </button>
+                  >戻る</button>
                 </div>
               ) : (
                 <button
                   onClick={() => setDeleteConfirm(rep.id)}
                   className="text-xs text-gray-300 hover:text-red-400 transition-colors px-1 font-bold text-lg leading-none"
                   title="削除"
-                >
-                  ×
-                </button>
+                >×</button>
               )}
             </div>
           ))}

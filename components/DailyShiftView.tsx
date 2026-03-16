@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase, SalesRep } from '@/lib/supabase'
+import { supabase, SalesRep, Team } from '@/lib/supabase'
 import { getDaysArray, localToday } from '@/lib/dateUtils'
 
-type Props = { yearMonth: string }
+type Props = { yearMonth: string; teams: Team[] }
 
 type ScheduleRow = {
   sales_rep_id: string
@@ -15,7 +15,7 @@ type ScheduleRow = {
 
 const DOW_JA = ['日', '月', '火', '水', '木', '金', '土']
 
-export default function DailyShiftView({ yearMonth }: Props) {
+export default function DailyShiftView({ yearMonth, teams }: Props) {
   const days = getDaysArray(yearMonth)
   const today = localToday()
   const defaultDate = days.find(d => d.dateStr === today) || days[0]
@@ -24,6 +24,7 @@ export default function DailyShiftView({ yearMonth }: Props) {
   const [reps, setReps] = useState<SalesRep[]>([])
   const [schedules, setSchedules] = useState<Record<string, ScheduleRow>>({})
   const [loading, setLoading] = useState(true)
+  const [filterTeamId, setFilterTeamId] = useState<string | null>(null)
 
   // 月が変わったら選択日をリセット
   useEffect(() => {
@@ -56,14 +57,31 @@ export default function DailyShiftView({ yearMonth }: Props) {
   const idx = days.findIndex(d => d.dateStr === selectedDate)
   const isToday = selectedDate === today
 
-  const working = reps.filter(r => schedules[r.id]?.work_status === '稼働')
-  const off = reps.filter(r => schedules[r.id]?.work_status === '休日')
-  const unsubmitted = reps.filter(r => !schedules[r.id])
+  const visibleReps = filterTeamId ? reps.filter(r => r.team_id === filterTeamId) : reps
+  const working = visibleReps.filter(r => schedules[r.id]?.work_status === '稼働')
+  const off = visibleReps.filter(r => schedules[r.id]?.work_status === '休日')
+  const unsubmitted = visibleReps.filter(r => !schedules[r.id])
 
   if (!selectedDay) return null
 
   return (
     <div>
+      {/* チームフィルター */}
+      {teams.length > 0 && (
+        <div className="flex gap-1.5 mb-3 flex-wrap">
+          <button
+            onClick={() => setFilterTeamId(null)}
+            className={`text-xs px-3 py-1.5 rounded-full font-bold transition-colors ${filterTeamId === null ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+          >全体</button>
+          {teams.map(t => (
+            <button key={t.id}
+              onClick={() => setFilterTeamId(t.id)}
+              className={`text-xs px-3 py-1.5 rounded-full font-bold transition-colors ${filterTeamId === t.id ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+            >{t.name}</button>
+          ))}
+        </div>
+      )}
+
       {/* 日付ナビ */}
       <div className="mobile-card">
         <div className="flex items-center justify-between mb-2">

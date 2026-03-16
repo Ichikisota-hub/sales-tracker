@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase, SalesRep, DailyReport } from '@/lib/supabase'
+import { supabase, SalesRep, DailyReport, Team } from '@/lib/supabase'
 import { getMonthList, formatYearMonth, localYearMonth } from '@/lib/dateUtils'
 
 const DOW_JA = ['日', '月', '火', '水', '木', '金', '土']
@@ -12,12 +12,14 @@ function formatDate(dateStr: string): string {
 }
 
 type ReportWithRep = DailyReport & { rep: SalesRep | undefined }
+type Props = { teams: Team[] }
 
-export default function DailyReportListView() {
+export default function DailyReportListView({ teams }: Props) {
   const [yearMonth, setYearMonth] = useState(localYearMonth())
   const [reps, setReps] = useState<SalesRep[]>([])
   const [reports, setReports] = useState<ReportWithRep[]>([])
   const [filterRepId, setFilterRepId] = useState<string>('all')
+  const [filterTeamId, setFilterTeamId] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -59,9 +61,15 @@ export default function DailyReportListView() {
     setLoading(false)
   }
 
-  const filtered = filterRepId === 'all'
-    ? reports
-    : reports.filter(r => r.sales_rep_id === filterRepId)
+  const teamFilteredRepIds = filterTeamId
+    ? new Set(reps.filter(r => r.team_id === filterTeamId).map(r => r.id))
+    : null
+
+  const filtered = reports.filter(r => {
+    if (filterRepId !== 'all' && r.sales_rep_id !== filterRepId) return false
+    if (teamFilteredRepIds && !teamFilteredRepIds.has(r.sales_rep_id)) return false
+    return true
+  })
 
   const hasContent = (r: DailyReport) =>
     r.acquisition_case || r.lost_case || r.good_points || r.issues || r.improvements || r.learnings
@@ -80,7 +88,7 @@ export default function DailyReportListView() {
           </select>
           <select
             value={filterRepId}
-            onChange={e => setFilterRepId(e.target.value)}
+            onChange={e => { setFilterRepId(e.target.value); setFilterTeamId(null) }}
             className="bg-slate-700 text-white text-xs font-semibold rounded-lg px-2 py-1.5 border-none outline-none"
           >
             <option value="all">全員</option>
@@ -88,6 +96,20 @@ export default function DailyReportListView() {
           </select>
           <span className="text-xs text-slate-400 ml-auto">{filtered.length}件</span>
         </div>
+        {teams.length > 0 && (
+          <div className="flex gap-1.5 mt-2 flex-wrap">
+            <button
+              onClick={() => { setFilterTeamId(null); setFilterRepId('all') }}
+              className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${filterTeamId === null ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+            >全体</button>
+            {teams.map(t => (
+              <button key={t.id}
+                onClick={() => { setFilterTeamId(t.id); setFilterRepId('all') }}
+                className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${filterTeamId === t.id ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+              >{t.name}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       {loading ? (

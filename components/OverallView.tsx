@@ -1,16 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase, SalesRep } from '@/lib/supabase'
+import { supabase, SalesRep, Team } from '@/lib/supabase'
 import { calcMonthlyStats, round1, MonthlyStats } from '@/lib/calcUtils'
 
-type Props = { yearMonth: string }
+type Props = { yearMonth: string; teams: Team[] }
 type RepStats = { rep: SalesRep; stats: MonthlyStats }
 
-export default function OverallView({ yearMonth }: Props) {
+export default function OverallView({ yearMonth, teams }: Props) {
   const [data, setData] = useState<RepStats[]>([])
   const [loading, setLoading] = useState(true)
   const [sortKey, setSortKey] = useState<'name' | 'forecast' | 'acquisitions' | 'productivity'>('forecast')
+  const [filterTeamId, setFilterTeamId] = useState<string | null>(null)
 
   useEffect(() => { loadAll() }, [yearMonth])
 
@@ -39,7 +40,11 @@ export default function OverallView({ yearMonth }: Props) {
 
   if (loading) return <div className="p-6 text-center text-slate-400 text-sm">読み込み中...</div>
 
-  const sorted = [...data].sort((a, b) => {
+  const filteredData = filterTeamId
+    ? data.filter(d => d.rep.team_id === filterTeamId)
+    : data
+
+  const sorted = [...filteredData].sort((a, b) => {
     if (sortKey === 'name') return a.rep.display_order - b.rep.display_order
     if (sortKey === 'forecast') return b.stats.forecastAcquisitions - a.stats.forecastAcquisitions
     if (sortKey === 'acquisitions') return b.stats.totalAcquisitions - a.stats.totalAcquisitions
@@ -47,14 +52,14 @@ export default function OverallView({ yearMonth }: Props) {
     return 0
   })
 
-  const teamAcq = data.reduce((s, d) => s + d.stats.totalAcquisitions, 0)
-  const teamForecast = data.reduce((s, d) => s + d.stats.forecastAcquisitions, 0)
-  const teamPlan = data.reduce((s, d) => s + d.stats.planCases, 0)
-  const teamWorking = data.reduce((s, d) => s + d.stats.actualWorkingDays, 0)
+  const teamAcq = filteredData.reduce((s, d) => s + d.stats.totalAcquisitions, 0)
+  const teamForecast = filteredData.reduce((s, d) => s + d.stats.forecastAcquisitions, 0)
+  const teamPlan = filteredData.reduce((s, d) => s + d.stats.planCases, 0)
+  const teamWorking = filteredData.reduce((s, d) => s + d.stats.actualWorkingDays, 0)
   const teamProductivity = teamWorking > 0 ? teamAcq / teamWorking : 0
 
   // 獲得件数ランキング（降順）
-  const acqRanking = [...data]
+  const acqRanking = [...filteredData]
     .filter(d => d.stats.totalAcquisitions > 0)
     .sort((a, b) => b.stats.totalAcquisitions - a.stats.totalAcquisitions)
   const maxAcq = acqRanking[0]?.stats.totalAcquisitions || 1
@@ -89,6 +94,22 @@ export default function OverallView({ yearMonth }: Props) {
     <div>
       {/* ===== MOBILE ===== */}
       <div className="md:hidden space-y-3">
+
+        {/* チームフィルター */}
+        {teams.length > 0 && (
+          <div className="flex gap-1.5 flex-wrap">
+            <button
+              onClick={() => setFilterTeamId(null)}
+              className={`text-xs px-3 py-1.5 rounded-full font-bold transition-colors ${filterTeamId === null ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+            >全体</button>
+            {teams.map(t => (
+              <button key={t.id}
+                onClick={() => setFilterTeamId(t.id)}
+                className={`text-xs px-3 py-1.5 rounded-full font-bold transition-colors ${filterTeamId === t.id ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+              >{t.name}</button>
+            ))}
+          </div>
+        )}
 
         {/* チームサマリー */}
         <div className="mobile-card">
@@ -270,7 +291,23 @@ export default function OverallView({ yearMonth }: Props) {
 
       {/* ===== PC ===== */}
       <div className="hidden md:block">
-        <div className="text-xs font-bold text-slate-600 mb-3">全体着地 — {yearMonth}</div>
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <div className="text-xs font-bold text-slate-600">全体着地 — {yearMonth}</div>
+          {teams.length > 0 && (
+            <>
+              <button
+                onClick={() => setFilterTeamId(null)}
+                className={`text-xs px-3 py-1 rounded-full font-bold transition-colors ${filterTeamId === null ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+              >全体</button>
+              {teams.map(t => (
+                <button key={t.id}
+                  onClick={() => setFilterTeamId(t.id)}
+                  className={`text-xs px-3 py-1 rounded-full font-bold transition-colors ${filterTeamId === t.id ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+                >{t.name}</button>
+              ))}
+            </>
+          )}
+        </div>
 
         <div className="flex gap-3 mb-4 flex-wrap items-start">
           {/* チーム合計 */}

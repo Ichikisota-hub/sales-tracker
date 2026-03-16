@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase, SalesRep } from '@/lib/supabase'
+import { supabase, SalesRep, Team } from '@/lib/supabase'
 import { getDaysArray } from '@/lib/dateUtils'
 
-type Props = { yearMonth: string }
+type Props = { yearMonth: string; teams: Team[] }
 
 type ScheduleRow = {
   sales_rep_id: string
@@ -16,12 +16,13 @@ type ScheduleRow = {
 
 type BulkResult = { name: string; matched: string | null; days: number; status: string }
 
-export default function ShiftCalendarView({ yearMonth }: Props) {
+export default function ShiftCalendarView({ yearMonth, teams }: Props) {
   const [reps, setReps] = useState<SalesRep[]>([])
   const [schedules, setSchedules] = useState<ScheduleRow[]>([])
   const [loading, setLoading] = useState(true)
   const [bulkLoading, setBulkLoading] = useState(false)
   const [bulkResults, setBulkResults] = useState<BulkResult[] | null>(null)
+  const [filterTeamId, setFilterTeamId] = useState<string | null>(null)
 
   const days = getDaysArray(yearMonth)
 
@@ -66,7 +67,10 @@ export default function ShiftCalendarView({ yearMonth }: Props) {
   schedules.forEach(s => { schedMap[`${s.sales_rep_id}__${s.schedule_date}`] = s })
   const getRow = (repId: string, dateStr: string) => schedMap[`${repId}__${dateStr}`] || null
 
-  const activeReps = reps.filter(r => r.name && !r.name.startsWith('担当者'))
+  const baseReps = reps.filter(r => r.name && !r.name.startsWith('担当者'))
+  const activeReps = filterTeamId
+    ? baseReps.filter(r => r.team_id === filterTeamId)
+    : baseReps
 
   // 日付ごとの稼働人数
   const countByDate: Record<string, number> = {}
@@ -88,6 +92,20 @@ export default function ShiftCalendarView({ yearMonth }: Props) {
         <div>
           <div className="font-black text-slate-800 text-lg">{yearMonth.replace('-', '年')}月 シフト確認</div>
           <div className="text-xs text-slate-400 mt-0.5">提出済み: {activeReps.filter(r => workingDaysByRep[r.id] > 0).length} / {activeReps.length}人</div>
+          {teams.length > 0 && (
+            <div className="flex gap-1.5 mt-2 flex-wrap">
+              <button
+                onClick={() => setFilterTeamId(null)}
+                className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${filterTeamId === null ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+              >全体</button>
+              {teams.map(t => (
+                <button key={t.id}
+                  onClick={() => setFilterTeamId(t.id)}
+                  className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${filterTeamId === t.id ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+                >{t.name}</button>
+              ))}
+            </div>
+          )}
         </div>
         <button
           onClick={handleBulkImport}

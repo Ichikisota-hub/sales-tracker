@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { supabase, SalesRep } from '@/lib/supabase'
+import { supabase, SalesRep, Team } from '@/lib/supabase'
 import { getMonthList, formatYearMonth, localYearMonth } from '@/lib/dateUtils'
 import SheetView from '@/components/SheetView'
 import AnalysisView from '@/components/AnalysisView'
@@ -28,6 +28,7 @@ type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 
 
 export default function Home() {
   const [reps, setReps] = useState<SalesRep[]>([])
+  const [teams, setTeams] = useState<Team[]>([])
   const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null)
   const [selectedMonth, setSelectedMonth] = useState<string>(localYearMonth())
   const [scheduleMonth, setScheduleMonth] = useState<string>(getNextMonth(localYearMonth()))
@@ -55,13 +56,17 @@ export default function Home() {
   }, [])
 
   async function loadReps() {
-    const { data } = await supabase.from('sales_reps').select('*').order('display_order')
+    const [{ data }, { data: teamData }] = await Promise.all([
+      supabase.from('sales_reps').select('*').order('display_order'),
+      supabase.from('teams').select('*').order('display_order'),
+    ])
     if (data) {
       setReps(data)
       const savedId = localStorage.getItem('selectedRepId')
       const saved = savedId ? data.find(r => r.id === savedId) : null
       setSelectedRep((prev: SalesRep | null) => prev ?? saved ?? (data.length > 0 ? data[0] : null))
     }
+    setTeams(teamData || [])
     setLoading(false)
   }
 
@@ -139,7 +144,26 @@ export default function Home() {
               if (rep) localStorage.setItem('selectedRepId', rep.id)
             }}
               className="bg-slate-700 text-white text-xs font-semibold rounded-lg px-2 py-1.5 border-none outline-none cursor-pointer max-w-[110px]">
-              {reps.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              {teams.length > 0 ? (
+                <>
+                  {teams.map(team => {
+                    const teamReps = reps.filter(r => r.team_id === team.id)
+                    if (teamReps.length === 0) return null
+                    return (
+                      <optgroup key={team.id} label={team.name}>
+                        {teamReps.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                      </optgroup>
+                    )
+                  })}
+                  {reps.filter(r => !r.team_id).length > 0 && (
+                    <optgroup label="未所属">
+                      {reps.filter(r => !r.team_id).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </optgroup>
+                  )}
+                </>
+              ) : (
+                reps.map(r => <option key={r.id} value={r.id}>{r.name}</option>)
+              )}
             </select>
           )}
         </div>
@@ -194,7 +218,7 @@ export default function Home() {
           <AnalysisView repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />
         )}
         {activeSubTab === null && activeTab === 'overall' && (
-          <OverallView yearMonth={selectedMonth} />
+          <OverallView yearMonth={selectedMonth} teams={teams} />
         )}
         {activeSubTab === 'contracts' && (
           <ContractListView
@@ -208,10 +232,10 @@ export default function Home() {
           <ScheduleSubmitForm repId={selectedRep.id} repName={selectedRep.name} yearMonth={scheduleMonth} />
         )}
         {activeSubTab === 'shift' && (
-          <ShiftCalendarView yearMonth={scheduleMonth} />
+          <ShiftCalendarView yearMonth={scheduleMonth} teams={teams} />
         )}
         {activeSubTab === 'daily_shift' && (
-          <DailyShiftView yearMonth={scheduleMonth} />
+          <DailyShiftView yearMonth={scheduleMonth} teams={teams} />
         )}
         {activeSubTab === 'area' && (
           <AreaStatsView yearMonth={selectedMonth} />
@@ -220,7 +244,7 @@ export default function Home() {
           <SheetView repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />
         )}
         {activeSubTab === 'daily_report' && (
-          <DailyReportListView />
+          <DailyReportListView teams={teams} />
         )}
         {activeSubTab === 'settings' && (
           <RepSettings reps={reps} onUpdate={loadReps} />

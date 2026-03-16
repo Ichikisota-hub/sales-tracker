@@ -132,27 +132,34 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
 
   async function handleSaveAndCopy() {
     setSaving(true)
-    const payload = {
-      sales_rep_id: repId,
-      report_date: selectedDate,
-      acquisition_case: acquisitionCase,
-      lost_case: lostCase,
-      remaining_work: remainingWork,
-      good_points: goodPoints,
-      issues,
-      improvements,
-      learnings,
-      gratitude,
-      updated_at: new Date().toISOString(),
+    try {
+      const payload = {
+        sales_rep_id: repId,
+        report_date: selectedDate,
+        acquisition_case: acquisitionCase,
+        lost_case: lostCase,
+        remaining_work: remainingWork,
+        good_points: goodPoints,
+        issues,
+        improvements,
+        learnings,
+        gratitude,
+        updated_at: new Date().toISOString(),
+      }
+      await supabase
+        .from('daily_reports')
+        .upsert(payload, { onConflict: 'sales_rep_id,report_date' })
+      setSaved(true)
+      try {
+        await navigator.clipboard.writeText(buildReport())
+        setCopied(true)
+      } catch {
+        // クリップボードアクセス失敗は無視（保存は成功済み）
+      }
+      setTimeout(() => { setSaved(false); setCopied(false) }, 3000)
+    } finally {
+      setSaving(false)
     }
-    await supabase
-      .from('daily_reports')
-      .upsert(payload, { onConflict: 'sales_rep_id,report_date' })
-    await navigator.clipboard.writeText(buildReport())
-    setSaving(false)
-    setSaved(true)
-    setCopied(true)
-    setTimeout(() => { setSaved(false); setCopied(false) }, 3000)
   }
 
   return (
