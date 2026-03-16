@@ -59,6 +59,18 @@ export default function OverallView({ yearMonth }: Props) {
     .sort((a, b) => b.stats.totalAcquisitions - a.stats.totalAcquisitions)
   const maxAcq = acqRanking[0]?.stats.totalAcquisitions || 1
 
+  // 同率対応: dense ranking
+  const acqRanks: number[] = []
+  acqRanking.forEach((d, i) => {
+    if (i === 0) { acqRanks.push(1); return }
+    if (acqRanking[i - 1].stats.totalAcquisitions === d.stats.totalAcquisitions) {
+      acqRanks.push(acqRanks[i - 1])
+    } else {
+      acqRanks.push(i + 1)
+    }
+  })
+  const getMedal = (rank: number) => rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : null
+
   const SortBtn = ({ k, label }: { k: typeof sortKey; label: string }) => (
     <button onClick={() => setSortKey(k)}
       className={`text-xs px-2 py-1 rounded font-medium transition-colors ${
@@ -111,7 +123,7 @@ export default function OverallView({ yearMonth }: Props) {
                     {/* 2位 */}
                     {acqRanking[1] ? (
                       <div className="flex flex-col items-center flex-1">
-                        <div className="text-2xl mb-1">🥈</div>
+                        <div className="text-2xl mb-1">{getMedal(acqRanks[1]) ?? `${acqRanks[1]}位`}</div>
                         <div className="text-xs text-slate-400 font-bold mb-1 truncate w-full text-center">
                           {acqRanking[1].rep.name}
                         </div>
@@ -127,7 +139,7 @@ export default function OverallView({ yearMonth }: Props) {
 
                     {/* 1位 */}
                     <div className="flex flex-col items-center flex-1" style={{transform:'scale(1.1)', transformOrigin:'bottom center'}}>
-                      <div className="text-3xl mb-1">🥇</div>
+                      <div className="text-3xl mb-1">{getMedal(acqRanks[0]) ?? `${acqRanks[0]}位`}</div>
                       <div className="text-sm text-yellow-300 font-black mb-1 truncate w-full text-center">
                         {acqRanking[0].rep.name}
                       </div>
@@ -143,7 +155,7 @@ export default function OverallView({ yearMonth }: Props) {
                     {/* 3位 */}
                     {acqRanking[2] ? (
                       <div className="flex flex-col items-center flex-1">
-                        <div className="text-2xl mb-1">🥉</div>
+                        <div className="text-2xl mb-1">{getMedal(acqRanks[2]) ?? `${acqRanks[2]}位`}</div>
                         <div className="text-xs text-slate-400 font-bold mb-1 truncate w-full text-center">
                           {acqRanking[2].rep.name}
                         </div>
@@ -166,7 +178,7 @@ export default function OverallView({ yearMonth }: Props) {
                       const pct = (d.stats.totalAcquisitions / maxAcq) * 100
                       return (
                         <div key={d.rep.id} className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500 font-black w-5 text-center">{i + 4}</span>
+                          <span className="text-xs text-slate-500 font-black w-5 text-center">{acqRanks[i + 3]}</span>
                           <div className="flex-1 relative rounded-lg overflow-hidden border border-slate-700/50" style={{height:32}}>
                             <div className="absolute inset-0 bg-slate-800/60 rounded-lg" />
                             <div className="absolute inset-y-0 left-0 rounded-lg"
@@ -281,19 +293,20 @@ export default function OverallView({ yearMonth }: Props) {
                 <div className="space-y-2">
                   {acqRanking.map((d, i) => {
                     const pct = (d.stats.totalAcquisitions / maxAcq) * 100
-                    const isTop3 = i < 3
-                    const barBg = i === 0
+                    const rank = acqRanks[i]
+                    const isTop3 = rank <= 3
+                    const barBg = rank === 1
                       ? 'linear-gradient(90deg,#f59e0b,#ef4444)'
-                      : i === 1
+                      : rank === 2
                       ? 'linear-gradient(90deg,#64748b,#94a3b8)'
-                      : i === 2
+                      : rank === 3
                       ? 'linear-gradient(90deg,#92400e,#b45309)'
                       : 'linear-gradient(90deg,#3730a3,#6366f1)'
-                    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null
+                    const medal = getMedal(rank)
                     return (
                       <div key={d.rep.id} className="flex items-center gap-2">
                         <span className="w-7 text-center text-sm flex-shrink-0">
-                          {medal || <span className="text-xs text-slate-500 font-black">{i+1}</span>}
+                          {medal || <span className="text-xs text-slate-500 font-black">{rank}</span>}
                         </span>
                         <div className="flex-1 relative rounded-lg overflow-hidden border border-slate-700/40"
                           style={{height: isTop3 ? 34 : 28}}>
@@ -305,9 +318,9 @@ export default function OverallView({ yearMonth }: Props) {
                               {d.rep.name}
                             </span>
                             <span className={`font-black ml-2 flex-shrink-0 ${
-                              i === 0 ? 'text-yellow-300 text-xl' :
-                              i === 1 ? 'text-slate-200 text-lg' :
-                              i === 2 ? 'text-amber-300 text-base' :
+                              rank === 1 ? 'text-yellow-300 text-xl' :
+                              rank === 2 ? 'text-slate-200 text-lg' :
+                              rank === 3 ? 'text-amber-300 text-base' :
                               'text-indigo-300 text-sm'
                             }`}>
                               {d.stats.totalAcquisitions}
