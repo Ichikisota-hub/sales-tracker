@@ -15,6 +15,7 @@ import StatusView from '@/components/StatusView'
 import ContractListView from '@/components/ContractListView'
 import ContractAddForm from '@/components/ContractAddForm'
 import DailyShiftView from '@/components/DailyShiftView'
+import DailyReportListView from '@/components/DailyReportListView'
 
 function getNextMonth(ym: string): string {
   const [y, m] = ym.split('-').map(Number)
@@ -23,7 +24,7 @@ function getNextMonth(ym: string): string {
 }
 
 type MainTab = 'form' | 'status' | 'analysis' | 'overall'
-type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings'
+type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings' | 'daily_report'
 
 export default function Home() {
   const [reps, setReps] = useState<SalesRep[]>([])
@@ -97,6 +98,7 @@ export default function Home() {
     { id: 'daily_shift'  as SubTab, label: '日別稼働',   icon: '📆' },
     { id: 'area'         as SubTab, label: 'エリア',    icon: '📍' },
     { id: 'sheet'        as SubTab, label: '表',        icon: '📊' },
+    { id: 'daily_report' as SubTab, label: '日報',       icon: '📝' },
     { id: 'settings'     as SubTab, label: '設定',      icon: '⚙️' },
   ]
 
@@ -216,6 +218,9 @@ export default function Home() {
         )}
         {activeSubTab === 'sheet' && selectedRep && (
           <SheetView repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />
+        )}
+        {activeSubTab === 'daily_report' && (
+          <DailyReportListView />
         )}
         {activeSubTab === 'settings' && (
           <RepSettings reps={reps} onUpdate={loadReps} />

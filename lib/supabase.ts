@@ -55,6 +55,22 @@ export type WorkSchedule = {
   updated_at: string
 }
 
+export type DailyReport = {
+  id: string
+  sales_rep_id: string
+  report_date: string
+  acquisition_case: string
+  lost_case: string
+  remaining_work: string
+  good_points: string
+  issues: string
+  improvements: string
+  learnings: string
+  gratitude: string
+  created_at: string
+  updated_at: string
+}
+
 export type Contract = {
   id: string
   sales_rep_id: string

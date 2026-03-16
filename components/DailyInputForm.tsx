@@ -387,7 +387,7 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
       )}
 
       {/* ── 日報 ── */}
-      <DailyReportForm repName={repName} selectedDate={selectedDate} record={record} />
+      <DailyReportForm repId={repId} repName={repName} selectedDate={selectedDate} record={record} />
 
       {/* ── 月初計画 ── */}
       <div className="mobile-card">
