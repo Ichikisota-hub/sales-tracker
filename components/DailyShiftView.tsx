@@ -25,6 +25,13 @@ export default function DailyShiftView({ yearMonth }: Props) {
   const [schedules, setSchedules] = useState<Record<string, ScheduleRow>>({})
   const [loading, setLoading] = useState(true)
 
+  // 月が変わったら選択日をリセット
+  useEffect(() => {
+    const newDays = getDaysArray(yearMonth)
+    const newDefault = newDays.find(d => d.dateStr === today) || newDays[0]
+    setSelectedDate(newDefault.dateStr)
+  }, [yearMonth])
+
   useEffect(() => { loadReps() }, [])
   useEffect(() => { loadSchedule() }, [selectedDate])
 
@@ -45,13 +52,15 @@ export default function DailyShiftView({ yearMonth }: Props) {
     setLoading(false)
   }
 
-  const selectedDay = days.find(d => d.dateStr === selectedDate)!
+  const selectedDay = days.find(d => d.dateStr === selectedDate) || days[0]
   const idx = days.findIndex(d => d.dateStr === selectedDate)
   const isToday = selectedDate === today
 
   const working = reps.filter(r => schedules[r.id]?.work_status === '稼働')
   const off = reps.filter(r => schedules[r.id]?.work_status === '休日')
   const unsubmitted = reps.filter(r => !schedules[r.id])
+
+  if (!selectedDay) return null
 
   return (
     <div>
