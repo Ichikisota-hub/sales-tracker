@@ -17,6 +17,7 @@ export type SalesRep = {
   name: string
   display_order: number
   team_id: string | null
+  is_active: boolean
   created_at: string
 }
 
@@ -75,6 +76,11 @@ export type DailyReport = {
   improvements: string
   learnings: string
   gratitude: string
+  visits: number
+  net_meetings: number
+  owner_meetings: number
+  negotiations: number
+  acquisitions: number
   created_at: string
   updated_at: string
 }
@@ -93,6 +99,9 @@ export type Contract = {
   construction_date: string | null
   construction_called: boolean
   status: string
+  option_removed: boolean
+  landline_removed: boolean
+  router_removed: boolean
   notes: string
   created_at: string
   updated_at: string

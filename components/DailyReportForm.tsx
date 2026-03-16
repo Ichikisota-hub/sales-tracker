@@ -12,6 +12,24 @@ type Props = {
 
 const DOW_JA = ['日', '月', '火', '水', '木', '金', '土']
 
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    try {
+      const el = document.createElement('textarea')
+      el.value = text
+      el.style.position = 'fixed'; el.style.opacity = '0'
+      document.body.appendChild(el)
+      el.focus(); el.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(el)
+      return ok
+    } catch { return false }
+  }
+}
+
 function formatDateHeader(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00')
   return `${d.getMonth() + 1}月${d.getDate()}日（${DOW_JA[d.getDay()]}）`
@@ -39,6 +57,7 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
 
   // 日付・担当者が変わるたびに既存データを読み込む
   useEffect(() => {
@@ -132,6 +151,7 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
 
   async function handleSaveAndCopy() {
     setSaving(true)
+    setCopyFailed(false)
     try {
       const payload = {
         sales_rep_id: repId,
@@ -144,17 +164,22 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
         improvements,
         learnings,
         gratitude,
+        visits:         (record.visits         as number) || 0,
+        net_meetings:   (record.net_meetings    as number) || 0,
+        owner_meetings: (record.owner_meetings  as number) || 0,
+        negotiations:   (record.negotiations    as number) || 0,
+        acquisitions:   (record.acquisitions    as number) || 0,
         updated_at: new Date().toISOString(),
       }
       await supabase
         .from('daily_reports')
         .upsert(payload, { onConflict: 'sales_rep_id,report_date' })
       setSaved(true)
-      try {
-        await navigator.clipboard.writeText(buildReport())
+      const ok = await copyToClipboard(buildReport())
+      if (ok) {
         setCopied(true)
-      } catch {
-        // クリップボードアクセス失敗は無視（保存は成功済み）
+      } else {
+        setCopyFailed(true)
       }
       setTimeout(() => { setSaved(false); setCopied(false) }, 3000)
     } finally {
@@ -172,7 +197,7 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
       improvements={improvements} setImprovements={setImprovements}
       learnings={learnings} setLearnings={setLearnings}
       gratitude={gratitude} setGratitude={setGratitude}
-      saving={saving} saved={saved}
+      saving={saving} saved={saved} copyFailed={copyFailed}
       onSaveAndCopy={handleSaveAndCopy}
     />
   )
@@ -189,7 +214,7 @@ type CardProps = {
   improvements: string;    setImprovements: (v: string) => void
   learnings: string;       setLearnings: (v: string) => void
   gratitude: string;       setGratitude: (v: string) => void
-  saving: boolean; saved: boolean
+  saving: boolean; saved: boolean; copyFailed: boolean
   onSaveAndCopy: () => void
 }
 
@@ -202,7 +227,7 @@ function ReportCard({
   improvements, setImprovements,
   learnings, setLearnings,
   gratitude, setGratitude,
-  saving, saved, onSaveAndCopy,
+  saving, saved, copyFailed, onSaveAndCopy,
 }: CardProps) {
   return (
     <div className="mobile-card">
@@ -267,6 +292,11 @@ function ReportCard({
            saving ? '保存中...' :
            '📝 日報を作成する（保存＆コピー）'}
         </button>
+        {copyFailed && (
+          <div className="mt-2 text-xs text-red-600 font-bold bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+            ⚠️ コピーに失敗しました。テキストを手動で選択してコピーしてください。
+          </div>
+        )}
       </div>
     </div>
   )

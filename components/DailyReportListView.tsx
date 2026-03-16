@@ -26,7 +26,7 @@ export default function DailyReportListView({ teams }: Props) {
   const months = getMonthList(12)
 
   useEffect(() => {
-    supabase.from('sales_reps').select('*').order('display_order').then(({ data }) => {
+    supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order').then(({ data }) => {
       setReps(data || [])
     })
   }, [])
@@ -51,7 +51,7 @@ export default function DailyReportListView({ teams }: Props) {
     // repsがまだ空の場合は再取得
     let repList = reps
     if (repList.length === 0) {
-      const { data: rd } = await supabase.from('sales_reps').select('*').order('display_order')
+      const { data: rd } = await supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order')
       repList = rd || []
       setReps(repList)
       repList.forEach(r => { repMap[r.id] = r })
@@ -72,7 +72,8 @@ export default function DailyReportListView({ teams }: Props) {
   })
 
   const hasContent = (r: DailyReport) =>
-    r.acquisition_case || r.lost_case || r.good_points || r.issues || r.improvements || r.learnings
+    r.acquisition_case || r.lost_case || r.good_points || r.issues || r.improvements || r.learnings ||
+    r.visits > 0 || r.acquisitions > 0
 
   return (
     <div className="space-y-3">
@@ -157,6 +158,15 @@ export default function DailyReportListView({ teams }: Props) {
               {/* 展開内容 */}
               {isExpanded && (
                 <div className="mt-3 space-y-3 border-t border-slate-100 pt-3">
+                  {(report.visits > 0 || report.acquisitions > 0) && (
+                    <div className="flex flex-wrap gap-2 text-xs font-bold">
+                      <Stat label="訪問" value={report.visits} />
+                      <Stat label="ネット対面" value={report.net_meetings} />
+                      <Stat label="主権対面" value={report.owner_meetings} />
+                      <Stat label="商談" value={report.negotiations} />
+                      <Stat label="獲得" value={report.acquisitions} color="emerald" />
+                    </div>
+                  )}
                   {report.acquisition_case && (
                     <Section icon="🏠" label="獲得案件" value={report.acquisition_case} color="emerald" />
                   )}
@@ -191,6 +201,18 @@ export default function DailyReportListView({ teams }: Props) {
         })
       )}
     </div>
+  )
+}
+
+function Stat({ label, value, color = 'slate' }: { label: string; value: number; color?: string }) {
+  const colorMap: Record<string, string> = {
+    emerald: 'bg-emerald-100 text-emerald-700',
+    slate:   'bg-slate-100 text-slate-600',
+  }
+  return (
+    <span className={`px-2 py-1 rounded-lg ${colorMap[color] || colorMap.slate}`}>
+      {label}：{value}
+    </span>
   )
 }
 
