@@ -37,6 +37,17 @@ function needsCallAlert(c: Contract): boolean {
   return daysDiff(c.acquired_date) >= 3
 }
 
+// 開通後アクションが必要か（翌月1日以降 & option_removed が false）
+function needsPostConstructionAlert(c: Contract): boolean {
+  if (c.status !== '開通') return false
+  if (!c.construction_date) return false
+  if (c.option_removed) return false
+  const [y, m] = c.construction_date.split('-').map(Number)
+  const nextMonth1st = new Date(y, m, 1) // JS月は0-indexed → m はそのまま翌月
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  return today >= nextMonth1st
+}
+
 // 工事日が過去か
 function isConstructionPast(c: Contract): boolean {
   if (!c.construction_date) return false
@@ -128,6 +139,18 @@ export default function ContractListView({ reps, selectedRepId, onAdd }: Props) 
   // 工事日電話アラートが必要な件数
   const alertContracts = filtered.filter(needsCallAlert)
 
+  // 開通後アクションが必要な契約
+  const postActionContracts = filtered.filter(needsPostConstructionAlert)
+
+  async function toggleAction(
+    id: string,
+    field: 'option_removed' | 'landline_removed' | 'router_removed',
+    val: boolean
+  ) {
+    await supabase.from('contracts').update({ [field]: val, updated_at: new Date().toISOString() }).eq('id', id)
+    loadContracts()
+  }
+
   return (
     <div>
       {/* ── ヘッダー ── */}
@@ -217,6 +240,65 @@ export default function ContractListView({ reps, selectedRepId, onAdd }: Props) 
         </div>
       )}
 
+      {/* ── 開通後アクション まとめバナー ── */}
+      {postActionContracts.length > 0 && (
+        <div className="bg-emerald-50 border-2 border-emerald-400 rounded-2xl p-4 mb-3">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xl">✅</span>
+            <div className="text-base font-black text-emerald-700">
+              開通後アクション必要 — {postActionContracts.length}件
+            </div>
+          </div>
+          <div className="text-xs text-emerald-600 mb-3">
+            翌月1日以降、まだ完了していないお客様です
+          </div>
+          <div className="space-y-2">
+            {postActionContracts.map(c => (
+              <div key={c.id} className="bg-white rounded-xl px-3 py-2.5 border border-emerald-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-sm font-black text-slate-800">{c.customer_name}</span>
+                    <span className="text-xs text-slate-500 ml-2">{repName(c.sales_rep_id)}</span>
+                  </div>
+                  {c.phone && (
+                    <a href={`tel:${c.phone}`}
+                      className="flex items-center gap-1 text-blue-600 font-bold text-sm">
+                      📞 {c.phone}
+                    </a>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-3 text-sm">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" checked={c.option_removed}
+                      onChange={e => toggleAction(c.id, 'option_removed', e.target.checked)}
+                      className="w-4 h-4 accent-emerald-600" />
+                    <span className={c.option_removed ? 'line-through text-slate-400' : 'font-bold text-slate-700'}>
+                      オプションはずし
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" checked={c.landline_removed}
+                      onChange={e => toggleAction(c.id, 'landline_removed', e.target.checked)}
+                      className="w-4 h-4 accent-emerald-600" />
+                    <span className={c.landline_removed ? 'line-through text-slate-400' : 'text-slate-600'}>
+                      固定電話外し<span className="text-xs text-slate-400 ml-0.5">(任意)</span>
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" checked={c.router_removed}
+                      onChange={e => toggleAction(c.id, 'router_removed', e.target.checked)}
+                      className="w-4 h-4 accent-emerald-600" />
+                    <span className={c.router_removed ? 'line-through text-slate-400' : 'text-slate-600'}>
+                      ルーターはずし<span className="text-xs text-slate-400 ml-0.5">(任意)</span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── 削除確認モーダル ── */}
       {deletingId && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -257,6 +339,7 @@ export default function ContractListView({ reps, selectedRepId, onAdd }: Props) 
             const sty = STATUS_STYLE[c.status] || STATUS_STYLE['手続き中']
             const callAlert = needsCallAlert(c)
             const constPast = isConstructionPast(c)
+            const postAction = needsPostConstructionAlert(c)
             const isEditing = editingId === c.id
             const diff = daysDiff(c.acquired_date)
 
@@ -282,6 +365,45 @@ export default function ContractListView({ reps, selectedRepId, onAdd }: Props) 
                 {constPast && !callAlert && c.status !== 'キャンセル' && c.status !== '開通' && (
                   <div className="bg-red-100 text-red-700 text-sm font-bold px-4 py-2">
                     ⚠️ 工事日を過ぎています
+                  </div>
+                )}
+
+                {/* 開通後アクションバナー */}
+                {postAction && (
+                  <div className="bg-emerald-50 border-b border-emerald-200 px-4 py-3 space-y-2">
+                    <div className="text-sm font-black text-emerald-700">🟢 開通後アクションが必要です</div>
+                    <div className="flex flex-wrap gap-3 text-sm">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" checked={c.option_removed}
+                          onChange={e => toggleAction(c.id, 'option_removed', e.target.checked)}
+                          className="w-4 h-4 accent-emerald-600" />
+                        <span className={c.option_removed ? 'line-through text-slate-400' : 'font-bold text-slate-700'}>
+                          オプションはずし
+                        </span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" checked={c.landline_removed}
+                          onChange={e => toggleAction(c.id, 'landline_removed', e.target.checked)}
+                          className="w-4 h-4 accent-emerald-600" />
+                        <span className={c.landline_removed ? 'line-through text-slate-400' : 'text-slate-600'}>
+                          固定電話外し<span className="text-xs text-slate-400 ml-0.5">(任意)</span>
+                        </span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" checked={c.router_removed}
+                          onChange={e => toggleAction(c.id, 'router_removed', e.target.checked)}
+                          className="w-4 h-4 accent-emerald-600" />
+                        <span className={c.router_removed ? 'line-through text-slate-400' : 'text-slate-600'}>
+                          ルーターはずし<span className="text-xs text-slate-400 ml-0.5">(任意)</span>
+                        </span>
+                      </label>
+                    </div>
+                    {c.phone && (
+                      <a href={`tel:${c.phone}`}
+                        className="inline-flex items-center gap-1.5 text-blue-600 font-bold text-sm">
+                        📞 {c.phone}（タップで発信）
+                      </a>
+                    )}
                   </div>
                 )}
 

@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Supabaseから担当者一覧を取得
-  const { data: reps } = await supabase.from('sales_reps').select('id,name').order('display_order')
+  const { data: reps } = await supabase.from('sales_reps').select('id,name').eq('is_active', true).order('display_order')
   if (!reps) return NextResponse.json({ error: 'reps取得失敗' }, { status: 500 })
 
   // 月の全日付を生成

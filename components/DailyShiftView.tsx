@@ -37,7 +37,7 @@ export default function DailyShiftView({ yearMonth, teams }: Props) {
   useEffect(() => { loadSchedule() }, [selectedDate])
 
   async function loadReps() {
-    const { data } = await supabase.from('sales_reps').select('*').order('display_order')
+    const { data } = await supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order')
     setReps((data || []).filter(r => r.name && !r.name.startsWith('担当者')))
   }
 

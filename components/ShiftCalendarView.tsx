@@ -33,7 +33,7 @@ export default function ShiftCalendarView({ yearMonth, teams }: Props) {
     setBulkResults(null)
     const [y, m] = yearMonth.split('-')
     const [{ data: repData }, { data: schedData }] = await Promise.all([
-      supabase.from('sales_reps').select('*').order('display_order'),
+      supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
       supabase.from('work_schedules').select('*')
         .gte('schedule_date', `${y}-${m}-01`)
         .lte('schedule_date', `${y}-${m}-31`),

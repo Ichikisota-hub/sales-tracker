@@ -58,6 +58,7 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
   const [saved, setSaved] = useState(false)
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
+  const [reportText, setReportText] = useState('')
 
   // 日付・担当者が変わるたびに既存データを読み込む
   useEffect(() => {
@@ -175,11 +176,13 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
         .from('daily_reports')
         .upsert(payload, { onConflict: 'sales_rep_id,report_date' })
       setSaved(true)
-      const ok = await copyToClipboard(buildReport())
+      const text = buildReport()
+      const ok = await copyToClipboard(text)
       if (ok) {
         setCopied(true)
       } else {
         setCopyFailed(true)
+        setReportText(text)
       }
       setTimeout(() => { setSaved(false); setCopied(false) }, 3000)
     } finally {
@@ -197,7 +200,7 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
       improvements={improvements} setImprovements={setImprovements}
       learnings={learnings} setLearnings={setLearnings}
       gratitude={gratitude} setGratitude={setGratitude}
-      saving={saving} saved={saved} copyFailed={copyFailed}
+      saving={saving} saved={saved} copyFailed={copyFailed} reportText={reportText}
       onSaveAndCopy={handleSaveAndCopy}
     />
   )
@@ -214,7 +217,7 @@ type CardProps = {
   improvements: string;    setImprovements: (v: string) => void
   learnings: string;       setLearnings: (v: string) => void
   gratitude: string;       setGratitude: (v: string) => void
-  saving: boolean; saved: boolean; copyFailed: boolean
+  saving: boolean; saved: boolean; copyFailed: boolean; reportText: string
   onSaveAndCopy: () => void
 }
 
@@ -227,7 +230,7 @@ function ReportCard({
   improvements, setImprovements,
   learnings, setLearnings,
   gratitude, setGratitude,
-  saving, saved, copyFailed, onSaveAndCopy,
+  saving, saved, copyFailed, reportText, onSaveAndCopy,
 }: CardProps) {
   return (
     <div className="mobile-card">
@@ -294,7 +297,14 @@ function ReportCard({
         </button>
         {copyFailed && (
           <div className="mt-2 text-xs text-red-600 font-bold bg-red-50 border border-red-200 rounded-xl px-3 py-2">
-            ⚠️ コピーに失敗しました。テキストを手動で選択してコピーしてください。
+            ⚠️ コピーに失敗しました。下のテキストを長押しして全選択→コピーしてください。
+            <textarea
+              readOnly
+              value={reportText}
+              className="mt-2 w-full text-xs text-gray-800 font-normal bg-white border border-red-200 rounded-lg p-2 resize-none"
+              rows={10}
+              onFocus={e => e.target.select()}
+            />
           </div>
         )}
       </div>

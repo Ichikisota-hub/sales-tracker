@@ -38,7 +38,7 @@ export default function AreaStatsView({ yearMonth }: Props) {
     const [y, m] = yearMonth.split('-')
 
     const [{ data: repData }, { data: records }] = await Promise.all([
-      supabase.from('sales_reps').select('*').order('display_order'),
+      supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
       supabase.from('daily_records').select('*')
         .gte('record_date', `${y}-${m}-01`)
         .lte('record_date', `${y}-${m}-31`),

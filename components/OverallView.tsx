@@ -32,7 +32,7 @@ export default function OverallView({ yearMonth, teams }: Props) {
     setLoading(true)
     const [y, m] = yearMonth.split('-')
     const [{ data: reps }, { data: allRecords }, { data: allPlans }, schedRes] = await Promise.all([
-      supabase.from('sales_reps').select('*').order('display_order'),
+      supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
       supabase.from('daily_records').select('*')
         .gte('record_date', `${y}-${m}-01`).lte('record_date', `${y}-${m}-31`),
       supabase.from('monthly_plans').select('*').eq('year_month', yearMonth),
@@ -374,11 +374,11 @@ export default function OverallView({ yearMonth, teams }: Props) {
                           </div>
                           <div className="w-full rounded-t-xl text-center py-3"
                             style={{background: RANK_COLORS[1].bg, minHeight: 64}}>
-                            <div className="text-xs text-slate-300 opacity-80">着地</div>
+                            <div className="text-xs text-slate-300 opacity-80">現在獲得</div>
                             <div className="text-2xl font-black text-white leading-tight">
-                              {round1(teamStats[1].forecastAcquisitions)}
+                              {teamStats[1].totalAcquisitions}
                             </div>
-                            <div className="text-xs text-slate-300 opacity-70">獲得 {teamStats[1].totalAcquisitions}</div>
+                            <div className="text-xs text-slate-300 opacity-60 mt-0.5">着地予想 {round1(teamStats[1].forecastAcquisitions)}</div>
                           </div>
                         </div>
                       ) : <div className="flex-1" />}
@@ -392,11 +392,11 @@ export default function OverallView({ yearMonth, teams }: Props) {
                           </div>
                           <div className="w-full rounded-t-xl text-center py-4"
                             style={{background: RANK_COLORS[0].bg, minHeight: 84}}>
-                            <div className="text-xs text-yellow-200 opacity-80">着地</div>
+                            <div className="text-xs text-yellow-200 opacity-80">現在獲得</div>
                             <div className="text-4xl font-black text-white leading-tight">
-                              {round1(teamStats[0].forecastAcquisitions)}
+                              {teamStats[0].totalAcquisitions}
                             </div>
-                            <div className="text-sm text-yellow-200 opacity-70">獲得 {teamStats[0].totalAcquisitions}</div>
+                            <div className="text-xs text-yellow-200 opacity-60 mt-1">着地予想 {round1(teamStats[0].forecastAcquisitions)}</div>
                           </div>
                         </div>
                       )}
@@ -410,11 +410,11 @@ export default function OverallView({ yearMonth, teams }: Props) {
                           </div>
                           <div className="w-full rounded-t-xl text-center py-2"
                             style={{background: RANK_COLORS[2].bg, minHeight: 52}}>
-                            <div className="text-xs text-amber-200 opacity-80">着地</div>
+                            <div className="text-xs text-amber-200 opacity-80">現在獲得</div>
                             <div className="text-xl font-black text-white leading-tight">
-                              {round1(teamStats[2].forecastAcquisitions)}
+                              {teamStats[2].totalAcquisitions}
                             </div>
-                            <div className="text-xs text-amber-200 opacity-70">獲得 {teamStats[2].totalAcquisitions}</div>
+                            <div className="text-xs text-amber-200 opacity-60 mt-0.5">着地予想 {round1(teamStats[2].forecastAcquisitions)}</div>
                           </div>
                         </div>
                       ) : <div className="flex-1" />}
@@ -434,9 +434,12 @@ export default function OverallView({ yearMonth, teams }: Props) {
                                   style={{width:`${pct}%`, background:'linear-gradient(90deg,#3730a3,#6366f1)', opacity:0.7}} />
                                 <div className="relative h-full flex items-center justify-between px-3">
                                   <span className="text-xs font-bold text-slate-200">{ts.team?.name ?? '未所属'}</span>
-                                  <span className="text-sm font-black text-indigo-300">
-                                    着地 {round1(ts.forecastAcquisitions)}<span className="text-xs font-normal text-slate-500 ml-0.5">件</span>
-                                  </span>
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-sm font-black text-indigo-300">
+                                      {ts.totalAcquisitions}<span className="text-xs font-normal text-slate-500 ml-0.5">件</span>
+                                    </span>
+                                    <span className="text-xs text-slate-500">着地 {round1(ts.forecastAcquisitions)}</span>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -480,12 +483,12 @@ export default function OverallView({ yearMonth, teams }: Props) {
                     </div>
                     <div className="grid grid-cols-4 gap-1 text-center">
                       <div className="bg-slate-50 rounded-lg p-1.5">
-                        <div className="text-xs text-slate-400">着地予想</div>
-                        <div className={`text-lg font-black ${achieved ? 'text-emerald-600' : 'text-red-500'}`}>{round1(ts.forecastAcquisitions)}</div>
+                        <div className="text-xs text-slate-400">現在獲得</div>
+                        <div className="text-2xl font-black text-slate-800">{ts.totalAcquisitions}</div>
                       </div>
                       <div className="bg-slate-50 rounded-lg p-1.5">
-                        <div className="text-xs text-slate-400">獲得</div>
-                        <div className="text-lg font-black text-slate-700">{ts.totalAcquisitions}</div>
+                        <div className="text-xs text-slate-400">着地予想</div>
+                        <div className={`text-sm font-bold ${achieved ? 'text-emerald-600' : 'text-red-400'}`}>{round1(ts.forecastAcquisitions)}</div>
                       </div>
                       <div className="bg-slate-50 rounded-lg p-1.5">
                         <div className="text-xs text-slate-400">目標</div>
@@ -730,9 +733,9 @@ export default function OverallView({ yearMonth, teams }: Props) {
                       >
                         <td className="text-center font-bold text-lg">{medal ?? `${ts.rank}位`}</td>
                         <td className="text-left px-2 font-bold bg-gray-50 whitespace-nowrap">{ts.team?.name ?? '未所属'}</td>
-                        <td className={`font-bold ${achieved ? 'text-emerald-600' : 'text-red-600'}`}>{round1(ts.forecastAcquisitions)}</td>
+                        <td className={`text-xs ${achieved ? 'text-emerald-500' : 'text-red-400'}`}>{round1(ts.forecastAcquisitions)}</td>
                         <td>{ts.planCases}</td>
-                        <td className="font-bold">{ts.totalAcquisitions}</td>
+                        <td className="font-black text-xl text-slate-800">{ts.totalAcquisitions}</td>
                         <td>{ts.actualWorkingDays}日</td>
                         <td>{round1(ts.productivity)}</td>
                         <td className={`font-bold text-xs ${!hasData ? 'text-slate-300' : achieved ? 'text-emerald-600' : 'text-red-500'}`}>
@@ -746,9 +749,9 @@ export default function OverallView({ yearMonth, teams }: Props) {
                           <tr key={rep.id} className="bg-slate-50/80 text-slate-600">
                             <td></td>
                             <td className="text-left px-4 text-xs text-slate-500 whitespace-nowrap">└ {rep.name}</td>
-                            <td className={`text-xs ${mAchieved ? 'text-emerald-600' : 'text-red-500'}`}>{round1(stats.forecastAcquisitions)}</td>
+                            <td className={`text-xs opacity-70 ${mAchieved ? 'text-emerald-500' : 'text-red-400'}`}>{round1(stats.forecastAcquisitions)}</td>
                             <td className="text-xs">{stats.planCases}</td>
-                            <td className="text-xs">{stats.totalAcquisitions}</td>
+                            <td className="text-sm font-black text-slate-700">{stats.totalAcquisitions}</td>
                             <td className="text-xs">{stats.actualWorkingDays}日</td>
                             <td className="text-xs">{round1(stats.productivity)}</td>
                             <td className={`text-xs ${mAchieved ? 'text-emerald-600' : 'text-red-500'}`}>

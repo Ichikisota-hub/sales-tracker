@@ -12,6 +12,8 @@ export default function RepSettings({ reps, onUpdate }: Props) {
   const [saved, setSaved] = useState(false)
   const [adding, setAdding] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [inactiveReps, setInactiveReps] = useState<SalesRep[]>([])
+  const [showInactive, setShowInactive] = useState(false)
 
   const [teams, setTeams] = useState<Team[]>([])
   const [newTeamName, setNewTeamName] = useState('')
@@ -24,11 +26,16 @@ export default function RepSettings({ reps, onUpdate }: Props) {
   const [savingRepTeam, setSavingRepTeam] = useState(false)
   const [savedRepTeam, setSavedRepTeam] = useState(false)
 
-  useEffect(() => { loadTeams() }, [])
+  useEffect(() => { loadTeams(); loadInactiveReps() }, [])
 
   async function loadTeams() {
     const { data } = await supabase.from('teams').select('*').order('display_order')
     setTeams(data || [])
+  }
+
+  async function loadInactiveReps() {
+    const { data } = await supabase.from('sales_reps').select('*').eq('is_active', false).order('display_order')
+    setInactiveReps(data || [])
   }
 
   function handleChange(id: string, value: string) {
@@ -64,9 +71,16 @@ export default function RepSettings({ reps, onUpdate }: Props) {
   }
 
   async function deleteRep(id: string) {
-    await supabase.from('sales_reps').delete().eq('id', id)
+    await supabase.from('sales_reps').update({ is_active: false }).eq('id', id)
     setDeleteConfirm(null)
     onUpdate()
+    loadInactiveReps()
+  }
+
+  async function restoreRep(id: string) {
+    await supabase.from('sales_reps').update({ is_active: true }).eq('id', id)
+    onUpdate()
+    loadInactiveReps()
   }
 
   async function addTeam() {
@@ -306,6 +320,34 @@ export default function RepSettings({ reps, onUpdate }: Props) {
         </div>
         <p className="text-xs text-gray-400 mt-2">現在 {reps.length} 名登録中</p>
       </div>
+
+      {/* 非表示の担当者 */}
+      {inactiveReps.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm p-4">
+          <button
+            onClick={() => setShowInactive(v => !v)}
+            className="flex items-center gap-2 w-full text-left"
+          >
+            <h2 className="font-bold text-sm text-gray-500">非表示の担当者（{inactiveReps.length}名）</h2>
+            <span className="text-xs text-gray-400">{showInactive ? '▲ 閉じる' : '▼ 表示'}</span>
+          </button>
+          {showInactive && (
+            <div className="mt-3 space-y-2">
+              {inactiveReps.map(rep => (
+                <div key={rep.id} className="flex items-center gap-2">
+                  <span className="text-sm text-gray-400 flex-1">{rep.name}</span>
+                  <button
+                    onClick={() => restoreRep(rep.id)}
+                    className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-lg font-medium hover:bg-blue-200 transition-colors"
+                  >
+                    復元
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
     </div>
   )

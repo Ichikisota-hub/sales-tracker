@@ -57,7 +57,7 @@ export default function Home() {
 
   async function loadReps() {
     const [{ data }, { data: teamData }] = await Promise.all([
-      supabase.from('sales_reps').select('*').order('display_order'),
+      supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
       supabase.from('teams').select('*').order('display_order'),
     ])
     if (data) {
