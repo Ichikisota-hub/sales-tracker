@@ -30,12 +30,18 @@ export default function ContractAddForm({ reps, defaultRepId, onSaved, onCancel 
     wifi_provider_other: '',
     acquired_date: today,
     notes: '',
+    needs_option_removal: true,
+    needs_landline_removal: false,
+    needs_router_removal: false,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   function set(field: string, value: string) {
     setForm(prev => ({ ...prev, [field]: value }))
+  }
+  function toggle(field: 'needs_option_removal' | 'needs_landline_removal' | 'needs_router_removal') {
+    setForm(prev => ({ ...prev, [field]: !prev[field] }))
   }
 
   async function handleSave() {
@@ -54,6 +60,9 @@ export default function ContractAddForm({ reps, defaultRepId, onSaved, onCancel 
       wifi_provider_other: form.wifi_provider === 'その他' ? form.wifi_provider_other.trim() : '',
       acquired_date: form.acquired_date,
       status: '手続き中',
+      needs_option_removal: form.needs_option_removal,
+      needs_landline_removal: form.needs_landline_removal,
+      needs_router_removal: form.needs_router_removal,
       notes: form.notes.trim(),
       updated_at: new Date().toISOString(),
     })
@@ -153,6 +162,36 @@ export default function ContractAddForm({ reps, defaultRepId, onSaved, onCancel 
                 placeholder="回線名を入力"
                 className="mt-2 w-full border-2 border-blue-300 rounded-xl px-3 py-3 text-base focus:outline-none focus:border-blue-400" />
             )}
+          </div>
+
+          {/* 開通後アクション */}
+          <div>
+            <label className="block text-sm font-bold text-slate-600 mb-2">開通後に必要なアクション</label>
+            <div className="flex flex-col gap-2">
+              {([
+                { field: 'needs_option_removal',   label: 'オプション外し',   required: true },
+                { field: 'needs_landline_removal',  label: '固定電話外し',   required: false },
+                { field: 'needs_router_removal',    label: 'ルーター外し',   required: false },
+              ] as { field: 'needs_option_removal' | 'needs_landline_removal' | 'needs_router_removal'; label: string; required: boolean }[]).map(({ field, label, required }) => {
+                const checked = form[field]
+                return (
+                  <button key={field} type="button" onClick={() => toggle(field)}
+                    className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl border-2 text-left transition-all ${
+                      checked
+                        ? 'bg-emerald-50 border-emerald-400 text-emerald-800'
+                        : 'bg-white border-slate-200 text-slate-400'
+                    }`}>
+                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                      checked ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'
+                    }`}>
+                      {checked && <span className="text-white text-xs font-black">✓</span>}
+                    </div>
+                    <span className="text-sm font-bold">{label}</span>
+                    {required && <span className="text-xs text-emerald-600 font-bold ml-auto">必須</span>}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {/* 獲得日 */}

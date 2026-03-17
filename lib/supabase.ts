@@ -102,6 +102,9 @@ export type Contract = {
   option_removed: boolean
   landline_removed: boolean
   router_removed: boolean
+  needs_option_removal: boolean
+  needs_landline_removal: boolean
+  needs_router_removal: boolean
   notes: string
   created_at: string
   updated_at: string
