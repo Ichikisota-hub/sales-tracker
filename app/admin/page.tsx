@@ -2,26 +2,18 @@
 
 import { useOrganization } from '@/contexts/OrganizationContext'
 import { useAuth } from '@/contexts/AuthContext'
-import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 
 export default function AdminPage() {
-  const { organization, isManager, loading } = useOrganization()
+  const { organization } = useOrganization()
   const { signOut } = useAuth()
-  const router = useRouter()
   const supabase = createClient()
   const [memberCount, setMemberCount] = useState(0)
   const [sheetId, setSheetId] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-
-  useEffect(() => {
-    if (!loading && !isManager) {
-      router.push('/')
-    }
-  }, [loading, isManager])
 
   useEffect(() => {
     if (!organization) return
@@ -50,13 +42,6 @@ export default function AdminPage() {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
-        <p className="text-slate-400">読み込み中...</p>
-      </div>
-    )
-  }
 
   const trialEnd = organization?.trial_ends_at ? new Date(organization.trial_ends_at) : null
   const daysLeft = trialEnd

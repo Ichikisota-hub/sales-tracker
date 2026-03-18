@@ -1,30 +1,12 @@
 'use client'
 
-import { useOrganization } from '@/contexts/OrganizationContext'
-import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import MemberList from '@/components/admin/MemberList'
 import InviteForm from '@/components/admin/InviteForm'
 import Link from 'next/link'
 
 export default function MembersPage() {
-  const { isManager, loading } = useOrganization()
-  const router = useRouter()
   const [refreshKey, setRefreshKey] = useState(0)
-
-  useEffect(() => {
-    if (!loading && !isManager) {
-      router.push('/')
-    }
-  }, [loading, isManager])
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
-        <p className="text-slate-400">読み込み中...</p>
-      </div>
-    )
-  }
 
   return (
     <div className="min-h-screen bg-slate-100">
