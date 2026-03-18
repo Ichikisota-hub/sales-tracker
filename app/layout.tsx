@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { AuthProvider } from '@/contexts/AuthContext'
+import { OrganizationProvider } from '@/contexts/OrganizationContext'
 
 export const metadata: Metadata = {
   title: 'origin-dx 数値管理',
@@ -27,7 +29,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0f172a" />
       </head>
-      <body>{children}</body>
+      <body>
+        <AuthProvider>
+          <OrganizationProvider>
+            {children}
+          </OrganizationProvider>
+        </AuthProvider>
+      </body>
     </html>
   )
 }

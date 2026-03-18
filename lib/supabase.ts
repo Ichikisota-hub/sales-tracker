@@ -1,14 +1,54 @@
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// 後方互換のためシングルトンエクスポートを維持
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)
+
+// ========== 型定義 ==========
+
+export type Organization = {
+  id: string
+  name: string
+  slug: string
+  plan: string
+  trial_ends_at: string | null
+  max_members: number
+  is_active: boolean
+  settings: {
+    google_sheet_id?: string
+    [key: string]: unknown
+  }
+  created_at: string
+}
+
+export type OrganizationMember = {
+  id: string
+  organization_id: string
+  user_id: string
+  role: 'admin' | 'manager' | 'member'
+  sales_rep_id: string | null
+  joined_at: string
+}
+
+export type Invitation = {
+  id: string
+  organization_id: string
+  email: string
+  role: 'admin' | 'manager' | 'member'
+  token: string
+  expires_at: string
+  accepted_at: string | null
+  invited_by: string | null
+  created_at: string
+}
 
 export type Team = {
   id: string
   name: string
   display_order: number
+  organization_id: string | null
   created_at: string
 }
 
@@ -18,6 +58,7 @@ export type SalesRep = {
   display_order: number
   team_id: string | null
   is_active: boolean
+  organization_id: string | null
   created_at: string
 }
 
@@ -27,6 +68,7 @@ export type MonthlyPlan = {
   year_month: string
   plan_cases: number
   plan_working_days: number
+  organization_id: string | null
   updated_at: string
 }
 
@@ -48,6 +90,7 @@ export type DailyRecord = {
   area_pref: string
   area_city: string
   area_list: { pref: string; city: string }[]
+  organization_id: string | null
   updated_at: string
 }
 
@@ -61,6 +104,7 @@ export type WorkSchedule = {
   working_hours: number
   area_pref: string
   area_city: string
+  organization_id: string | null
   updated_at: string
 }
 
@@ -81,6 +125,7 @@ export type DailyReport = {
   owner_meetings: number
   negotiations: number
   acquisitions: number
+  organization_id: string | null
   created_at: string
   updated_at: string
 }
@@ -106,6 +151,7 @@ export type Contract = {
   needs_landline_removal: boolean
   needs_router_removal: boolean
   notes: string
+  organization_id: string | null
   created_at: string
   updated_at: string
 }

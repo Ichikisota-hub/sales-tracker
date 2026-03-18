@@ -1,7 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient as createServerSupabase } from '@/lib/supabase-server'
 
-const SHEET_ID = '1g5TNx75jUVAdqRVpKXxng1UQoAtzPmj5kAidaoA_c-8'
+const DEFAULT_SHEET_ID = process.env.GOOGLE_SHEET_ID || ''
 const SHEET_NAME = '月間表'
+
+async function getSheetId(): Promise<string> {
+  try {
+    const supabase = await createServerSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return DEFAULT_SHEET_ID
+
+    const { data: member } = await supabase
+      .from('organization_members')
+      .select('organizations(settings)')
+      .eq('user_id', user.id)
+      .single()
+
+    const sheetId = (member as any)?.organizations?.settings?.google_sheet_id
+    return sheetId || DEFAULT_SHEET_ID
+  } catch {
+    return DEFAULT_SHEET_ID
+  }
+}
 
 // 担当者名 → 稼働日付Set のマップを返す
 // { "市来颯太": Set(["2025-03-01", "2025-03-02", ...]), ... }
@@ -9,6 +29,11 @@ export async function GET(req: NextRequest) {
   const apiKey = process.env.GOOGLE_SHEETS_API_KEY
   if (!apiKey) {
     return NextResponse.json({ error: 'GOOGLE_SHEETS_API_KEY not set' }, { status: 500 })
+  }
+
+  const SHEET_ID = await getSheetId()
+  if (!SHEET_ID) {
+    return NextResponse.json({ error: 'スプレッドシートIDが設定されていません' }, { status: 400 })
   }
 
   const { searchParams } = new URL(req.url)

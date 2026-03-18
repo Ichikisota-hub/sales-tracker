@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerSupabase } from '@/lib/supabase-server'
 
-const SHEET_ID = '1g5TNx75jUVAdqRVpKXxng1UQoAtzPmj5kAidaoA_c-8'
+const DEFAULT_SHEET_ID = process.env.GOOGLE_SHEET_ID || ''
 const SHEET_NAME = '月間表'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 function normalize(s: string) {
   return s.replace(/[\s　]/g, '')
@@ -30,6 +25,21 @@ export async function POST(req: NextRequest) {
   if (!yearMonth) return NextResponse.json({ error: 'yearMonth required' }, { status: 400 })
 
   const [year, month] = yearMonth.split('-').map(Number)
+
+  // 認証済みユーザーの org settings から SHEET_ID を取得
+  const supabase = await createServerSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  let SHEET_ID = DEFAULT_SHEET_ID
+  if (user) {
+    const { data: member } = await supabase
+      .from('organization_members')
+      .select('organizations(settings)')
+      .eq('user_id', user.id)
+      .single()
+    const sheetId = (member as any)?.organizations?.settings?.google_sheet_id
+    if (sheetId) SHEET_ID = sheetId
+  }
+  if (!SHEET_ID) return NextResponse.json({ error: 'スプレッドシートIDが設定されていません' }, { status: 400 })
 
   // スプレッドシートを取得
   const sheetRes = await fetch(

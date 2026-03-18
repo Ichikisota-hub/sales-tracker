@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient as createServerSupabase } from '@/lib/supabase-server'
 
-const SHEET_ID = '1g5TNx75jUVAdqRVpKXxng1UQoAtzPmj5kAidaoA_c-8'
-// 既存の /api/schedule と同じシートを使用
+const DEFAULT_SHEET_ID = process.env.GOOGLE_SHEET_ID || ''
 const SHEET_NAMES = ['月間表', 'Sheet1', 'シフト']
 
 function normalize(s: string) {
@@ -34,9 +34,9 @@ function parseTime(cell: string): { start: string; end: string } | null {
   return null
 }
 
-async function fetchSheet(apiKey: string, sheetName: string) {
+async function fetchSheet(apiKey: string, sheetId: string, sheetName: string) {
   const res = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(sheetName)}?key=${apiKey}`
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}?key=${apiKey}`
   )
   if (!res.ok) return null
   const json = await res.json()
@@ -56,10 +56,26 @@ export async function GET(req: NextRequest) {
 
   const [year, month] = yearMonth.split('-').map(Number)
 
+  // org settings から SHEET_ID を取得
+  let SHEET_ID = DEFAULT_SHEET_ID
+  try {
+    const supabase = await createServerSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: member } = await supabase
+        .from('organization_members')
+        .select('organizations(settings)')
+        .eq('user_id', user.id)
+        .single()
+      const sheetId = (member as any)?.organizations?.settings?.google_sheet_id
+      if (sheetId) SHEET_ID = sheetId
+    }
+  } catch {}
+
   // シート名を順番に試す
   let rows: string[][] | null = null
   for (const name of SHEET_NAMES) {
-    rows = await fetchSheet(apiKey, name)
+    rows = await fetchSheet(apiKey, SHEET_ID, name)
     if (rows && rows.length >= 2) break
   }
 

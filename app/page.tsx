@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase, SalesRep, Team } from '@/lib/supabase'
 import { getMonthList, formatYearMonth, localYearMonth } from '@/lib/dateUtils'
+import { useOrganization } from '@/contexts/OrganizationContext'
+import { useAuth } from '@/contexts/AuthContext'
+import TrialBanner from '@/components/billing/TrialBanner'
 import SheetView from '@/components/SheetView'
 import AnalysisView from '@/components/AnalysisView'
 import RepSettings from '@/components/RepSettings'
@@ -27,6 +30,8 @@ type MainTab = 'form' | 'status' | 'analysis' | 'overall'
 type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings' | 'daily_report'
 
 export default function Home() {
+  const { isManager } = useOrganization()
+  const { signOut } = useAuth()
   const [reps, setReps] = useState<SalesRep[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null)
@@ -107,6 +112,14 @@ export default function Home() {
     { id: 'settings'     as SubTab, label: '設定',      icon: '⚙️' },
   ]
 
+  // サブメニューに追加する管理者メニュー（サブタブではなく別ページへのリンク）
+  const adminMenuItems = isManager ? [
+    { label: '組織管理', icon: '🏢', href: '/admin' },
+    { label: 'ログアウト', icon: '🚪', action: signOut },
+  ] : [
+    { label: 'ログアウト', icon: '🚪', action: signOut },
+  ]
+
   const currentTab = activeSubTab ?? activeTab
   const isShiftSubmitTab = currentTab === 'shift_submit' || currentTab === 'shift' || currentTab === 'daily_shift'
   const needsRep = ['form', 'status', 'shift_submit', 'sheet', 'analysis'].includes(currentTab)
@@ -114,6 +127,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-100">
+      <TrialBanner />
       <div className="top-nav">
         <div className="flex items-center gap-2 mb-2">
           <img src="/logo.png" alt="ORIGIN SALES REPORTING" className="h-14 w-auto" />
@@ -200,6 +214,23 @@ export default function Home() {
                     {activeSubTab === tab.id && <span className="ml-auto text-blue-500">✓</span>}
                   </button>
                 ))}
+                <div className="border-t border-slate-100 mt-1">
+                  {adminMenuItems.map((item, i) =>
+                    'href' in item ? (
+                      <a key={i} href={item.href}
+                        className="w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-left transition-colors hover:bg-slate-50 text-slate-600">
+                        <span>{item.icon}</span>
+                        <span>{item.label}</span>
+                      </a>
+                    ) : (
+                      <button key={i} onClick={() => { setSubMenuOpen(false); item.action?.() }}
+                        className="w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-left transition-colors hover:bg-slate-50 text-slate-600">
+                        <span>{item.icon}</span>
+                        <span>{item.label}</span>
+                      </button>
+                    )
+                  )}
+                </div>
               </div>
             )}
           </div>
