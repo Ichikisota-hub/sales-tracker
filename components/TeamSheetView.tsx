@@ -11,7 +11,8 @@ type RawRepData = {
   records: DailyRecord[]
   planCases: number
   planWorkingDays: number
-  schedWorkingDays: string[]
+  // work_schedules: date -> work_status (例: '稼働' | '休日')
+  workSchedules: Record<string, string>
 }
 
 type RepRow = {
@@ -45,65 +46,68 @@ function getWeeks(yearMonth: string) {
   return weeks
 }
 
-function calcRepRow(raw: RawRepData, weekFilter?: { start: string; end: string; days: number }, monthDays?: number): RepRow {
+// SheetViewと同じロジックで集計
+function calcRepRow(
+  raw: RawRepData,
+  weekFilter?: { start: string; end: string; days: number },
+  monthDays?: number
+): RepRow {
   const today = new Date().toISOString().split('T')[0]
+
   const records = weekFilter
     ? raw.records.filter(r => r.record_date >= weekFilter.start && r.record_date <= weekFilter.end)
     : raw.records
 
-  const acquisitions = records.reduce((s, r) => s + (r.acquisitions || 0), 0)
-  const actualWorkingDays = records.filter(r => r.attendance_status === '稼働').length
+  // 実稼働: SheetViewと同じ条件 (attendance_status OR work_status が '稼働')
+  const acquisitions = records.reduce((s, r) => s + (Number(r.acquisitions) || 0), 0)
+  const actualWorkingDays = records.filter(
+    r => r.attendance_status === '稼働' || r.work_status === '稼働'
+  ).length
 
-  // Planned working days for this period
-  let planWorkDays: number
+  const productivity = actualWorkingDays > 0 ? acquisitions / actualWorkingDays : 0
+
   let planCases: number
+  let planWorkDays: number
+  let schedRemaining: number  // 着地予想の計算用（未来の予定稼働日）
+
   if (weekFilter && monthDays) {
     const ratio = weekFilter.days / monthDays
     planCases = raw.planCases * ratio
-    // Use schedule days in this week if available
-    const weekSchedDays = raw.schedWorkingDays.filter(d => d >= weekFilter.start && d <= weekFilter.end)
-    planWorkDays = weekSchedDays.length > 0
-      ? weekSchedDays.length
+
+    // 計画稼働: work_schedulesのその週の稼働日数、なければ按分
+    const weekSchedDates = Object.entries(raw.workSchedules)
+      .filter(([d, s]) => d >= weekFilter.start && d <= weekFilter.end && s === '稼働')
+      .map(([d]) => d)
+    planWorkDays = weekSchedDates.length > 0
+      ? weekSchedDates.length
       : raw.planWorkingDays * ratio
-    const productivity = actualWorkingDays > 0 ? acquisitions / actualWorkingDays : 0
-    const schedRemaining = weekSchedDays.filter(d => d >= today).length ||
-      records.filter(r => r.record_date >= today && r.work_status === '稼働').length
-    const forecastAcquisitions = acquisitions + productivity * schedRemaining
-    const remainingWorkingDays = Math.max(0, planWorkDays - actualWorkingDays)
-    return {
-      rep: raw.rep,
-      planCases,
-      planWorkDays,
-      acquisitions,
-      forecastAcquisitions,
-      achievementRate: planCases > 0 ? acquisitions / planCases : 0,
-      forecastRate: planCases > 0 ? forecastAcquisitions / planCases : 0,
-      productivity,
-      actualWorkingDays,
-      remainingWorkingDays,
-    }
+
+    // 残日計算: work_schedulesの週内で未来の稼働日
+    schedRemaining = weekSchedDates.filter(d => d >= today).length
   } else {
     planCases = raw.planCases
     planWorkDays = raw.planWorkingDays
-    const futureSched = raw.schedWorkingDays.filter(d => d >= today)
-    const schedRemaining = futureSched.length > 0
-      ? futureSched.length
-      : raw.records.filter(r => r.record_date >= today && r.work_status === '稼働').length
-    const productivity = actualWorkingDays > 0 ? acquisitions / actualWorkingDays : 0
-    const forecastAcquisitions = acquisitions + productivity * schedRemaining
-    const remainingWorkingDays = Math.max(0, planWorkDays - actualWorkingDays)
-    return {
-      rep: raw.rep,
-      planCases,
-      planWorkDays,
-      acquisitions,
-      forecastAcquisitions,
-      achievementRate: planCases > 0 ? acquisitions / planCases : 0,
-      forecastRate: planCases > 0 ? forecastAcquisitions / planCases : 0,
-      productivity,
-      actualWorkingDays,
-      remainingWorkingDays,
-    }
+
+    // 残日計算: work_schedulesの未来の稼働日
+    schedRemaining = Object.entries(raw.workSchedules)
+      .filter(([d, s]) => d >= today && s === '稼働')
+      .length
+  }
+
+  const forecastAcquisitions = acquisitions + productivity * schedRemaining
+  const remainingWorkingDays = Math.max(0, planWorkDays - actualWorkingDays)
+
+  return {
+    rep: raw.rep,
+    planCases,
+    planWorkDays,
+    acquisitions,
+    forecastAcquisitions,
+    achievementRate: planCases > 0 ? acquisitions / planCases : 0,
+    forecastRate: planCases > 0 ? forecastAcquisitions / planCases : 0,
+    productivity,
+    actualWorkingDays,
+    remainingWorkingDays,
   }
 }
 
@@ -120,48 +124,55 @@ export default function TeamSheetView({ yearMonth, teams }: Props) {
 
   useEffect(() => {
     load()
-    // Ensure selectedWeek is valid
     if (selectedWeek >= weeks.length) setSelectedWeek(0)
   }, [yearMonth])
 
   async function load() {
     setLoading(true)
     const [yStr, mStr] = yearMonth.split('-')
-    const [{ data: reps }, { data: records }, { data: plans }, schedRes] = await Promise.all([
+    const dateFrom = `${yStr}-${mStr}-01`
+    const dateTo = `${yStr}-${mStr}-31`
+
+    const [{ data: reps }, { data: records }, { data: plans }, { data: schedules }] = await Promise.all([
       supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
-      supabase.from('daily_records').select('*')
-        .gte('record_date', `${yStr}-${mStr}-01`)
-        .lte('record_date', `${yStr}-${mStr}-31`),
+      supabase.from('daily_records').select('*').gte('record_date', dateFrom).lte('record_date', dateTo),
       supabase.from('monthly_plans').select('*').eq('year_month', yearMonth),
-      fetch(`/api/schedule?yearMonth=${yearMonth}`).then(r => r.json()).catch(() => null),
+      supabase.from('work_schedules').select('sales_rep_id,schedule_date,work_status')
+        .gte('schedule_date', dateFrom).lte('schedule_date', dateTo),
     ])
+
     if (!reps) { setLoading(false); return }
-    const scheduleMap: Record<string, string[]> = schedRes?.schedule || {}
+
+    // work_schedules を rep_id → { date: status } に変換
+    const schedMap: Record<string, Record<string, string>> = {}
+    for (const s of schedules || []) {
+      if (!schedMap[s.sales_rep_id]) schedMap[s.sales_rep_id] = {}
+      schedMap[s.sales_rep_id][s.schedule_date] = s.work_status
+    }
+
     const raw: RawRepData[] = reps.map(rep => ({
       rep,
       records: (records || []).filter(r => r.sales_rep_id === rep.id),
       planCases: (plans || []).find(p => p.sales_rep_id === rep.id)?.plan_cases || 0,
       planWorkingDays: (plans || []).find(p => p.sales_rep_id === rep.id)?.plan_working_days || 0,
-      schedWorkingDays: scheduleMap[rep.name] || [],
+      workSchedules: schedMap[rep.id] || {},
     }))
+
     setRawData(raw)
     setLoading(false)
   }
 
   if (loading) return <div className="p-6 text-center text-slate-400 text-sm">読み込み中...</div>
 
-  // Filter by team
   const filteredRaw = selectedTeamId === '__all__'
     ? rawData
     : rawData.filter(d => d.rep.team_id === selectedTeamId)
 
-  // Compute rows
   const weekFilter = viewMode === 'week' ? weeks[selectedWeek] : undefined
   const rows: RepRow[] = filteredRaw.map(raw =>
     calcRepRow(raw, weekFilter, weekFilter ? monthDays : undefined)
   )
 
-  // Team totals
   const totalAcq = rows.reduce((s, r) => s + r.acquisitions, 0)
   const totalPlan = rows.reduce((s, r) => s + r.planCases, 0)
   const totalForecast = rows.reduce((s, r) => s + r.forecastAcquisitions, 0)
@@ -174,7 +185,6 @@ export default function TeamSheetView({ yearMonth, teams }: Props) {
 
   const fmtPct = (v: number) => `${(v * 100).toFixed(1)}%`
   const fmtNum = (v: number) => v % 1 === 0 ? String(Math.round(v)) : round1(v)
-
   const rateColor = (r: number) => r >= 1 ? 'text-emerald-600' : r >= 0.8 ? 'text-amber-600' : 'text-red-500'
   const forecastColor = (r: number) => r >= 1 ? 'bg-emerald-50' : r >= 0.8 ? 'bg-amber-50' : 'bg-red-50'
 
