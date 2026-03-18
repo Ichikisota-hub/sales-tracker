@@ -43,6 +43,9 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [showContractAdd, setShowContractAdd] = useState(false)
   const [contractRefreshKey, setContractRefreshKey] = useState(0)
+  const [settingsUnlocked, setSettingsUnlocked] = useState(false)
+  const [settingsPassword, setSettingsPassword] = useState('')
+  const [settingsPasswordError, setSettingsPasswordError] = useState(false)
   const subMenuRef = useRef<HTMLDivElement>(null)
 
   const months = getMonthList(24)
@@ -79,6 +82,11 @@ export default function Home() {
     setActiveSubTab(tab)
     setActiveTab('form')
     setSubMenuOpen(false)
+    if (tab !== 'settings') {
+      setSettingsUnlocked(false)
+      setSettingsPassword('')
+      setSettingsPasswordError(false)
+    }
   }
 
   function openMainTab(tab: MainTab) {
@@ -270,7 +278,39 @@ export default function Home() {
           <DailyReportListView teams={teams} />
         )}
         {activeSubTab === 'settings' && (
-          <RepSettings reps={reps} onUpdate={loadReps} />
+          settingsUnlocked ? (
+            <RepSettings reps={reps} onUpdate={loadReps} />
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+              <div className="text-slate-500 text-sm font-bold">設定画面はパスワードが必要です</div>
+              <form onSubmit={e => {
+                e.preventDefault()
+                if (settingsPassword === 'Origin0201') {
+                  setSettingsUnlocked(true)
+                  setSettingsPasswordError(false)
+                } else {
+                  setSettingsPasswordError(true)
+                  setSettingsPassword('')
+                }
+              }} className="flex flex-col items-center gap-3">
+                <input
+                  type="password"
+                  value={settingsPassword}
+                  onChange={e => { setSettingsPassword(e.target.value); setSettingsPasswordError(false) }}
+                  placeholder="パスワードを入力"
+                  className="border border-slate-300 rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-400 w-52"
+                  autoFocus
+                />
+                {settingsPasswordError && (
+                  <div className="text-red-500 text-xs font-bold">パスワードが違います</div>
+                )}
+                <button type="submit"
+                  className="bg-blue-600 text-white text-sm font-bold px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                  入力
+                </button>
+              </form>
+            </div>
+          )
         )}
       </div>
 

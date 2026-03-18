@@ -31,19 +31,25 @@ export default function OverallView({ yearMonth, teams }: Props) {
   async function loadAll() {
     setLoading(true)
     const [y, m] = yearMonth.split('-')
-    const [{ data: reps }, { data: allRecords }, { data: allPlans }, schedRes] = await Promise.all([
+    const [{ data: reps }, { data: allRecords }, { data: allPlans }, { data: allSchedules }] = await Promise.all([
       supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
       supabase.from('daily_records').select('*')
         .gte('record_date', `${y}-${m}-01`).lte('record_date', `${y}-${m}-31`),
       supabase.from('monthly_plans').select('*').eq('year_month', yearMonth),
-      fetch(`/api/schedule?yearMonth=${yearMonth}`).then(r => r.json()).catch(() => null),
+      supabase.from('work_schedules').select('sales_rep_id,schedule_date')
+        .eq('work_status', '稼働')
+        .gte('schedule_date', `${y}-${m}-01`).lte('schedule_date', `${y}-${m}-31`),
     ])
     if (!reps) { setLoading(false); return }
-    const scheduleMap: Record<string, string[]> = schedRes?.schedule || {}
+    const scheduleMap: Record<string, string[]> = {}
+    for (const s of allSchedules || []) {
+      if (!scheduleMap[s.sales_rep_id]) scheduleMap[s.sales_rep_id] = []
+      scheduleMap[s.sales_rep_id].push(s.schedule_date)
+    }
     const result: RepStats[] = reps.map(rep => {
       const records = (allRecords || []).filter(r => r.sales_rep_id === rep.id)
       const plan = (allPlans || []).find(p => p.sales_rep_id === rep.id)
-      const schedWorkingDays = scheduleMap[rep.name] || []
+      const schedWorkingDays = scheduleMap[rep.id] || []
       const stats = calcMonthlyStats(records, plan?.plan_cases || 0, plan?.plan_working_days || 0, yearMonth, schedWorkingDays)
       return { rep, stats }
     })

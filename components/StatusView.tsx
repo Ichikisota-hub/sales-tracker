@@ -36,15 +36,16 @@ export default function StatusView({ repId, repName, yearMonth }: Props) {
   async function loadData() {
     setLoading(true)
     const [y, m] = yearMonth.split('-')
-    const [{ data: recData }, { data: planData }, schedRes] = await Promise.all([
+    const [{ data: recData }, { data: planData }, { data: schedData }] = await Promise.all([
       supabase.from('daily_records').select('*')
         .eq('sales_rep_id', repId).gte('record_date', `${y}-${m}-01`).lte('record_date', `${y}-${m}-31`),
       supabase.from('monthly_plans').select('*')
         .eq('sales_rep_id', repId).eq('year_month', yearMonth).single(),
-      fetch(`/api/schedule?yearMonth=${yearMonth}`).then(r => r.json()).catch(() => null),
+      supabase.from('work_schedules').select('schedule_date')
+        .eq('sales_rep_id', repId).eq('work_status', '稼働')
+        .gte('schedule_date', `${y}-${m}-01`).lte('schedule_date', `${y}-${m}-31`),
     ])
-    const scheduleMap: Record<string, string[]> = schedRes?.schedule || {}
-    const schedWorkingDays = scheduleMap[repName] || []
+    const schedWorkingDays = schedData?.map(s => s.schedule_date) || []
     setStats(calcMonthlyStats(
       recData || [],
       planData?.plan_cases || 0,
