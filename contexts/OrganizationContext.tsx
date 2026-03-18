@@ -43,16 +43,33 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     }
 
     setLoading(true)
-    const { data } = await supabase
+
+    // organization_members を単体で取得（join なし）
+    const { data: memberData, error: memberError } = await supabase
       .from('organization_members')
-      .select('*, organizations(*)')
+      .select('*')
       .eq('user_id', user.id)
       .maybeSingle()
 
-    if (data) {
-      setMembership(data as OrganizationMember)
-      setOrganization((data as any).organizations as Organization)
+    if (memberError) {
+      console.error('organization_members error:', memberError)
+      setLoading(false)
+      return
     }
+
+    if (memberData) {
+      setMembership(memberData as OrganizationMember)
+
+      // 組織情報を別途取得
+      const { data: orgData } = await supabase
+        .from('organizations')
+        .select('*')
+        .eq('id', memberData.organization_id)
+        .maybeSingle()
+
+      if (orgData) setOrganization(orgData as Organization)
+    }
+
     setLoading(false)
   }
 
