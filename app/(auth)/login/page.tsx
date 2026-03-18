@@ -18,15 +18,22 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
-      setError('メールアドレスまたはパスワードが正しくありません')
+      setError(`ログイン失敗: ${error.message}`)
+      setLoading(false)
+      return
+    }
+
+    if (!data.session) {
+      setError('セッションの取得に失敗しました。もう一度お試しください。')
       setLoading(false)
       return
     }
 
     router.push('/')
     router.refresh()
+    setLoading(false)
   }
 
   return (
