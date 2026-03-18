@@ -82,6 +82,22 @@ function calcRepRow(
       ? weekSchedDates.length
       : raw.planWorkingDays * ratio
 
+    // 週間稼働が1以下は0として扱う（生産性・着地予想を計算しない）
+    if (actualWorkingDays <= 1) {
+      return {
+        rep: raw.rep,
+        planCases,
+        planWorkDays,
+        acquisitions,
+        forecastAcquisitions: acquisitions,
+        achievementRate: planCases > 0 ? acquisitions / planCases : 0,
+        forecastRate: planCases > 0 ? acquisitions / planCases : 0,
+        productivity: 0,
+        actualWorkingDays: 0,
+        remainingWorkingDays: Math.max(0, planWorkDays),
+      }
+    }
+
     // 残日計算: work_schedulesの週内で未来の稼働日
     schedRemaining = weekSchedDates.filter(d => d >= today).length
   } else {
