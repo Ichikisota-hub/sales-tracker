@@ -25,7 +25,7 @@ type RepRow = {
   forecastRate: number
   productivity: number
   actualWorkingDays: number
-  remainingWorkingDays: number  // planWorkDays - actualWorkingDays
+  remainingWorkingDays: number  // work_schedulesの今日以降の稼働日数
 }
 
 function getWeeks(yearMonth: string) {
@@ -83,6 +83,7 @@ function calcRepRow(
       : raw.planWorkingDays * ratio
 
     // 週間稼働が1以下は0として扱う（生産性・着地予想を計算しない）
+    schedRemaining = weekSchedDates.filter(d => d >= today).length
     if (actualWorkingDays <= 1) {
       return {
         rep: raw.rep,
@@ -94,12 +95,9 @@ function calcRepRow(
         forecastRate: planCases > 0 ? acquisitions / planCases : 0,
         productivity: 0,
         actualWorkingDays: 0,
-        remainingWorkingDays: Math.max(0, planWorkDays),
+        remainingWorkingDays: schedRemaining,
       }
     }
-
-    // 残日計算: work_schedulesの週内で未来の稼働日
-    schedRemaining = weekSchedDates.filter(d => d >= today).length
   } else {
     planCases = raw.planCases
     planWorkDays = raw.planWorkingDays
@@ -111,7 +109,7 @@ function calcRepRow(
   }
 
   const forecastAcquisitions = acquisitions + productivity * schedRemaining
-  const remainingWorkingDays = Math.max(0, planWorkDays - actualWorkingDays)
+  const remainingWorkingDays = schedRemaining
 
   return {
     rep: raw.rep,
