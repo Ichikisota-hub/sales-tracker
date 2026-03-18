@@ -31,7 +31,7 @@ type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 
 
 export default function Home() {
   const { isManager } = useOrganization()
-  const { signOut } = useAuth()
+  const { user, loading: authLoading, signOut } = useAuth()
   const [reps, setReps] = useState<SalesRep[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null)
@@ -48,7 +48,13 @@ export default function Home() {
   const months = getMonthList(24)
   const scheduleMonthOptions = [localYearMonth(), getNextMonth(localYearMonth())]
 
-  useEffect(() => { loadReps() }, [])
+  useEffect(() => {
+    if (!authLoading && !user) {
+      window.location.href = '/login'
+    }
+  }, [authLoading, user])
+
+  useEffect(() => { if (user) loadReps() }, [user])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {

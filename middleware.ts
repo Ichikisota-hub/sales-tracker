@@ -23,28 +23,8 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // セッションをクッキーから取得（ネットワーク通信なし・Edge環境で高速）
-  const { data: { session } } = await supabase.auth.getSession()
-
-  const { pathname } = request.nextUrl
-
-  // 認証不要なパス
-  const publicPaths = ['/login', '/signup', '/invite']
-  const isPublicPath = publicPaths.some(p => pathname.startsWith(p))
-
-  // 未認証ユーザーを /login にリダイレクト
-  if (!session && !isPublicPath) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
-  }
-
-  // 認証済みユーザーが /login や /signup にアクセスした場合はホームへ
-  if (session && (pathname === '/login' || pathname === '/signup')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/'
-    return NextResponse.redirect(url)
-  }
+  // セッションクッキーを更新するだけ（リダイレクトはクライアント側で処理）
+  await supabase.auth.getSession()
 
   return supabaseResponse
 }
