@@ -118,11 +118,9 @@ export default function Home() {
     { id: 'settings'     as SubTab, label: '設定',      icon: '⚙️' },
   ]
 
-  // サブメニューに追加する管理者メニュー（サブタブではなく別ページへのリンク）
-  const adminMenuItems = isManager ? [
+  // 全ユーザーに組織管理を表示（権限チェックはadminページ側で実施）
+  const adminMenuItems = [
     { label: '組織管理', icon: '🏢', href: '/admin' },
-    { label: 'ログアウト', icon: '🚪', action: signOut },
-  ] : [
     { label: 'ログアウト', icon: '🚪', action: signOut },
   ]
 
