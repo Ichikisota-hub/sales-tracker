@@ -23,8 +23,8 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // セッションを更新（重要：この呼び出しはサーバーコンポーネントでのセッション有効性に必要）
-  const { data: { user } } = await supabase.auth.getUser()
+  // セッションをクッキーから取得（ネットワーク通信なし・Edge環境で高速）
+  const { data: { session } } = await supabase.auth.getSession()
 
   const { pathname } = request.nextUrl
 
@@ -33,14 +33,14 @@ export async function middleware(request: NextRequest) {
   const isPublicPath = publicPaths.some(p => pathname.startsWith(p))
 
   // 未認証ユーザーを /login にリダイレクト
-  if (!user && !isPublicPath) {
+  if (!session && !isPublicPath) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
   // 認証済みユーザーが /login や /signup にアクセスした場合はホームへ
-  if (user && (pathname === '/login' || pathname === '/signup')) {
+  if (session && (pathname === '/login' || pathname === '/signup')) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
