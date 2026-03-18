@@ -60,12 +60,12 @@ export async function GET(req: NextRequest) {
   let SHEET_ID = DEFAULT_SHEET_ID
   try {
     const supabase = await createServerSupabase()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user) {
       const { data: member } = await supabase
         .from('organization_members')
         .select('organizations(settings)')
-        .eq('user_id', user.id)
+        .eq('user_id', session.user.id)
         .single()
       const sheetId = (member as any)?.organizations?.settings?.google_sheet_id
       if (sheetId) SHEET_ID = sheetId

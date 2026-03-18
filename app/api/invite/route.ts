@@ -13,7 +13,8 @@ function getServiceClient() {
 export async function POST(req: NextRequest) {
   // 認証チェック
   const serverSupabase = await createServerSupabase()
-  const { data: { user } } = await serverSupabase.auth.getUser()
+  const { data: { session } } = await serverSupabase.auth.getSession()
+  const user = session?.user
   if (!user) {
     return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
   }
