@@ -30,8 +30,7 @@ type MainTab = 'form' | 'status' | 'analysis' | 'overall'
 type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings' | 'daily_report'
 
 export default function Home() {
-  const { isManager } = useOrganization()
-  const { user, loading: authLoading, signOut } = useAuth()
+  const { signOut } = useAuth()
   const [reps, setReps] = useState<SalesRep[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null)
@@ -48,13 +47,7 @@ export default function Home() {
   const months = getMonthList(24)
   const scheduleMonthOptions = [localYearMonth(), getNextMonth(localYearMonth())]
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      window.location.href = '/login'
-    }
-  }, [authLoading, user])
-
-  useEffect(() => { if (user) loadReps() }, [user])
+  useEffect(() => { loadReps() }, [])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -118,9 +111,7 @@ export default function Home() {
     { id: 'settings'     as SubTab, label: '設定',      icon: '⚙️' },
   ]
 
-  // 全ユーザーに組織管理を表示（権限チェックはadminページ側で実施）
   const adminMenuItems = [
-    { label: '組織管理', icon: '🏢', href: '/admin' },
     { label: 'ログアウト', icon: '🚪', action: signOut },
   ]
 
@@ -219,21 +210,13 @@ export default function Home() {
                   </button>
                 ))}
                 <div className="border-t border-slate-100 mt-1">
-                  {adminMenuItems.map((item, i) =>
-                    'href' in item ? (
-                      <a key={i} href={item.href}
-                        className="w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-left transition-colors hover:bg-slate-50 text-slate-600">
-                        <span>{item.icon}</span>
-                        <span>{item.label}</span>
-                      </a>
-                    ) : (
-                      <button key={i} onClick={() => { setSubMenuOpen(false); item.action?.() }}
-                        className="w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-left transition-colors hover:bg-slate-50 text-slate-600">
-                        <span>{item.icon}</span>
-                        <span>{item.label}</span>
-                      </button>
-                    )
-                  )}
+                  {adminMenuItems.map((item, i) => (
+                    <button key={i} onClick={() => { setSubMenuOpen(false); item.action?.() }}
+                      className="w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-left transition-colors hover:bg-slate-50 text-slate-600">
+                      <span>{item.icon}</span>
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
