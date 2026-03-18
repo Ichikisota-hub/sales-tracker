@@ -47,7 +47,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       .from('organization_members')
       .select('*, organizations(*)')
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle()
 
     if (data) {
       setMembership(data as OrganizationMember)

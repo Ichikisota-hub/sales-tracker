@@ -64,8 +64,7 @@ export default function SignupPage() {
       return
     }
 
-    router.push('/')
-    router.refresh()
+    window.location.href = '/'
   }
 
   return (
