@@ -24,7 +24,7 @@ type RepRow = {
   forecastRate: number
   productivity: number
   actualWorkingDays: number
-  remainingWorkingDays: number
+  remainingWorkingDays: number  // planWorkDays - actualWorkingDays
 }
 
 function getWeeks(yearMonth: string) {
@@ -65,11 +65,11 @@ function calcRepRow(raw: RawRepData, weekFilter?: { start: string; end: string; 
     planWorkDays = weekSchedDays.length > 0
       ? weekSchedDays.length
       : raw.planWorkingDays * ratio
-    // Remaining = future schedule days in this week
-    const remainingWorkingDays = weekSchedDays.filter(d => d >= today).length ||
-      records.filter(r => r.record_date >= today && r.work_status === '稼働').length
     const productivity = actualWorkingDays > 0 ? acquisitions / actualWorkingDays : 0
-    const forecastAcquisitions = acquisitions + productivity * remainingWorkingDays
+    const schedRemaining = weekSchedDays.filter(d => d >= today).length ||
+      records.filter(r => r.record_date >= today && r.work_status === '稼働').length
+    const forecastAcquisitions = acquisitions + productivity * schedRemaining
+    const remainingWorkingDays = Math.max(0, planWorkDays - actualWorkingDays)
     return {
       rep: raw.rep,
       planCases,
@@ -86,11 +86,12 @@ function calcRepRow(raw: RawRepData, weekFilter?: { start: string; end: string; 
     planCases = raw.planCases
     planWorkDays = raw.planWorkingDays
     const futureSched = raw.schedWorkingDays.filter(d => d >= today)
-    const remainingWorkingDays = futureSched.length > 0
+    const schedRemaining = futureSched.length > 0
       ? futureSched.length
       : raw.records.filter(r => r.record_date >= today && r.work_status === '稼働').length
     const productivity = actualWorkingDays > 0 ? acquisitions / actualWorkingDays : 0
-    const forecastAcquisitions = acquisitions + productivity * remainingWorkingDays
+    const forecastAcquisitions = acquisitions + productivity * schedRemaining
+    const remainingWorkingDays = Math.max(0, planWorkDays - actualWorkingDays)
     return {
       rep: raw.rep,
       planCases,
@@ -255,7 +256,7 @@ export default function TeamSheetView({ yearMonth, teams }: Props) {
               <th className="bg-gray-200 text-left px-2 sticky left-0 z-10" style={{ minWidth: 80 }}>担当者</th>
               <th className="header-orange">目標件数</th>
               <th className="header-blue">現状件数</th>
-              <th className="header-red">予実</th>
+              <th className="header-red">着地予想</th>
               <th className="header-red">達成率</th>
               <th className="header-green">生産性</th>
               <th className="bg-purple-100 text-purple-700 text-xs font-bold py-1 px-1 text-center">計画稼働</th>
@@ -274,7 +275,7 @@ export default function TeamSheetView({ yearMonth, teams }: Props) {
                   <td>{fmtNum(row.planCases)}</td>
                   <td className="font-bold text-slate-800">{row.acquisitions}</td>
                   <td className={`font-bold ${rateColor(row.forecastRate)}`}>
-                    {row.planCases > 0 ? fmtPct(row.forecastRate) : '—'}
+                    {round1(row.forecastAcquisitions)}
                   </td>
                   <td className={`font-bold ${rateColor(row.achievementRate)}`}>
                     {row.planCases > 0 ? fmtPct(row.achievementRate) : '—'}
@@ -291,7 +292,7 @@ export default function TeamSheetView({ yearMonth, teams }: Props) {
               <td className="text-left px-2 bg-yellow-100 sticky left-0 z-10">合計</td>
               <td>{fmtNum(totalPlan)}</td>
               <td className="text-slate-800">{totalAcq}</td>
-              <td className={rateColor(totalForecastRate)}>{totalPlan > 0 ? fmtPct(totalForecastRate) : '—'}</td>
+              <td className={rateColor(totalForecastRate)}>{round1(totalForecast)}</td>
               <td className={rateColor(totalAchRate)}>{totalPlan > 0 ? fmtPct(totalAchRate) : '—'}</td>
               <td className="text-blue-700">{round1(totalProductivity)}</td>
               <td className="text-purple-700">{fmtNum(totalPlanDays)}</td>
