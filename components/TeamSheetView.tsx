@@ -199,6 +199,16 @@ export default function TeamSheetView({ yearMonth, teams }: Props) {
   const totalAchRate = totalPlan > 0 ? totalAcq / totalPlan : 0
   const totalForecastRate = totalPlan > 0 ? totalForecast / totalPlan : 0
 
+  const n = rows.length || 1
+  const avgAcq = totalAcq / n
+  const avgPlan = totalPlan / n
+  const avgForecast = totalForecast / n
+  const avgActualDays = totalActualDays / n
+  const avgPlanDays = totalPlanDays / n
+  const avgRemaining = totalRemaining / n
+  const avgAchRate = totalAchRate
+  const avgForecastRate = totalForecastRate
+
   const fmtPct = (v: number) => `${(v * 100).toFixed(1)}%`
   const fmtNum = (v: number) => v % 1 === 0 ? String(Math.round(v)) : round1(v)
   const rateColor = (r: number) => r >= 1 ? 'text-emerald-600' : r >= 0.8 ? 'text-amber-600' : 'text-red-500'
@@ -324,6 +334,18 @@ export default function TeamSheetView({ yearMonth, teams }: Props) {
               <td className="text-purple-700">{fmtNum(totalPlanDays)}</td>
               <td className="text-purple-700">{totalActualDays}</td>
               <td className="text-purple-700">{totalRemaining}</td>
+            </tr>
+            {/* Average row */}
+            <tr className="border-t border-slate-300 bg-slate-50 text-slate-500">
+              <td className="text-left px-2 font-bold bg-slate-100 sticky left-0 z-10">平均</td>
+              <td>{round1(avgPlan)}</td>
+              <td className="font-bold text-slate-700">{round1(avgAcq)}</td>
+              <td className={rateColor(avgForecastRate)}>{round1(avgForecast)}</td>
+              <td className={rateColor(avgAchRate)}>{totalPlan > 0 ? fmtPct(avgAchRate) : '—'}</td>
+              <td className="text-blue-600">{round1(totalProductivity)}</td>
+              <td className="text-purple-600">{round1(avgPlanDays)}</td>
+              <td className="text-purple-600">{round1(avgActualDays)}</td>
+              <td className="text-purple-600">{round1(avgRemaining)}</td>
             </tr>
           </tbody>
         </table>
