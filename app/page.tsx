@@ -20,6 +20,7 @@ import ContractAddForm from '@/components/ContractAddForm'
 import DailyShiftView from '@/components/DailyShiftView'
 import DailyReportListView from '@/components/DailyReportListView'
 import TeamSheetView from '@/components/TeamSheetView'
+import TeamStatsView from '@/components/TeamStatsView'
 
 function getNextMonth(ym: string): string {
   const [y, m] = ym.split('-').map(Number)
@@ -28,7 +29,7 @@ function getNextMonth(ym: string): string {
 }
 
 type MainTab = 'form' | 'status' | 'analysis' | 'overall'
-type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings' | 'daily_report' | 'team_sheet'
+type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings' | 'daily_report' | 'team_sheet' | 'stats_sheet'
 
 export default function Home() {
   const { signOut } = useAuth()
@@ -117,6 +118,7 @@ export default function Home() {
     { id: 'area'         as SubTab, label: 'エリア',    icon: '📍' },
     { id: 'sheet'        as SubTab, label: '表',        icon: '📊' },
     { id: 'team_sheet'   as SubTab, label: 'チーム表',   icon: '📋' },
+    { id: 'stats_sheet'  as SubTab, label: '数値表',     icon: '📊' },
     { id: 'daily_report' as SubTab, label: '日報',       icon: '📝' },
     { id: 'settings'     as SubTab, label: '設定',      icon: '⚙️' },
   ]
@@ -273,6 +275,9 @@ export default function Home() {
         )}
         {activeSubTab === 'team_sheet' && (
           <TeamSheetView yearMonth={selectedMonth} teams={teams} />
+        )}
+        {activeSubTab === 'stats_sheet' && (
+          <TeamStatsView yearMonth={selectedMonth} teams={teams} />
         )}
         {activeSubTab === 'daily_report' && (
           <DailyReportListView teams={teams} />
