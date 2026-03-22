@@ -306,15 +306,15 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
             <thead>
               <tr>
                 <th className="bg-gray-200 text-left px-2 sticky left-0 z-10" style={{ minWidth: 80 }}>担当者</th>
-                <th className="header-orange">目標件数</th>
+                <th className="header-orange border-l-[3px] border-l-slate-400">目標件数</th>
                 <th className="header-orange">獲得件数</th>
                 <th className="header-orange">達成率</th>
-                <th className="header-blue">訪問数</th>
+                <th className="header-blue border-l-[3px] border-l-slate-400">訪問数</th>
                 <th className="header-blue">対面数</th>
                 <th className="header-blue">主権対面</th>
                 <th className="header-blue">商談数</th>
-                <th className="header-green">生産性</th>
-                <th className="bg-gray-100 text-gray-600 text-xs font-bold py-1 px-1 text-center">順位</th>
+                <th className="header-green border-l-[3px] border-l-slate-400">生産性</th>
+                <th className="bg-gray-100 text-gray-600 text-xs font-bold py-1 px-1 text-center border-l-[3px] border-l-slate-400">順位</th>
               </tr>
             </thead>
             <tbody>
@@ -323,32 +323,32 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
                   <td className="text-left px-2 font-medium bg-gray-50 whitespace-nowrap sticky left-0 z-10">
                     {row.rep.name}
                   </td>
-                  <td className="text-slate-600">{row.planCases > 0 ? Math.round(row.planCases * 10) / 10 : dash}</td>
-                  <td className="font-bold text-slate-800">{row.acquisitions > 0 ? row.acquisitions : dash}</td>
-                  <td className={`font-bold ${row.planCases > 0 ? achievementColor(row.achievementRate) : 'text-slate-300'}`}>
+                  <td className="bg-orange-50 text-slate-600 border-l-[3px] border-l-slate-400">{row.planCases > 0 ? Math.round(row.planCases * 10) / 10 : dash}</td>
+                  <td className="bg-orange-50 font-bold text-slate-800">{row.acquisitions > 0 ? row.acquisitions : dash}</td>
+                  <td className={`bg-orange-50 font-bold ${row.planCases > 0 ? achievementColor(row.achievementRate) : 'text-slate-300'}`}>
                     {row.planCases > 0 ? fmtRate(row.achievementRate) : dash}
                   </td>
-                  <td>{row.visits > 0 ? row.visits : dash}</td>
-                  <td>{row.netMeetings > 0 ? row.netMeetings : dash}</td>
-                  <td>{row.ownerMeetings > 0 ? row.ownerMeetings : dash}</td>
-                  <td>{row.negotiations > 0 ? row.negotiations : dash}</td>
-                  <td className="text-blue-700 font-bold">{row.productivity > 0 ? round1(row.productivity) : dash}</td>
-                  <td className="text-gray-600 font-bold">{row.acquisitions > 0 ? `${row.rank}位` : dash}</td>
+                  <td className="bg-blue-50 border-l-[3px] border-l-slate-400">{row.visits > 0 ? row.visits : dash}</td>
+                  <td className="bg-blue-50">{row.netMeetings > 0 ? row.netMeetings : dash}</td>
+                  <td className="bg-blue-50">{row.ownerMeetings > 0 ? row.ownerMeetings : dash}</td>
+                  <td className="bg-blue-50">{row.negotiations > 0 ? row.negotiations : dash}</td>
+                  <td className="bg-green-50 text-blue-700 font-bold border-l-[3px] border-l-slate-400">{row.productivity > 0 ? round1(row.productivity) : dash}</td>
+                  <td className="text-gray-600 font-bold border-l-[3px] border-l-slate-400">{row.acquisitions > 0 ? `${row.rank}位` : dash}</td>
                 </tr>
               ))}
               <tr className="border-t-2 border-slate-400 font-bold bg-yellow-50">
                 <td className="text-left px-2 bg-yellow-100 sticky left-0 z-10">合計</td>
-                <td className="text-slate-600">{totalPlanCases > 0 ? Math.round(totalPlanCases * 10) / 10 : dash}</td>
+                <td className="text-slate-600 border-l-[3px] border-l-slate-400">{totalPlanCases > 0 ? Math.round(totalPlanCases * 10) / 10 : dash}</td>
                 <td className="text-slate-800">{totalAcquisitions > 0 ? totalAcquisitions : dash}</td>
                 <td className={`font-bold ${totalPlanCases > 0 ? achievementColor(totalAchievementRate) : ''}`}>
                   {totalPlanCases > 0 ? fmtRate(totalAchievementRate) : dash}
                 </td>
-                <td>{totalVisits > 0 ? totalVisits : dash}</td>
+                <td className="border-l-[3px] border-l-slate-400">{totalVisits > 0 ? totalVisits : dash}</td>
                 <td>{totalNetMeetings > 0 ? totalNetMeetings : dash}</td>
                 <td>{totalOwnerMeetings > 0 ? totalOwnerMeetings : dash}</td>
                 <td>{totalNegotiations > 0 ? totalNegotiations : dash}</td>
-                <td className="text-blue-700">{totalProductivity > 0 ? round1(totalProductivity) : dash}</td>
-                <td>{dash}</td>
+                <td className="text-blue-700 border-l-[3px] border-l-slate-400">{totalProductivity > 0 ? round1(totalProductivity) : dash}</td>
+                <td className="border-l-[3px] border-l-slate-400">{dash}</td>
               </tr>
             </tbody>
           </table>
