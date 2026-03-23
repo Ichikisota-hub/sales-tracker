@@ -31,14 +31,16 @@ export default function OverallView({ yearMonth, teams }: Props) {
   async function loadAll() {
     setLoading(true)
     const [y, m] = yearMonth.split('-')
+    const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
+    const lastDayStr = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
     const [{ data: reps }, { data: allRecords }, { data: allPlans }, { data: allSchedules }] = await Promise.all([
       supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
       supabase.from('daily_records').select('*')
-        .gte('record_date', `${y}-${m}-01`).lte('record_date', `${y}-${m}-31`),
+        .gte('record_date', `${y}-${m}-01`).lte('record_date', lastDayStr),
       supabase.from('monthly_plans').select('*').eq('year_month', yearMonth),
       supabase.from('work_schedules').select('sales_rep_id,schedule_date')
         .eq('work_status', '稼働')
-        .gte('schedule_date', `${y}-${m}-01`).lte('schedule_date', `${y}-${m}-31`),
+        .gte('schedule_date', `${y}-${m}-01`).lte('schedule_date', lastDayStr),
     ])
     if (!reps) { setLoading(false); return }
     const scheduleMap: Record<string, string[]> = {}

@@ -32,11 +32,12 @@ export default function ShiftCalendarView({ yearMonth, teams }: Props) {
     setLoading(true)
     setBulkResults(null)
     const [y, m] = yearMonth.split('-')
+    const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
     const [{ data: repData }, { data: schedData }] = await Promise.all([
       supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
       supabase.from('work_schedules').select('*')
         .gte('schedule_date', `${y}-${m}-01`)
-        .lte('schedule_date', `${y}-${m}-31`),
+        .lte('schedule_date', `${y}-${m}-${String(lastDay).padStart(2, '0')}`),
     ])
     setReps(repData || [])
     setSchedules(schedData || [])

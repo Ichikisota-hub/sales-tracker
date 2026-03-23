@@ -36,14 +36,16 @@ export default function StatusView({ repId, repName, yearMonth }: Props) {
   async function loadData() {
     setLoading(true)
     const [y, m] = yearMonth.split('-')
+    const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
+    const lastDayStr = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
     const [{ data: recData }, { data: planData }, { data: schedData }] = await Promise.all([
       supabase.from('daily_records').select('*')
-        .eq('sales_rep_id', repId).gte('record_date', `${y}-${m}-01`).lte('record_date', `${y}-${m}-31`),
+        .eq('sales_rep_id', repId).gte('record_date', `${y}-${m}-01`).lte('record_date', lastDayStr),
       supabase.from('monthly_plans').select('*')
         .eq('sales_rep_id', repId).eq('year_month', yearMonth).single(),
       supabase.from('work_schedules').select('schedule_date')
         .eq('sales_rep_id', repId).eq('work_status', '稼働')
-        .gte('schedule_date', `${y}-${m}-01`).lte('schedule_date', `${y}-${m}-31`),
+        .gte('schedule_date', `${y}-${m}-01`).lte('schedule_date', lastDayStr),
     ])
     const schedWorkingDays = schedData?.map(s => s.schedule_date) || []
     setStats(calcMonthlyStats(

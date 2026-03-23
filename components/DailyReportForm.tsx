@@ -77,7 +77,7 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
           .eq('work_status', '稼働')
           .gt('schedule_date', selectedDate)
           .gte('schedule_date', `${selectedDate.slice(0, 7)}-01`)
-          .lte('schedule_date', `${selectedDate.slice(0, 7)}-31`),
+          .lte('schedule_date', (() => { const [y,m] = selectedDate.slice(0,7).split('-'); const d = new Date(parseInt(y), parseInt(m), 0).getDate(); return `${y}-${m}-${String(d).padStart(2,'0')}` })()),
       ])
 
       const remaining = scheduleData.data?.length ?? 0

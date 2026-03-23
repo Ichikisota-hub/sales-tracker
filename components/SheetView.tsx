@@ -43,6 +43,8 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
     const rid = repIdRef.current
     const ym = yearMonthRef.current
     const [y, m] = ym.split('-')
+    const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
+    const lastDayStr = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
 
     const [{ data: planData }, { data: recData }, { data: schedData }] = await Promise.all([
       supabase.from('monthly_plans').select('*')
@@ -50,11 +52,11 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
       supabase.from('daily_records').select('*')
         .eq('sales_rep_id', rid)
         .gte('record_date', `${y}-${m}-01`)
-        .lte('record_date', `${y}-${m}-31`),
+        .lte('record_date', lastDayStr),
       supabase.from('work_schedules').select('schedule_date,work_status')
         .eq('sales_rep_id', rid)
         .gte('schedule_date', `${y}-${m}-01`)
-        .lte('schedule_date', `${y}-${m}-31`),
+        .lte('schedule_date', lastDayStr),
     ])
 
     if (repIdRef.current !== rid) return
