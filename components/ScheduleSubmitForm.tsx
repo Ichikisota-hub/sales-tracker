@@ -62,6 +62,7 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [validationError, setValidationError] = useState('')
+  const [note, setNote] = useState('')
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<string | null>(null)
 
@@ -77,12 +78,13 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
 
   async function loadSchedules() {
     const [y, m] = yearMonth.split('-')
+    const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
     const { data } = await supabase
       .from('work_schedules')
       .select('*')
       .eq('sales_rep_id', repId)
       .gte('schedule_date', `${y}-${m}-01`)
-      .lte('schedule_date', `${y}-${m}-31`)
+      .lte('schedule_date', `${y}-${m}-${String(lastDay).padStart(2, '0')}`)
 
     const map: Record<string, DaySchedule> = {}
     days.forEach(d => { map[d.dateStr] = { ...DEFAULT_DAY } })
@@ -94,6 +96,14 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
       }
     })
     setSchedules(map)
+
+    const { data: planData } = await supabase
+      .from('monthly_plans')
+      .select('note')
+      .eq('sales_rep_id', repId)
+      .eq('year_month', yearMonth)
+      .single()
+    setNote(planData?.note || '')
   }
 
   function setDayField(dateStr: string, field: keyof DaySchedule, value: string) {
@@ -184,6 +194,7 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
         year_month: yearMonth,
         plan_cases: existingPlan?.plan_cases || 0,
         plan_working_days: workingCount,
+        note: note,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'sales_rep_id,year_month' })
 
@@ -480,6 +491,19 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
             )
           })}
         </div>
+      </div>
+
+      {/* ── 備考 ── */}
+      <div className="mobile-card">
+        <div className="mobile-card-label text-lg">📝 備考（任意）</div>
+        <textarea
+          value={note}
+          onChange={e => setNote(e.target.value)}
+          disabled={!isEditable}
+          placeholder="シフトについてのコメントを入力..."
+          rows={3}
+          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:bg-slate-50 disabled:text-slate-400"
+        />
       </div>
 
       {/* ── 提出ボタン ── */}

@@ -1,0 +1,1 @@
+ALTER TABLE monthly_plans ADD COLUMN IF NOT EXISTS note TEXT DEFAULT '';
