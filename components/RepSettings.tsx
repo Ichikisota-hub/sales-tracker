@@ -26,11 +26,68 @@ export default function RepSettings({ reps, onUpdate }: Props) {
   const [savingRepTeam, setSavingRepTeam] = useState(false)
   const [savedRepTeam, setSavedRepTeam] = useState(false)
 
+  type RepLinkStatus = { linked: boolean; pendingEmail: string | null; pendingToken: string | null }
+  const [linkStatuses, setLinkStatuses] = useState<Record<string, RepLinkStatus>>({})
+  const [inviteEmail, setInviteEmail] = useState<Record<string, string>>({})
+  const [inviting, setInviting] = useState<Record<string, boolean>>({})
+  const [inviteResult, setInviteResult] = useState<Record<string, { url: string; error: string }>>({})
+  const [loadingLinks, setLoadingLinks] = useState(false)
+
   useEffect(() => { loadTeams(); loadInactiveReps() }, [])
+  useEffect(() => { loadLinkStatuses() }, [reps])
 
   async function loadTeams() {
     const { data } = await supabase.from('teams').select('*').order('display_order')
     setTeams(data || [])
+  }
+
+  async function loadLinkStatuses() {
+    const repIds = reps.map(r => r.id)
+    if (repIds.length === 0) return
+    setLoadingLinks(true)
+    const [{ data: members }, { data: pending }] = await Promise.all([
+      supabase.from('organization_members').select('sales_rep_id').in('sales_rep_id', repIds),
+      supabase.from('invitations').select('rep_id, email, token, expires_at')
+        .in('rep_id', repIds)
+        .is('accepted_at', null)
+        .gt('expires_at', new Date().toISOString()),
+    ])
+    const linkedSet = new Set((members || []).map(m => m.sales_rep_id))
+    const pendingMap: Record<string, { email: string; token: string }> = {}
+    for (const inv of (pending || [])) {
+      if (inv.rep_id) pendingMap[inv.rep_id] = { email: inv.email, token: inv.token }
+    }
+    const statuses: Record<string, RepLinkStatus> = {}
+    for (const rep of reps) {
+      statuses[rep.id] = {
+        linked: linkedSet.has(rep.id),
+        pendingEmail: pendingMap[rep.id]?.email ?? null,
+        pendingToken: pendingMap[rep.id]?.token ?? null,
+      }
+    }
+    setLinkStatuses(statuses)
+    setLoadingLinks(false)
+  }
+
+  async function sendInvite(repId: string) {
+    const email = inviteEmail[repId]?.trim()
+    if (!email) return
+    setInviting(prev => ({ ...prev, [repId]: true }))
+    setInviteResult(prev => ({ ...prev, [repId]: { url: '', error: '' } }))
+    const res = await fetch('/api/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, role: 'member', repId }),
+    })
+    const data = await res.json()
+    setInviting(prev => ({ ...prev, [repId]: false }))
+    if (!res.ok) {
+      setInviteResult(prev => ({ ...prev, [repId]: { url: '', error: data.error || '招待に失敗しました' } }))
+    } else {
+      setInviteResult(prev => ({ ...prev, [repId]: { url: data.inviteUrl, error: '' } }))
+      setInviteEmail(prev => ({ ...prev, [repId]: '' }))
+      await loadLinkStatuses()
+    }
   }
 
   async function loadInactiveReps() {
@@ -295,6 +352,82 @@ export default function RepSettings({ reps, onUpdate }: Props) {
             <span className="text-orange-500 text-xs">{Object.keys(editing).length}件の変更あり</span>
           )}
         </div>
+      </div>
+
+      {/* メールアドレス・招待 */}
+      <div className="bg-white rounded-xl shadow-sm p-4">
+        <h2 className="font-bold text-sm mb-1 text-gray-800">メールアドレス・招待</h2>
+        <p className="text-xs text-gray-400 mb-3">担当者ごとにメールアドレスを紐付けます。招待リンクを発行して共有してください。</p>
+        {loadingLinks ? (
+          <p className="text-xs text-gray-400">読み込み中...</p>
+        ) : (
+          <div className="space-y-3">
+            {reps.map(rep => {
+              const status = linkStatuses[rep.id]
+              const result = inviteResult[rep.id]
+              const appUrl = typeof window !== 'undefined' ? window.location.origin : ''
+              return (
+                <div key={rep.id} className="border border-gray-100 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-800 flex-1">{rep.name}</span>
+                    {status?.linked ? (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">✓ 連携済み</span>
+                    ) : status?.pendingEmail ? (
+                      <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-medium">招待中</span>
+                    ) : (
+                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">未連携</span>
+                    )}
+                  </div>
+                  {status?.linked ? (
+                    <p className="text-xs text-gray-400">ユーザーアカウントと連携されています。</p>
+                  ) : status?.pendingEmail ? (
+                    <div className="space-y-1">
+                      <p className="text-xs text-gray-500">招待中: <span className="font-medium">{status.pendingEmail}</span></p>
+                      {status.pendingToken && (
+                        <div className="flex gap-2 items-center">
+                          <p className="text-xs text-gray-400 break-all flex-1 truncate">{appUrl}/invite/{status.pendingToken}</p>
+                          <button type="button" onClick={async () => {
+                            const url = `${appUrl}/invite/${status.pendingToken}`
+                            try { await navigator.clipboard.writeText(url); alert('コピーしました') }
+                            catch { prompt('招待リンク:', url) }
+                          }} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded font-medium hover:bg-gray-200 shrink-0">コピー</button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {result?.error && <p className="text-xs text-red-500">{result.error}</p>}
+                      {result?.url && (
+                        <div className="flex gap-2 items-center">
+                          <p className="text-xs text-green-600 break-all flex-1 truncate">{result.url}</p>
+                          <button type="button" onClick={async () => {
+                            try { await navigator.clipboard.writeText(result.url); alert('コピーしました') }
+                            catch { prompt('招待リンク:', result.url) }
+                          }} className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-medium hover:bg-green-200 shrink-0">コピー</button>
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <input
+                          type="email"
+                          value={inviteEmail[rep.id] || ''}
+                          onChange={e => setInviteEmail(prev => ({ ...prev, [rep.id]: e.target.value }))}
+                          onKeyDown={e => e.key === 'Enter' && sendInvite(rep.id)}
+                          placeholder="メールアドレスを入力..."
+                          className="border border-gray-300 rounded-lg px-3 py-1.5 text-xs flex-1 focus:outline-none focus:border-blue-400"
+                        />
+                        <button
+                          onClick={() => sendInvite(rep.id)}
+                          disabled={inviting[rep.id] || !inviteEmail[rep.id]?.trim()}
+                          className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                        >{inviting[rep.id] ? '送信中...' : '招待'}</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* 担当者追加 */}

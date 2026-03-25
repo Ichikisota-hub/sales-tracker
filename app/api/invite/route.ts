@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
   }
 
-  const { email, role } = await req.json()
+  const { email, role, repId } = await req.json()
   if (!email || !role) {
     return NextResponse.json({ error: 'email と role が必要です' }, { status: 400 })
   }
@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
       email,
       role,
       invited_by: user.id,
+      ...(repId ? { rep_id: repId } : {}),
     })
     .select()
     .single()

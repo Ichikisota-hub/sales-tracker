@@ -41,6 +41,7 @@ export type Invitation = {
   expires_at: string
   accepted_at: string | null
   invited_by: string | null
+  rep_id: string | null
   created_at: string
 }
 
@@ -68,6 +69,7 @@ export type MonthlyPlan = {
   year_month: string
   plan_cases: number
   plan_working_days: number
+  note?: string
   organization_id: string | null
   updated_at: string
 }

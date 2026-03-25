@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
         organization_id: invitation.organization_id,
         user_id: userId,
         role: invitation.role,
+        ...(invitation.rep_id ? { sales_rep_id: invitation.rep_id } : {}),
       })
 
     if (memberError) {
