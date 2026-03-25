@@ -14,12 +14,22 @@ export default function AdminPage() {
   const [sheetId, setSheetId] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [noteMonth, setNoteMonth] = useState(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
+  const [shiftNotes, setShiftNotes] = useState<{ rep_name: string; note: string }[]>([])
+  const [notesLoading, setNotesLoading] = useState(false)
 
   useEffect(() => {
     if (!organization) return
     setSheetId(organization.settings?.google_sheet_id || '')
     loadMemberCount()
   }, [organization?.id])
+
+  useEffect(() => {
+    loadShiftNotes(noteMonth)
+  }, [noteMonth, organization?.id])
 
   async function loadMemberCount() {
     if (!organization) return
@@ -28,6 +38,23 @@ export default function AdminPage() {
       .select('id', { count: 'exact' })
       .eq('organization_id', organization.id)
     setMemberCount(count || 0)
+  }
+
+  async function loadShiftNotes(month: string) {
+    if (!organization) return
+    setNotesLoading(true)
+    const { data } = await supabase
+      .from('monthly_plans')
+      .select('note, sales_reps(name)')
+      .eq('year_month', month)
+      .eq('organization_id', organization.id)
+      .not('note', 'is', null)
+      .neq('note', '')
+    setShiftNotes((data || []).map(d => ({
+      rep_name: (d.sales_reps as unknown as { name: string } | null)?.name || '不明',
+      note: d.note || '',
+    })))
+    setNotesLoading(false)
   }
 
   async function saveSheetId() {
@@ -128,6 +155,33 @@ export default function AdminPage() {
             <span className="text-slate-400 text-lg">→</span>
           </div>
         </Link>
+
+        {/* シフト備考一覧 */}
+        <div className="bg-white rounded-xl shadow-sm p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-bold text-slate-800">シフト備考一覧</h2>
+            <input
+              type="month"
+              value={noteMonth}
+              onChange={e => setNoteMonth(e.target.value)}
+              className="border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          {notesLoading ? (
+            <p className="text-xs text-slate-400">読み込み中...</p>
+          ) : shiftNotes.length === 0 ? (
+            <p className="text-xs text-slate-400">この月の備考はありません</p>
+          ) : (
+            <div className="space-y-2">
+              {shiftNotes.map((n, i) => (
+                <div key={i} className="border border-slate-100 rounded-lg p-3">
+                  <div className="text-xs font-bold text-slate-600 mb-1">{n.rep_name}</div>
+                  <div className="text-sm text-slate-800 whitespace-pre-wrap">{n.note}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
       </div>
     </div>
