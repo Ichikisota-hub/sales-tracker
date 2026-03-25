@@ -31,7 +31,11 @@ export default function LoginPage() {
       return
     }
 
-    window.location.href = '/'
+    if (data.user?.email === 'origin.compamy001@gmail.com') {
+      window.location.href = '/superadmin'
+    } else {
+      window.location.href = '/'
+    }
   }
 
   return (
