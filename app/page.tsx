@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { supabase, SalesRep, Team } from '@/lib/supabase'
 import { getMonthList, formatYearMonth, localYearMonth } from '@/lib/dateUtils'
 import { useOrganization } from '@/contexts/OrganizationContext'
@@ -230,6 +231,11 @@ export default function Home() {
                   ))}
                 </div>
                 <div className="border-t border-slate-100 p-2">
+                  <Link href="/admin" onClick={() => setSubMenuOpen(false)}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm font-bold text-left rounded-xl transition-colors hover:bg-slate-50 text-slate-500">
+                    <span>🏢</span>
+                    <span>組織管理</span>
+                  </Link>
                   {adminMenuItems.map((item, i) => (
                     <button key={i} onClick={() => { setSubMenuOpen(false); item.action?.() }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm font-bold text-left rounded-xl transition-colors hover:bg-slate-50 text-slate-500">
