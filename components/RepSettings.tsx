@@ -147,6 +147,11 @@ export default function RepSettings({ reps, onUpdate }: Props) {
     loadInactiveReps()
   }
 
+  async function permanentDeleteRep(id: string) {
+    await supabase.from('sales_reps').delete().eq('id', id)
+    loadInactiveReps()
+  }
+
   async function addTeam() {
     if (!newTeamName.trim()) return
     setAddingTeam(true)
@@ -481,6 +486,16 @@ export default function RepSettings({ reps, onUpdate }: Props) {
                     className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-lg font-medium hover:bg-blue-200 transition-colors"
                   >
                     復元
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`「${rep.name}」を完全に削除しますか？\nこの操作は元に戻せません。`)) {
+                        permanentDeleteRep(rep.id)
+                      }
+                    }}
+                    className="text-xs bg-red-100 text-red-600 px-3 py-1 rounded-lg font-medium hover:bg-red-200 transition-colors"
+                  >
+                    完全削除
                   </button>
                 </div>
               ))}
