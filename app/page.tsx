@@ -97,8 +97,9 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-900">
-        <div className="text-slate-400 text-sm font-medium">読み込み中...</div>
+      <div className="flex flex-col items-center justify-center h-screen bg-slate-900 gap-3">
+        <div className="w-8 h-8 border-2 border-slate-700 border-t-blue-500 rounded-full animate-spin" />
+        <div className="text-slate-500 text-sm font-medium">読み込み中...</div>
       </div>
     )
   }
@@ -153,7 +154,7 @@ export default function Home() {
             </div>
           ) : currentTab !== 'contracts' ? (
             <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
-              className="bg-slate-700 text-white text-xs font-semibold rounded-lg px-2 py-1.5 border-none outline-none cursor-pointer">
+              className="bg-slate-800 text-slate-200 text-xs font-semibold rounded-xl px-2.5 py-1.5 border border-slate-700 outline-none cursor-pointer">
               {months.map(m => <option key={m} value={m}>{formatYearMonth(m)}</option>)}
             </select>
           ) : null}
@@ -164,7 +165,7 @@ export default function Home() {
               setSelectedRep(rep)
               if (rep) localStorage.setItem('selectedRepId', rep.id)
             }}
-              className="bg-slate-700 text-white text-xs font-semibold rounded-lg px-2 py-1.5 border-none outline-none cursor-pointer max-w-[110px]">
+              className="bg-slate-800 text-slate-200 text-xs font-semibold rounded-xl px-2.5 py-1.5 border border-slate-700 outline-none cursor-pointer max-w-[120px]">
               {teams.length > 0 ? (
                 <>
                   {teams.map(team => {
@@ -202,29 +203,36 @@ export default function Home() {
           <div className="relative" ref={subMenuRef}>
             <button
               onClick={() => setSubMenuOpen(v => !v)}
-              className={`tab-btn flex-shrink-0 px-3 font-black text-base transition-all ${
+              className={`tab-btn flex-shrink-0 flex items-center gap-1 px-2 transition-all ${
                 activeSubTab ? 'tab-btn-active' : subMenuOpen ? 'bg-slate-600 text-white rounded-lg' : 'tab-btn-inactive'
               }`}
-              style={{minWidth:36}}>
-              ≡
+              style={{minWidth: activeSubTab ? 'auto' : 34}}>
+              {activeSubTab ? (
+                <>
+                  <span>{subTabs.find(t => t.id === activeSubTab)?.icon}</span>
+                  <span className="text-[11px]">{subTabs.find(t => t.id === activeSubTab)?.label}</span>
+                  <span className="text-[10px] opacity-70">▾</span>
+                </>
+              ) : '≡'}
             </button>
 
             {subMenuOpen && (
-              <div className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-50 min-w-[150px]">
-                {subTabs.map(tab => (
-                  <button key={tab.id} onClick={() => openSubTab(tab.id)}
-                    className={`w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-left transition-colors hover:bg-slate-50 ${
-                      activeSubTab === tab.id ? 'bg-blue-50 text-blue-700' : 'text-slate-700'
-                    }`}>
-                    <span>{tab.icon}</span>
-                    <span>{tab.label}</span>
-                    {activeSubTab === tab.id && <span className="ml-auto text-blue-500">✓</span>}
-                  </button>
-                ))}
-                <div className="border-t border-slate-100 mt-1">
+              <div className="absolute right-0 top-full mt-1.5 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-50 w-[272px]">
+                <div className="p-2 grid grid-cols-2 gap-1">
+                  {subTabs.map(tab => (
+                    <button key={tab.id} onClick={() => openSubTab(tab.id)}
+                      className={`flex items-center gap-2 px-3 py-2.5 text-sm font-bold text-left rounded-xl transition-colors ${
+                        activeSubTab === tab.id ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'
+                      }`}>
+                      <span className="text-base">{tab.icon}</span>
+                      <span>{tab.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="border-t border-slate-100 p-2">
                   {adminMenuItems.map((item, i) => (
                     <button key={i} onClick={() => { setSubMenuOpen(false); item.action?.() }}
-                      className="w-full flex items-center gap-2 px-4 py-3 text-sm font-bold text-left transition-colors hover:bg-slate-50 text-slate-600">
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm font-bold text-left rounded-xl transition-colors hover:bg-slate-50 text-slate-500">
                       <span>{item.icon}</span>
                       <span>{item.label}</span>
                     </button>
