@@ -32,8 +32,15 @@ export default function RepSettings({ reps, onUpdate }: Props) {
   const [inviting, setInviting] = useState<Record<string, boolean>>({})
   const [inviteResult, setInviteResult] = useState<Record<string, { url: string; error: string }>>({})
   const [loadingLinks, setLoadingLinks] = useState(false)
+  const [orgId, setOrgId] = useState<string | null>(null)
 
-  useEffect(() => { loadTeams(); loadInactiveReps() }, [])
+  useEffect(() => {
+    loadTeams()
+    loadInactiveReps()
+    supabase.from('organizations').select('id').limit(1).single().then(({ data }) => {
+      if (data) setOrgId(data.id)
+    })
+  }, [])
   useEffect(() => { loadLinkStatuses() }, [reps])
 
   async function loadTeams() {
@@ -77,7 +84,7 @@ export default function RepSettings({ reps, onUpdate }: Props) {
     const res = await fetch('/api/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, role: 'member', repId }),
+      body: JSON.stringify({ email, role: 'member', repId, organizationId: orgId }),
     })
     const data = await res.json()
     setInviting(prev => ({ ...prev, [repId]: false }))
@@ -417,7 +424,7 @@ export default function RepSettings({ reps, onUpdate }: Props) {
                         />
                         <button
                           onClick={() => sendInvite(rep.id)}
-                          disabled={inviting[rep.id] || !inviteEmail[rep.id]?.trim()}
+                          disabled={inviting[rep.id] || !inviteEmail[rep.id]?.trim() || !orgId}
                           className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                         >{inviting[rep.id] ? '送信中...' : '招待'}</button>
                       </div>
