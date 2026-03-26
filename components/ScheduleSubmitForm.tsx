@@ -71,8 +71,10 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [passwordInput, setPasswordInput] = useState('')
   const [passwordError, setPasswordError] = useState('')
+  const [hasSubmitted, setHasSubmitted] = useState(false)
 
-  const isEditable = !locked || unlocked
+  // 未提出（データなし）の場合は25日以降でも提出可能
+  const isEditable = !locked || unlocked || !hasSubmitted
 
   useEffect(() => { loadSchedules() }, [repId, yearMonth])
 
@@ -96,6 +98,7 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
       }
     })
     setSchedules(map)
+    setHasSubmitted((data?.length ?? 0) > 0)
 
     const { data: planData } = await supabase
       .from('monthly_plans')
@@ -297,7 +300,7 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
       </div>
 
       {/* ── ロック表示 ── */}
-      {locked && !unlocked && (
+      {locked && !unlocked && hasSubmitted && (
         <div className="mx-0 mt-2 p-4 bg-amber-50 border border-amber-300 rounded-xl">
           <div className="flex items-center justify-between">
             <div>
@@ -309,6 +312,12 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
               解除
             </button>
           </div>
+        </div>
+      )}
+      {locked && !unlocked && !hasSubmitted && (
+        <div className="mx-0 mt-2 p-4 bg-blue-50 border border-blue-300 rounded-xl">
+          <div className="text-base font-black text-blue-800">📋 未提出のため提出可能</div>
+          <div className="text-sm text-blue-600 mt-1">25日を過ぎていますが、まだ提出していないため入力できます</div>
         </div>
       )}
 
