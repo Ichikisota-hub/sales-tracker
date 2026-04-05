@@ -22,16 +22,17 @@ type Props = {
 }
 
 export default function ContractImportModal({ onClose, onImported }: Props) {
-  const [step, setStep] = useState<'idle' | 'preview' | 'done'>('idle')
+  const [step, setStep] = useState<'idle' | 'select_rep' | 'preview' | 'done'>('idle')
   const [loading, setLoading] = useState(false)
   const [importing, setImporting] = useState(false)
-  const [rows, setRows] = useState<ImportRow[]>([])
+  const [allRows, setAllRows] = useState<ImportRow[]>([])
   const [sheetName, setSheetName] = useState('')
-  const [colMap, setColMap] = useState<Record<string, number>>({})
+  const [selectedReps, setSelectedReps] = useState<Set<string>>(new Set())
   const [result, setResult] = useState<{ imported: number; skipped: string[] } | null>(null)
   const [error, setError] = useState('')
 
-  async function fetchPreview() {
+  // スプレッドシートから全データ取得
+  async function fetchAll() {
     setLoading(true)
     setError('')
     try {
@@ -42,16 +43,47 @@ export default function ContractImportModal({ onClose, onImported }: Props) {
         setLoading(false)
         return
       }
-      setRows(json.rows || [])
+      const rows: ImportRow[] = json.rows || []
+      setAllRows(rows)
       setSheetName(json.sheetName || '')
-      setColMap(json.colMap || {})
-      setStep('preview')
+      setSelectedReps(new Set())
+      setStep('select_rep')
     } catch (e: any) {
       setError(e.message || 'エラーが発生しました')
     }
     setLoading(false)
   }
 
+  // 選択された担当者でフィルターしたrows
+  const filteredRows = allRows.filter(r => selectedReps.has(r.rep_name))
+
+  // スプレッドシート内の担当者一覧（件数付き）
+  const repList = Array.from(
+    allRows.reduce((map, r) => {
+      const name = r.rep_name || '（担当者未設定）'
+      map.set(name, (map.get(name) || 0) + 1)
+      return map
+    }, new Map<string, number>())
+  ).sort((a, b) => b[1] - a[1])  // 件数降順
+
+  function toggleRep(name: string) {
+    setSelectedReps(prev => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
+
+  function selectAll() {
+    setSelectedReps(new Set(repList.map(([name]) => name)))
+  }
+
+  function clearAll() {
+    setSelectedReps(new Set())
+  }
+
+  // インポート実行
   async function doImport() {
     setImporting(true)
     setError('')
@@ -59,7 +91,7 @@ export default function ContractImportModal({ onClose, onImported }: Props) {
       const res = await fetch('/api/contracts/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows }),
+        body: JSON.stringify({ rows: filteredRows }),
       })
       const json = await res.json()
       if (!res.ok || json.error) {
@@ -76,36 +108,39 @@ export default function ContractImportModal({ onClose, onImported }: Props) {
     setImporting(false)
   }
 
-  const detectedKeys = Object.keys(colMap)
-  const FIELD_LABEL: Record<string, string> = {
-    rep_name: '担当者',
-    customer_name: '顧客名',
-    phone: '電話番号',
-    address: '住所',
-    area_pref: '都道府県',
-    area_city: '市区町村',
-    wifi_provider: 'WiFi',
-    acquired_date: '獲得日',
-    construction_date: '工事日',
-    status: 'ステータス',
-    notes: 'メモ',
-  }
-
   return (
     <div className="fixed inset-0 bg-black/60 flex items-end justify-center z-50 p-0">
       <div className="bg-white w-full max-w-lg rounded-t-3xl shadow-2xl max-h-[92vh] overflow-y-auto">
+
         {/* ヘッダー */}
         <div className="sticky top-0 bg-white z-10 px-5 pt-5 pb-3 border-b border-slate-100">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xl font-black text-slate-800">📥 スプレッドシートから取り込み</div>
-              {sheetName && (
-                <div className="text-xs text-slate-400 mt-0.5">シート: {sheetName}</div>
-              )}
+              {sheetName && <div className="text-xs text-slate-400 mt-0.5">シート: {sheetName}</div>}
             </div>
             <button onClick={onClose}
               className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 text-lg font-bold">✕</button>
           </div>
+
+          {/* ステップインジケーター */}
+          {step !== 'idle' && step !== 'done' && (
+            <div className="flex items-center gap-1 mt-3">
+              {(['select_rep', 'preview'] as const).map((s, i) => (
+                <div key={s} className="flex items-center gap-1">
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-black ${
+                    step === s ? 'bg-blue-600 text-white' :
+                    (step === 'preview' && s === 'select_rep') ? 'bg-emerald-500 text-white' :
+                    'bg-slate-200 text-slate-400'
+                  }`}>{i + 1}</div>
+                  <span className={`text-xs font-bold ${step === s ? 'text-blue-600' : 'text-slate-400'}`}>
+                    {s === 'select_rep' ? '担当者を選ぶ' : 'プレビュー'}
+                  </span>
+                  {i < 1 && <div className="w-4 h-px bg-slate-200 mx-1" />}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="px-5 py-4 space-y-4">
@@ -115,113 +150,155 @@ export default function ContractImportModal({ onClose, onImported }: Props) {
             </div>
           )}
 
-          {/* ステップ: idle */}
+          {/* ── Step 1: idle ── */}
           {step === 'idle' && (
             <div className="text-center py-8 space-y-4">
               <div className="text-4xl">📊</div>
               <div className="text-sm text-slate-600">
-                設定済みのGoogleスプレッドシートから<br />契約宅データを取り込みます
+                Googleスプレッドシートのデータを読み込み、<br />担当者を選んで取り込みます
               </div>
-              <button
-                onClick={fetchPreview}
-                disabled={loading}
-                className="bg-blue-600 text-white font-black text-base px-8 py-3 rounded-2xl disabled:opacity-50 transition-all active:scale-95"
-              >
+              <button onClick={fetchAll} disabled={loading}
+                className="bg-blue-600 text-white font-black text-base px-8 py-3 rounded-2xl disabled:opacity-50 transition-all active:scale-95">
                 {loading ? '読み込み中...' : 'データを読み込む'}
               </button>
             </div>
           )}
 
-          {/* ステップ: preview */}
-          {step === 'preview' && (
+          {/* ── Step 2: 担当者選択 ── */}
+          {step === 'select_rep' && (
             <>
-              {/* 検出した列マッピング */}
-              {detectedKeys.length > 0 && (
-                <div className="bg-slate-50 rounded-2xl p-3">
-                  <div className="text-xs font-bold text-slate-500 mb-2">検出した列</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {detectedKeys.map(k => (
-                      <span key={k} className="text-xs bg-blue-100 text-blue-700 font-bold px-2 py-1 rounded-lg">
-                        {FIELD_LABEL[k] || k}
-                      </span>
-                    ))}
-                  </div>
-                  {!colMap.rep_name && (
-                    <div className="text-xs text-amber-600 font-bold mt-2">
-                      ⚠️ 「担当者」列が検出できませんでした。担当者が空のデータはスキップされます
-                    </div>
-                  )}
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-black text-slate-700">
+                  担当者を選択 <span className="text-slate-400 font-normal">（全{allRows.length}件）</span>
                 </div>
-              )}
-
-              {/* プレビュー件数 */}
-              <div className="bg-emerald-50 rounded-2xl px-4 py-3 flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-black text-emerald-700">{rows.length}件 取り込み可能</div>
-                  <div className="text-xs text-emerald-600">顧客名が入力されている行のみ対象</div>
+                <div className="flex gap-2">
+                  <button onClick={selectAll}
+                    className="text-xs text-blue-600 font-bold px-2 py-1 rounded-lg hover:bg-blue-50">
+                    全選択
+                  </button>
+                  <button onClick={clearAll}
+                    className="text-xs text-slate-500 font-bold px-2 py-1 rounded-lg hover:bg-slate-50">
+                    クリア
+                  </button>
                 </div>
               </div>
 
-              {/* データプレビュー */}
-              {rows.length > 0 && (
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {rows.slice(0, 20).map((r, i) => (
-                    <div key={i} className="border border-slate-100 rounded-xl px-3 py-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <div className="font-black text-slate-800 flex-1 truncate">{r.customer_name}</div>
-                        <div className="text-xs text-slate-400 flex-shrink-0">{r.rep_name || '担当者不明'}</div>
+              <div className="space-y-2">
+                {repList.map(([name, count]) => {
+                  const checked = selectedReps.has(name)
+                  const isUnknown = name === '（担当者未設定）'
+                  return (
+                    <button key={name} onClick={() => !isUnknown && toggleRep(name)}
+                      disabled={isUnknown}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border-2 text-left transition-all ${
+                        isUnknown ? 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed' :
+                        checked ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-white hover:border-blue-200'
+                      }`}>
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                        checked ? 'bg-blue-600 border-blue-600' : 'border-slate-300'
+                      }`}>
+                        {checked && <span className="text-white text-xs font-black">✓</span>}
                       </div>
-                      <div className="flex gap-2 text-xs text-slate-500 mt-0.5 flex-wrap">
-                        {r.phone && <span>📞 {r.phone}</span>}
-                        {r.acquired_date && <span>獲得: {r.acquired_date}</span>}
-                        {r.status && r.status !== '手続き中' && (
-                          <span className="font-bold text-blue-600">{r.status}</span>
-                        )}
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-black flex-shrink-0 ${
+                        isUnknown ? 'bg-slate-300' : 'bg-slate-600'
+                      }`}>
+                        {isUnknown ? '?' : name.charAt(0)}
                       </div>
-                    </div>
-                  ))}
-                  {rows.length > 20 && (
-                    <div className="text-center text-xs text-slate-400 py-2">
-                      ...他 {rows.length - 20} 件
-                    </div>
-                  )}
-                </div>
-              )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-slate-800 truncate">{name}</div>
+                      </div>
+                      <div className={`text-sm font-black flex-shrink-0 ${checked ? 'text-blue-600' : 'text-slate-400'}`}>
+                        {count}件
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
 
-              {rows.length === 0 && (
-                <div className="text-center py-8 text-slate-400">
-                  <div className="text-3xl mb-2">📭</div>
-                  <div className="text-sm">取り込めるデータがありませんでした</div>
-                </div>
-              )}
-
-              {/* ボタン */}
               <div className="flex gap-2 pb-4">
                 <button onClick={() => setStep('idle')}
                   className="flex-1 py-3 rounded-2xl bg-slate-100 text-slate-600 font-bold text-sm">
                   戻る
                 </button>
-                {rows.length > 0 && (
-                  <button onClick={doImport} disabled={importing}
-                    className="flex-1 py-3 rounded-2xl bg-blue-600 text-white font-black text-sm disabled:opacity-50 active:scale-95 transition-all">
-                    {importing ? 'インポート中...' : `${rows.length}件を取り込む`}
-                  </button>
-                )}
+                <button
+                  onClick={() => setStep('preview')}
+                  disabled={selectedReps.size === 0}
+                  className="flex-1 py-3 rounded-2xl bg-blue-600 text-white font-black text-sm disabled:opacity-40 active:scale-95 transition-all">
+                  {selectedReps.size > 0
+                    ? `${filteredRows.length}件を確認する →`
+                    : '担当者を選んでください'}
+                </button>
               </div>
             </>
           )}
 
-          {/* ステップ: done */}
+          {/* ── Step 3: プレビュー ── */}
+          {step === 'preview' && (
+            <>
+              {/* 選択中の担当者 */}
+              <div className="bg-blue-50 rounded-2xl px-4 py-3">
+                <div className="text-xs font-bold text-blue-600 mb-1.5">選択中の担当者</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Array.from(selectedReps).map(name => (
+                    <span key={name} className="text-xs bg-blue-600 text-white font-bold px-2.5 py-1 rounded-full">
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* 件数 */}
+              <div className="bg-emerald-50 rounded-2xl px-4 py-3">
+                <div className="text-sm font-black text-emerald-700">{filteredRows.length}件 取り込み予定</div>
+                <div className="text-xs text-emerald-600 mt-0.5">以下の内容でインポートされます</div>
+              </div>
+
+              {/* データ一覧 */}
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {filteredRows.slice(0, 30).map((r, i) => (
+                  <div key={i} className="border border-slate-100 rounded-xl px-3 py-2.5 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="font-black text-slate-800 flex-1 truncate">{r.customer_name}</div>
+                      <div className="text-xs text-slate-400 flex-shrink-0">{r.rep_name}</div>
+                    </div>
+                    <div className="flex gap-2 text-xs text-slate-500 mt-0.5 flex-wrap">
+                      {r.phone && <span>📞 {r.phone}</span>}
+                      {r.acquired_date && <span>獲得: {r.acquired_date}</span>}
+                      {r.status && r.status !== '手続き中' && (
+                        <span className="font-bold text-blue-600">{r.status}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {filteredRows.length > 30 && (
+                  <div className="text-center text-xs text-slate-400 py-2">
+                    ...他 {filteredRows.length - 30} 件
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2 pb-4">
+                <button onClick={() => setStep('select_rep')}
+                  className="flex-1 py-3 rounded-2xl bg-slate-100 text-slate-600 font-bold text-sm">
+                  担当者を変更
+                </button>
+                <button onClick={doImport} disabled={importing}
+                  className="flex-1 py-3 rounded-2xl bg-blue-600 text-white font-black text-sm disabled:opacity-50 active:scale-95 transition-all">
+                  {importing ? 'インポート中...' : `${filteredRows.length}件を取り込む`}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── Step 4: 完了 ── */}
           {step === 'done' && result && (
             <div className="text-center py-8 space-y-4">
               <div className="text-5xl">✅</div>
-              <div>
-                <div className="text-xl font-black text-slate-800">{result.imported}件 インポート完了</div>
-              </div>
+              <div className="text-xl font-black text-slate-800">{result.imported}件 インポート完了</div>
               {result.skipped.length > 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-left">
                   <div className="text-sm font-bold text-amber-700 mb-1">
-                    スキップ {result.skipped.length}件（担当者名が一致しないなど）
+                    スキップ {result.skipped.length}件
                   </div>
                   <ul className="text-xs text-amber-600 space-y-0.5">
                     {result.skipped.map((s, i) => <li key={i}>• {s}</li>)}
