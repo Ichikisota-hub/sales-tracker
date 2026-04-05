@@ -78,6 +78,22 @@ export default function ContractListView({ reps, selectedRepId, onAdd }: Props) 
 
   async function loadContracts() {
     setLoading(true)
+    const today = new Date().toISOString().split('T')[0]
+
+    // 工事日が過ぎていて「工事日決定」のままの契約を「開通」に自動更新
+    const { data: toUpdate } = await supabase
+      .from('contracts')
+      .select('id')
+      .eq('status', '工事日決定')
+      .not('construction_date', 'is', null)
+      .lt('construction_date', today)
+    if (toUpdate && toUpdate.length > 0) {
+      await supabase
+        .from('contracts')
+        .update({ status: '開通', updated_at: new Date().toISOString() })
+        .in('id', toUpdate.map(c => c.id))
+    }
+
     const { data } = await supabase
       .from('contracts')
       .select('*')

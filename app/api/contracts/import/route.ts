@@ -105,9 +105,10 @@ function parseRow(row: string[]) {
   const openDate         = parseDate(cell(row, COL.open_date))
   let status             = normalizeStatus(cell(row, COL.status))
 
-  // 工事日が入力されていて、まだキャンセル・開通でない場合は「工事日決定」に上書き
+  // 工事日が入力されている場合のステータス自動判定
   if (constructionDate && status !== 'キャンセル' && status !== '開通') {
-    status = '工事日決定'
+    const today = new Date().toISOString().split('T')[0]
+    status = constructionDate < today ? '開通' : '工事日決定'
   }
 
   return {
