@@ -101,6 +101,15 @@ function parseRow(row: string[]) {
   const notes2 = cell(row, COL.special_notes)
   const notes  = [notes1, notes2].filter(Boolean).join('\n')
 
+  const constructionDate = parseDate(cell(row, COL.construction_date))
+  const openDate         = parseDate(cell(row, COL.open_date))
+  let status             = normalizeStatus(cell(row, COL.status))
+
+  // 工事日が入力されていて、まだキャンセル・開通でない場合は「工事日決定」に上書き
+  if (constructionDate && status !== 'キャンセル' && status !== '開通') {
+    status = '工事日決定'
+  }
+
   return {
     rep_name:          cell(row, COL.rep_name),
     customer_name:     customerName,
@@ -110,9 +119,9 @@ function parseRow(row: string[]) {
     address,
     wifi_provider:     cell(row, COL.wifi_provider),
     acquired_date:     parseDate(cell(row, COL.acquired_date)),
-    construction_date: parseDate(cell(row, COL.construction_date)),
-    open_date:         parseDate(cell(row, COL.open_date)),
-    status:            normalizeStatus(cell(row, COL.status)),
+    construction_date: constructionDate,
+    open_date:         openDate,
+    status,
     notes,
   }
 }
