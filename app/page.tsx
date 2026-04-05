@@ -23,6 +23,7 @@ import DailyShiftView from '@/components/DailyShiftView'
 import DailyReportListView from '@/components/DailyReportListView'
 import TeamSheetView from '@/components/TeamSheetView'
 import TeamStatsView from '@/components/TeamStatsView'
+import SubmissionCheckView from '@/components/SubmissionCheckView'
 
 function getNextMonth(ym: string): string {
   const [y, m] = ym.split('-').map(Number)
@@ -31,7 +32,7 @@ function getNextMonth(ym: string): string {
 }
 
 type MainTab = 'form' | 'status' | 'analysis' | 'overall'
-type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings' | 'daily_report' | 'team_sheet' | 'stats_sheet'
+type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings' | 'daily_report' | 'team_sheet' | 'stats_sheet' | 'submission_check'
 
 export default function Home() {
   const { signOut } = useAuth()
@@ -123,8 +124,9 @@ export default function Home() {
     { id: 'sheet'        as SubTab, label: '表',        icon: '📊' },
     { id: 'team_sheet'   as SubTab, label: 'チーム表',   icon: '📋' },
     { id: 'stats_sheet'  as SubTab, label: '数値表',     icon: '📊' },
-    { id: 'daily_report' as SubTab, label: '日報',       icon: '📝' },
-    { id: 'settings'     as SubTab, label: '設定',      icon: '⚙️' },
+    { id: 'daily_report'     as SubTab, label: '日報',     icon: '📝' },
+    { id: 'submission_check' as SubTab, label: '提出確認', icon: '✅' },
+    { id: 'settings'         as SubTab, label: '設定',     icon: '⚙️' },
   ]
 
   const adminMenuItems = [
@@ -307,6 +309,9 @@ export default function Home() {
         )}
         {activeSubTab === 'daily_report' && (
           <DailyReportListView teams={teams} />
+        )}
+        {activeSubTab === 'submission_check' && (
+          <SubmissionCheckView yearMonth={selectedMonth} teams={teams} />
         )}
         {activeSubTab === 'settings' && (
           settingsUnlocked ? (
