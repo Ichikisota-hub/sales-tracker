@@ -36,12 +36,14 @@ export default function AreaStatsView({ yearMonth }: Props) {
   async function loadAll() {
     setLoading(true)
     const [y, m] = yearMonth.split('-')
+    const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
+    const lastDayStr = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
 
     const [{ data: repData }, { data: records }] = await Promise.all([
       supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
       supabase.from('daily_records').select('*')
         .gte('record_date', `${y}-${m}-01`)
-        .lte('record_date', `${y}-${m}-31`),
+        .lte('record_date', lastDayStr),
     ])
 
     const repList = repData || []

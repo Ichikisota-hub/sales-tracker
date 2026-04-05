@@ -18,6 +18,7 @@ import AreaStatsView from '@/components/AreaStatsView'
 import StatusView from '@/components/StatusView'
 import ContractListView from '@/components/ContractListView'
 import ContractAddForm from '@/components/ContractAddForm'
+import ContractImportModal from '@/components/ContractImportModal'
 import DailyShiftView from '@/components/DailyShiftView'
 import DailyReportListView from '@/components/DailyReportListView'
 import TeamSheetView from '@/components/TeamSheetView'
@@ -44,6 +45,7 @@ export default function Home() {
   const [activeSubTab, setActiveSubTab] = useState<SubTab | null>(null)
   const [loading, setLoading] = useState(true)
   const [showContractAdd, setShowContractAdd] = useState(false)
+  const [showContractImport, setShowContractImport] = useState(false)
   const [contractRefreshKey, setContractRefreshKey] = useState(0)
   const [settingsUnlocked, setSettingsUnlocked] = useState(false)
   const [settingsPassword, setSettingsPassword] = useState('')
@@ -265,12 +267,22 @@ export default function Home() {
           <OverallView yearMonth={selectedMonth} teams={teams} />
         )}
         {activeSubTab === 'contracts' && (
-          <ContractListView
-            key={contractRefreshKey}
-            reps={reps}
-            selectedRepId={selectedRep?.id || null}
-            onAdd={() => setShowContractAdd(true)}
-          />
+          <>
+            <div className="flex justify-end mb-2">
+              <button
+                onClick={() => setShowContractImport(true)}
+                className="text-xs bg-slate-700 text-slate-200 font-bold px-3 py-1.5 rounded-xl hover:bg-slate-600 transition-colors"
+              >
+                📥 スプレッドシートから取り込み
+              </button>
+            </div>
+            <ContractListView
+              key={contractRefreshKey}
+              reps={reps}
+              selectedRepId={selectedRep?.id || null}
+              onAdd={() => setShowContractAdd(true)}
+            />
+          </>
         )}
         {activeSubTab === 'shift_submit' && selectedRep && (
           <ScheduleSubmitForm repId={selectedRep.id} repName={selectedRep.name} yearMonth={scheduleMonth} />
@@ -332,6 +344,17 @@ export default function Home() {
           )
         )}
       </div>
+
+      {/* 契約宅インポートモーダル */}
+      {showContractImport && (
+        <ContractImportModal
+          onClose={() => setShowContractImport(false)}
+          onImported={() => {
+            setShowContractImport(false)
+            setContractRefreshKey(k => k + 1)
+          }}
+        />
+      )}
 
       {/* 契約宅追加モーダル */}
       {showContractAdd && (

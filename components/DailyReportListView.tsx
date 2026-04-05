@@ -36,8 +36,9 @@ export default function DailyReportListView({ teams }: Props) {
   async function load() {
     setLoading(true)
     const [y, m] = yearMonth.split('-')
+    const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
     const from = `${y}-${m}-01`
-    const to   = `${y}-${m}-31`
+    const to   = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
     const { data } = await supabase
       .from('daily_reports')
       .select('*')

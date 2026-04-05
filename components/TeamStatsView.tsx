@@ -54,8 +54,9 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
   async function load() {
     setLoading(true)
     const [yStr, mStr] = yearMonth.split('-')
+    const lastDay = new Date(parseInt(yStr), parseInt(mStr), 0).getDate()
     const dateFrom = `${yStr}-${mStr}-01`
-    const dateTo = `${yStr}-${mStr}-31`
+    const dateTo = `${yStr}-${mStr}-${String(lastDay).padStart(2, '0')}`
 
     const [{ data: reps }, { data: records }, { data: schedules }, { data: plans }] = await Promise.all([
       supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
