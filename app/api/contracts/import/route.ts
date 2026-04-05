@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient as createServerSupabase } from '@/lib/supabase-server'
+import { createClient } from '@supabase/supabase-js'
+
+function getServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 const TARGET_GID = 1026668186
 const CONTRACT_SPREADSHEET_ID = '1I5Wpmd34kQaiS1Cm82WRb5wKjhT-5jc4CeLESaLJ6w0'
@@ -23,23 +31,6 @@ const COL = {
   status:           39,   // ステータス
   notes:            44,   // 備考
   special_notes:    45,   // 特記事項
-}
-
-async function getSheetId(): Promise<string> {
-  try {
-    const supabase = await createServerSupabase()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) return process.env.GOOGLE_SHEET_ID || ''
-    const { data: member } = await supabase
-      .from('organization_members')
-      .select('organizations(settings)')
-      .eq('user_id', session.user.id)
-      .single()
-    const sheetId = (member as any)?.organizations?.settings?.google_sheet_id
-    return sheetId || process.env.GOOGLE_SHEET_ID || ''
-  } catch {
-    return process.env.GOOGLE_SHEET_ID || ''
-  }
 }
 
 async function getSheetName(spreadsheetId: string, apiKey: string): Promise<string | null> {
@@ -159,23 +150,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.GOOGLE_SHEETS_API_KEY
-  if (!apiKey) {
-    return NextResponse.json({ error: 'GOOGLE_SHEETS_API_KEY not set' }, { status: 500 })
-  }
-
-  const supabase = await createServerSupabase()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const { data: member } = await supabase
-    .from('organization_members')
-    .select('organization_id')
-    .eq('user_id', session.user.id)
-    .single()
-  const orgId = (member as any)?.organization_id
+  const supabase = getServiceClient()
 
   // 担当者名 → ID マッピング（スペースなし・全角スペースも考慮）
   const { data: reps } = await supabase
@@ -230,7 +205,6 @@ export async function POST(req: NextRequest) {
       router_removed:        false,
       construction_called:   false,
       notes:                 row.notes || '',
-      organization_id:       orgId || null,
       updated_at:            new Date().toISOString(),
     })
   }
