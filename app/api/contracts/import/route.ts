@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerSupabase } from '@/lib/supabase-server'
 
 const TARGET_GID = 1026668186
+const CONTRACT_SPREADSHEET_ID = '1I5Wpmd34kQaiS1Cm82WRb5wKjhT-5jc4CeLESaLJ6w0'
 
 // 列インデックス（0始まり）
 const COL = {
@@ -130,17 +131,13 @@ export async function GET() {
   if (!apiKey) {
     return NextResponse.json({ error: 'GOOGLE_SHEETS_API_KEY not set' }, { status: 500 })
   }
-  const spreadsheetId = await getSheetId()
-  if (!spreadsheetId) {
-    return NextResponse.json({ error: 'スプレッドシートIDが設定されていません' }, { status: 400 })
-  }
 
-  const sheetName = await getSheetName(spreadsheetId, apiKey)
+  const sheetName = await getSheetName(CONTRACT_SPREADSHEET_ID, apiKey)
   if (!sheetName) {
     return NextResponse.json({ error: `gid=${TARGET_GID} のシートが見つかりません` }, { status: 404 })
   }
 
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}?key=${apiKey}`
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONTRACT_SPREADSHEET_ID}/values/${encodeURIComponent(sheetName)}?key=${apiKey}`
   const res = await fetch(url)
   if (!res.ok) {
     const err = await res.text()
