@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, Contract, SalesRep } from '@/lib/supabase'
 
-type ViewMode = '月別' | '人別'
+type ViewMode = '月別' | '人別' | '人×月'
 
 type StatRow = {
   label: string
@@ -38,6 +38,7 @@ export default function ContractStatsView() {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [reps, setReps] = useState<SalesRep[]>([])
   const [viewMode, setViewMode] = useState<ViewMode>('月別')
+  const [selectedRepId, setSelectedRepId] = useState<string>('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { loadAll() }, [])
@@ -94,6 +95,27 @@ export default function ContractStatsView() {
       })
   }
 
+  function buildRepMonthRows(repId: string): StatRow[] {
+    const monthMap: Record<string, Contract[]> = {}
+    contracts.filter(c => c.sales_rep_id === repId).forEach(c => {
+      const month = (c.acquired_date || '').substring(0, 7)
+      if (!month) return
+      if (!monthMap[month]) monthMap[month] = []
+      monthMap[month].push(c)
+    })
+    const months = Object.keys(monthMap).sort().reverse()
+    return months.map(month => {
+      const list = monthMap[month]
+      return {
+        label: month.replace('-', '/'),
+        total: list.length,
+        constructionSet: list.filter(c => c.status === '工事日決定' || c.status === '開通').length,
+        opened: list.filter(c => c.status === '開通').length,
+        cancelled: list.filter(c => c.status === 'キャンセル').length,
+      }
+    })
+  }
+
   function buildTotalRow(rows: StatRow[]): StatRow {
     return {
       label: '合計',
@@ -112,16 +134,21 @@ export default function ContractStatsView() {
     )
   }
 
-  const rows = viewMode === '月別' ? buildMonthRows() : buildRepRows()
+  const effectiveRepId = selectedRepId || (reps[0]?.id ?? '')
+  const rows = viewMode === '月別'
+    ? buildMonthRows()
+    : viewMode === '人別'
+      ? buildRepRows()
+      : buildRepMonthRows(effectiveRepId)
   const total = buildTotalRow(rows)
 
   return (
     <div className="space-y-4">
       {/* ヘッダー */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-base font-black text-slate-800">契約宅 統計</h2>
         <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
-          {(['月別', '人別'] as ViewMode[]).map(mode => (
+          {(['月別', '人別', '人×月'] as ViewMode[]).map(mode => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
@@ -135,6 +162,15 @@ export default function ContractStatsView() {
             </button>
           ))}
         </div>
+        {viewMode === '人×月' && (
+          <select
+            value={effectiveRepId}
+            onChange={e => setSelectedRepId(e.target.value)}
+            className="border border-slate-200 bg-white rounded-xl px-3 py-1.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {reps.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        )}
       </div>
 
       {/* 凡例 */}
@@ -150,7 +186,9 @@ export default function ContractStatsView() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-700 text-white">
-                <th className="text-left px-4 py-3 font-bold">{viewMode === '月別' ? '月' : '担当者'}</th>
+                <th className="text-left px-4 py-3 font-bold">
+                  {viewMode === '月別' ? '月' : viewMode === '人別' ? '担当者' : '月'}
+                </th>
                 <th className="text-center px-3 py-3 font-bold">総数</th>
                 <th className="text-center px-3 py-3 font-bold">工事日決定<br /><span className="font-normal text-xs text-slate-300">+開通含む</span></th>
                 <th className="text-center px-3 py-3 font-bold">開通数</th>
