@@ -66,6 +66,7 @@ export default function ContractListView({ reps, selectedRepId, onAdd }: Props) 
 
   // 編集用 state
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [editAcquiredDate, setEditAcquiredDate] = useState('')
   const [editConstDate, setEditConstDate] = useState('')
   const [editStatus, setEditStatus] = useState('')
   const [saving, setSaving] = useState(false)
@@ -102,15 +103,15 @@ export default function ContractListView({ reps, selectedRepId, onAdd }: Props) 
     setLoading(false)
   }
 
-  // 保存（工事日 + ステータス）
+  // 保存（獲得日 + 工事日 + ステータス）
   async function saveEdit(id: string) {
     setSaving(true)
     const updates: Record<string, unknown> = {
       status: editStatus,
+      construction_date: editConstDate || null,
       updated_at: new Date().toISOString(),
     }
-    // 工事日：入力があればセット、空なら null でクリア
-    updates.construction_date = editConstDate || null
+    if (editAcquiredDate) updates.acquired_date = editAcquiredDate
     await supabase.from('contracts').update(updates).eq('id', id)
     setSaving(false)
     setEditingId(null)
@@ -128,6 +129,7 @@ export default function ContractListView({ reps, selectedRepId, onAdd }: Props) 
 
   function startEdit(c: Contract) {
     setEditingId(c.id)
+    setEditAcquiredDate(c.acquired_date || '')
     setEditConstDate(c.construction_date || '')
     setEditStatus(c.status)
   }
@@ -511,6 +513,13 @@ export default function ContractListView({ reps, selectedRepId, onAdd }: Props) 
                   {/* 工事日 + ステータス編集エリア */}
                   {isEditing ? (
                     <div className="bg-slate-50 rounded-2xl p-3 space-y-3 border-2 border-blue-200">
+                      {/* 獲得日入力 */}
+                      <div>
+                        <div className="text-xs font-bold text-slate-600 mb-1.5">📅 獲得日</div>
+                        <input type="date" value={editAcquiredDate} onChange={e => setEditAcquiredDate(e.target.value)}
+                          className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:border-blue-400 bg-white" />
+                      </div>
+
                       {/* 工事日入力 */}
                       <div>
                         <div className="text-xs font-bold text-slate-600 mb-1.5">🔧 工事日</div>
