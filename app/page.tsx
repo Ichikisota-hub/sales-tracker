@@ -24,6 +24,7 @@ import DailyReportListView from '@/components/DailyReportListView'
 import TeamSheetView from '@/components/TeamSheetView'
 import TeamStatsView from '@/components/TeamStatsView'
 import SubmissionCheckView from '@/components/SubmissionCheckView'
+import ContractStatsView from '@/components/ContractStatsView'
 
 function getNextMonth(ym: string): string {
   const [y, m] = ym.split('-').map(Number)
@@ -32,7 +33,7 @@ function getNextMonth(ym: string): string {
 }
 
 type MainTab = 'form' | 'status' | 'analysis' | 'overall'
-type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings' | 'daily_report' | 'team_sheet' | 'stats_sheet' | 'submission_check'
+type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings' | 'daily_report' | 'team_sheet' | 'stats_sheet' | 'submission_check' | 'contract_stats'
 
 export default function Home() {
   const { signOut } = useAuth()
@@ -116,7 +117,8 @@ export default function Home() {
   ]
 
   const subTabs = [
-    { id: 'contracts'    as SubTab, label: '契約宅',    icon: '🏠' },
+    { id: 'contracts'       as SubTab, label: '契約宅',    icon: '🏠' },
+    { id: 'contract_stats'  as SubTab, label: '契約宅統計', icon: '📉' },
     { id: 'shift_submit' as SubTab, label: 'シフト提出', icon: '📅' },
     { id: 'shift'        as SubTab, label: 'シフト確認', icon: '🗓️' },
     { id: 'daily_shift'  as SubTab, label: '日別稼働',   icon: '📆' },
@@ -285,6 +287,9 @@ export default function Home() {
               onAdd={() => setShowContractAdd(true)}
             />
           </>
+        )}
+        {activeSubTab === 'contract_stats' && (
+          <ContractStatsView />
         )}
         {activeSubTab === 'shift_submit' && selectedRep && (
           <ScheduleSubmitForm repId={selectedRep.id} repName={selectedRep.name} yearMonth={scheduleMonth} />

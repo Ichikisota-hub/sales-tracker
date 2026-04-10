@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase, SalesRep, Contract } from '@/lib/supabase'
 
 const STATUS_OPTIONS = ['手続き中', '工事日決定', '開通', 'キャンセル']
@@ -131,6 +131,15 @@ export default function ContractListView({ reps, selectedRepId, onAdd }: Props) 
     setEditConstDate(c.construction_date || '')
     setEditStatus(c.status)
   }
+
+  // 重複顧客名セット
+  const duplicateNames = useMemo(() => {
+    const counts: Record<string, number> = {}
+    contracts.forEach(c => {
+      if (c.customer_name) counts[c.customer_name] = (counts[c.customer_name] ?? 0) + 1
+    })
+    return new Set(Object.entries(counts).filter(([, n]) => n > 1).map(([name]) => name))
+  }, [contracts])
 
   // 絞り込み
   const filtered = contracts.filter(c => {
@@ -445,7 +454,14 @@ export default function ContractListView({ reps, selectedRepId, onAdd }: Props) 
                   {/* 上段：顧客名 + ステータスバッジ + 削除ボタン */}
                   <div className="flex items-start gap-2 mb-2">
                     <div className="flex-1 min-w-0">
-                      <div className="text-lg font-black text-slate-800 truncate">{c.customer_name}</div>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="text-lg font-black text-slate-800 truncate">{c.customer_name}</div>
+                        {duplicateNames.has(c.customer_name) && (
+                          <span className="flex-shrink-0 text-xs font-bold text-yellow-600 bg-yellow-50 border border-yellow-300 rounded-md px-1.5 py-0.5">
+                            人物重複
+                          </span>
+                        )}
+                      </div>
                       <div className="text-sm text-slate-400 mt-0.5">
                         <span className="font-bold text-blue-600">{repName(c.sales_rep_id)}</span>
                         <span className="mx-1.5">·</span>

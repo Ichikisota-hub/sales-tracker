@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
+import AdminContractSheet from '@/components/admin/AdminContractSheet'
 
 export default function AdminPage() {
   const { organization } = useOrganization()
@@ -197,6 +198,12 @@ export default function AdminPage() {
         </div>
 
       </div>
+
+      {/* 契約宅一覧（全員・スプレッドシート形式） */}
+      <div className="p-4 mt-2">
+        <AdminContractSheet />
+      </div>
+
     </div>
   )
 }
