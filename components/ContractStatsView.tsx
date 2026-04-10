@@ -3,14 +3,19 @@
 import { useEffect, useState } from 'react'
 import { supabase, Contract, SalesRep } from '@/lib/supabase'
 
-type ViewMode = '月別' | '人別' | '人×月'
+type ViewMode = '月別' | '人別' | '人×月' | 'ランキング'
 
 type StatRow = {
   label: string
   total: number
   constructionSet: number // 工事日決定 + 開通
-  opened: number         // 開通
-  cancelled: number      // キャンセル
+  opened: number          // 開通
+  cancelled: number       // キャンセル
+}
+
+type RankRow = StatRow & {
+  constructionRate: number // 工事日決定率 = constructionSet / total
+  openRate: number         // 開通率 = opened / constructionSet
 }
 
 function calcRate(num: number, den: number): string {
@@ -34,11 +39,19 @@ function cancelColor(num: number, den: number): string {
   return 'text-red-500 font-bold'
 }
 
+const MEDAL = ['🥇', '🥈', '🥉']
+
+function currentYearMonth() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
 export default function ContractStatsView() {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [reps, setReps] = useState<SalesRep[]>([])
   const [viewMode, setViewMode] = useState<ViewMode>('月別')
   const [selectedRepId, setSelectedRepId] = useState<string>('')
+  const [rankingMonth, setRankingMonth] = useState(currentYearMonth)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { loadAll() }, [])
@@ -62,8 +75,7 @@ export default function ContractStatsView() {
       if (!monthMap[month]) monthMap[month] = []
       monthMap[month].push(c)
     })
-    const months = Object.keys(monthMap).sort().reverse()
-    return months.map(month => {
+    return Object.keys(monthMap).sort().reverse().map(month => {
       const list = monthMap[month]
       return {
         label: month.replace('-', '/'),
@@ -103,8 +115,7 @@ export default function ContractStatsView() {
       if (!monthMap[month]) monthMap[month] = []
       monthMap[month].push(c)
     })
-    const months = Object.keys(monthMap).sort().reverse()
-    return months.map(month => {
+    return Object.keys(monthMap).sort().reverse().map(month => {
       const list = monthMap[month]
       return {
         label: month.replace('-', '/'),
@@ -114,6 +125,35 @@ export default function ContractStatsView() {
         cancelled: list.filter(c => c.status === 'キャンセル').length,
       }
     })
+  }
+
+  function buildRankingRows(month: string): RankRow[] {
+    const repMap: Record<string, Contract[]> = {}
+    contracts
+      .filter(c => (c.acquired_date || '').startsWith(month))
+      .forEach(c => {
+        if (!repMap[c.sales_rep_id]) repMap[c.sales_rep_id] = []
+        repMap[c.sales_rep_id].push(c)
+      })
+    return reps
+      .filter(r => repMap[r.id])
+      .map(r => {
+        const list = repMap[r.id]
+        const total = list.length
+        const constructionSet = list.filter(c => c.status === '工事日決定' || c.status === '開通').length
+        const opened = list.filter(c => c.status === '開通').length
+        const cancelled = list.filter(c => c.status === 'キャンセル').length
+        return {
+          label: r.name,
+          total,
+          constructionSet,
+          opened,
+          cancelled,
+          constructionRate: total > 0 ? constructionSet / total : 0,
+          openRate: constructionSet > 0 ? opened / constructionSet : 0,
+        }
+      })
+      .sort((a, b) => b.constructionRate - a.constructionRate || b.openRate - a.openRate)
   }
 
   function buildTotalRow(rows: StatRow[]): StatRow {
@@ -139,29 +179,34 @@ export default function ContractStatsView() {
     ? buildMonthRows()
     : viewMode === '人別'
       ? buildRepRows()
-      : buildRepMonthRows(effectiveRepId)
+      : viewMode === '人×月'
+        ? buildRepMonthRows(effectiveRepId)
+        : []
   const total = buildTotalRow(rows)
+  const rankRows = viewMode === 'ランキング' ? buildRankingRows(rankingMonth) : []
 
   return (
     <div className="space-y-4">
       {/* ヘッダー */}
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-base font-black text-slate-800">契約宅 統計</h2>
-        <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
-          {(['月別', '人別', '人×月'] as ViewMode[]).map(mode => (
+        <div className="flex bg-slate-100 rounded-xl p-1 gap-1 flex-wrap">
+          {(['月別', '人別', '人×月', 'ランキング'] as ViewMode[]).map(mode => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${
                 viewMode === mode
                   ? 'bg-white text-slate-800 shadow-sm'
                   : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              {mode}
+              {mode === 'ランキング' ? '🏆 ランキング' : mode}
             </button>
           ))}
         </div>
+
+        {/* 人×月: 担当者選択 */}
         {viewMode === '人×月' && (
           <select
             value={effectiveRepId}
@@ -171,79 +216,184 @@ export default function ContractStatsView() {
             {reps.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
         )}
+
+        {/* ランキング: 月選択 */}
+        {viewMode === 'ランキング' && (
+          <input
+            type="month"
+            value={rankingMonth}
+            onChange={e => setRankingMonth(e.target.value)}
+            className="border border-slate-200 bg-white rounded-xl px-3 py-1.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        )}
       </div>
 
       {/* 凡例 */}
       <div className="flex flex-wrap gap-3 text-xs text-slate-500 bg-slate-50 rounded-xl px-4 py-2">
+        <span><span className="font-bold text-slate-700">工事日決定率</span> = (工事日決定+開通数) ÷ 総数</span>
+        <span className="text-slate-300">|</span>
         <span><span className="font-bold text-slate-700">開通率</span> = 開通数 ÷ (工事日決定+開通数)</span>
         <span className="text-slate-300">|</span>
         <span><span className="font-bold text-slate-700">キャンセル率</span> = キャンセル数 ÷ 総数</span>
       </div>
 
-      {/* テーブル */}
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-100">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-700 text-white">
-                <th className="text-left px-4 py-3 font-bold">
-                  {viewMode === '月別' ? '月' : viewMode === '人別' ? '担当者' : '月'}
-                </th>
-                <th className="text-center px-3 py-3 font-bold">総数</th>
-                <th className="text-center px-3 py-3 font-bold">工事日決定<br /><span className="font-normal text-xs text-slate-300">+開通含む</span></th>
-                <th className="text-center px-3 py-3 font-bold">開通数</th>
-                <th className="text-center px-3 py-3 font-bold">開通率</th>
-                <th className="text-center px-3 py-3 font-bold">キャンセル数</th>
-                <th className="text-center px-3 py-3 font-bold">キャンセル率</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="text-center py-10 text-slate-400">データがありません</td>
-                </tr>
-              )}
-              {rows.map((row, i) => (
-                <tr
-                  key={row.label}
-                  className={`border-t border-slate-100 hover:bg-slate-50 transition-colors ${
-                    i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
-                  }`}
-                >
-                  <td className="px-4 py-3 font-bold text-slate-700">{row.label}</td>
-                  <td className="px-3 py-3 text-center text-slate-600">{row.total}</td>
-                  <td className="px-3 py-3 text-center text-slate-600">{row.constructionSet}</td>
-                  <td className="px-3 py-3 text-center text-slate-600">{row.opened}</td>
-                  <td className={`px-3 py-3 text-center ${rateColor(row.opened, row.constructionSet)}`}>
-                    {calcRate(row.opened, row.constructionSet)}
-                  </td>
-                  <td className="px-3 py-3 text-center text-slate-600">{row.cancelled}</td>
-                  <td className={`px-3 py-3 text-center ${cancelColor(row.cancelled, row.total)}`}>
-                    {calcRate(row.cancelled, row.total)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            {rows.length > 0 && (
-              <tfoot>
-                <tr className="border-t-2 border-slate-300 bg-slate-100">
-                  <td className="px-4 py-3 font-black text-slate-800">合計</td>
-                  <td className="px-3 py-3 text-center font-bold text-slate-800">{total.total}</td>
-                  <td className="px-3 py-3 text-center font-bold text-slate-800">{total.constructionSet}</td>
-                  <td className="px-3 py-3 text-center font-bold text-slate-800">{total.opened}</td>
-                  <td className={`px-3 py-3 text-center ${rateColor(total.opened, total.constructionSet)}`}>
-                    {calcRate(total.opened, total.constructionSet)}
-                  </td>
-                  <td className="px-3 py-3 text-center font-bold text-slate-800">{total.cancelled}</td>
-                  <td className={`px-3 py-3 text-center ${cancelColor(total.cancelled, total.total)}`}>
-                    {calcRate(total.cancelled, total.total)}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
+      {/* ランキングビュー */}
+      {viewMode === 'ランキング' && (
+        <div className="space-y-3">
+          {rankRows.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 py-10 text-center text-slate-400">
+              {rankingMonth.replace('-', '/')}のデータがありません
+            </div>
+          ) : (
+            <>
+              {/* ランキングカード */}
+              {rankRows.map((row, i) => {
+                const cRate = row.constructionRate
+                const oRate = row.openRate
+                return (
+                  <div
+                    key={row.label}
+                    className={`bg-white rounded-2xl shadow-sm border overflow-hidden ${
+                      i === 0 ? 'border-yellow-300' : i === 1 ? 'border-slate-300' : i === 2 ? 'border-amber-600/40' : 'border-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      {/* 順位 */}
+                      <div className="text-2xl w-9 text-center shrink-0">
+                        {i < 3 ? MEDAL[i] : <span className="text-base font-black text-slate-400">{i + 1}</span>}
+                      </div>
+
+                      {/* 名前 */}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-black text-slate-800 text-base">{row.label}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">獲得 {row.total}件</div>
+                      </div>
+
+                      {/* 工事日決定率（メイン指標） */}
+                      <div className="text-right shrink-0">
+                        <div className={`text-xl font-black ${rateColor(row.constructionSet, row.total)}`}>
+                          {calcRate(row.constructionSet, row.total)}
+                        </div>
+                        <div className="text-xs text-slate-400">工事日決定率</div>
+                      </div>
+                    </div>
+
+                    {/* バーグラフ + サブ指標 */}
+                    <div className="px-4 pb-3 space-y-1.5">
+                      {/* 工事日決定率バー */}
+                      <div>
+                        <div className="flex justify-between text-xs text-slate-500 mb-0.5">
+                          <span>工事日決定+開通 {row.constructionSet}件</span>
+                        </div>
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              cRate >= 0.7 ? 'bg-emerald-500' : cRate >= 0.4 ? 'bg-amber-400' : 'bg-red-400'
+                            }`}
+                            style={{ width: `${Math.min(cRate * 100, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* サブ指標行 */}
+                      <div className="flex gap-4 text-xs pt-0.5">
+                        <span className="text-slate-500">
+                          開通率：
+                          <span className={`font-bold ${rateColor(row.opened, row.constructionSet)}`}>
+                            {calcRate(row.opened, row.constructionSet)}
+                          </span>
+                          <span className="text-slate-400 ml-1">({row.opened}件)</span>
+                        </span>
+                        <span className="text-slate-500">
+                          キャンセル率：
+                          <span className={`font-bold ${cancelColor(row.cancelled, row.total)}`}>
+                            {calcRate(row.cancelled, row.total)}
+                          </span>
+                          <span className="text-slate-400 ml-1">({row.cancelled}件)</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </>
+          )}
         </div>
-      </div>
+      )}
+
+      {/* 通常テーブル（ランキング以外） */}
+      {viewMode !== 'ランキング' && (
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-100">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-700 text-white">
+                  <th className="text-left px-4 py-3 font-bold">
+                    {viewMode === '月別' ? '月' : viewMode === '人別' ? '担当者' : '月'}
+                  </th>
+                  <th className="text-center px-3 py-3 font-bold">総数</th>
+                  <th className="text-center px-3 py-3 font-bold">工事日決定<br /><span className="font-normal text-xs text-slate-300">+開通含む</span></th>
+                  <th className="text-center px-3 py-3 font-bold">工事日決定率</th>
+                  <th className="text-center px-3 py-3 font-bold">開通数</th>
+                  <th className="text-center px-3 py-3 font-bold">開通率</th>
+                  <th className="text-center px-3 py-3 font-bold">キャンセル数</th>
+                  <th className="text-center px-3 py-3 font-bold">キャンセル率</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="text-center py-10 text-slate-400">データがありません</td>
+                  </tr>
+                )}
+                {rows.map((row, i) => (
+                  <tr
+                    key={row.label}
+                    className={`border-t border-slate-100 hover:bg-slate-50 transition-colors ${
+                      i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
+                    }`}
+                  >
+                    <td className="px-4 py-3 font-bold text-slate-700">{row.label}</td>
+                    <td className="px-3 py-3 text-center text-slate-600">{row.total}</td>
+                    <td className="px-3 py-3 text-center text-slate-600">{row.constructionSet}</td>
+                    <td className={`px-3 py-3 text-center ${rateColor(row.constructionSet, row.total)}`}>
+                      {calcRate(row.constructionSet, row.total)}
+                    </td>
+                    <td className="px-3 py-3 text-center text-slate-600">{row.opened}</td>
+                    <td className={`px-3 py-3 text-center ${rateColor(row.opened, row.constructionSet)}`}>
+                      {calcRate(row.opened, row.constructionSet)}
+                    </td>
+                    <td className="px-3 py-3 text-center text-slate-600">{row.cancelled}</td>
+                    <td className={`px-3 py-3 text-center ${cancelColor(row.cancelled, row.total)}`}>
+                      {calcRate(row.cancelled, row.total)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              {rows.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-slate-300 bg-slate-100">
+                    <td className="px-4 py-3 font-black text-slate-800">合計</td>
+                    <td className="px-3 py-3 text-center font-bold text-slate-800">{total.total}</td>
+                    <td className="px-3 py-3 text-center font-bold text-slate-800">{total.constructionSet}</td>
+                    <td className={`px-3 py-3 text-center ${rateColor(total.constructionSet, total.total)}`}>
+                      {calcRate(total.constructionSet, total.total)}
+                    </td>
+                    <td className="px-3 py-3 text-center font-bold text-slate-800">{total.opened}</td>
+                    <td className={`px-3 py-3 text-center ${rateColor(total.opened, total.constructionSet)}`}>
+                      {calcRate(total.opened, total.constructionSet)}
+                    </td>
+                    <td className="px-3 py-3 text-center font-bold text-slate-800">{total.cancelled}</td>
+                    <td className={`px-3 py-3 text-center ${cancelColor(total.cancelled, total.total)}`}>
+                      {calcRate(total.cancelled, total.total)}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
