@@ -186,13 +186,11 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
   const totalPlanCases = repStats.reduce((s, r) => s + r.planCases, 0)
   const totalAchievementRate = totalPlanCases > 0 ? totalAcquisitions / totalPlanCases : 0
 
-  // 平均: 稼働実績がある人（actualWorkingDays > 0）を対象
-  const activeReps = repStats.filter(r => r.actualWorkingDays > 0)
-  const activeN = activeReps.length
-  const avgVisits       = activeN > 0 ? totalVisits       / activeN : 0
-  const avgNetMeetings  = activeN > 0 ? totalNetMeetings  / activeN : 0
-  const avgOwnerMeetings= activeN > 0 ? totalOwnerMeetings/ activeN : 0
-  const avgNegotiations = activeN > 0 ? totalNegotiations / activeN : 0
+  // 1日平均: 総稼働日数で割る
+  const avgVisits        = totalActualDays > 0 ? totalVisits        / totalActualDays : 0
+  const avgNetMeetings   = totalActualDays > 0 ? totalNetMeetings   / totalActualDays : 0
+  const avgOwnerMeetings = totalActualDays > 0 ? totalOwnerMeetings / totalActualDays : 0
+  const avgNegotiations  = totalActualDays > 0 ? totalNegotiations  / totalActualDays : 0
 
   // ━━━ 下段テーブル: 曜日別集計 ━━━
   type DayStats = {
@@ -375,9 +373,9 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
                 <td className="text-blue-700 border-l-[3px] border-l-slate-400">{totalProductivity > 0 ? round1(totalProductivity) : dash}</td>
                 <td className="border-l-[3px] border-l-slate-400">{dash}</td>
               </tr>
-              {activeN > 0 && (
+              {totalActualDays > 0 && (
                 <tr className="border-t border-slate-300 bg-sky-50 text-sky-700">
-                  <td className="text-left px-2 bg-sky-100 sticky left-0 z-10 font-bold text-xs">平均 <span className="font-normal text-sky-400">({activeN}人)</span></td>
+                  <td className="text-left px-2 bg-sky-100 sticky left-0 z-10 font-bold text-xs">1日平均</td>
                   <td className="border-l-[3px] border-l-slate-400">{dash}</td>
                   <td>{dash}</td>
                   <td>{dash}</td>
