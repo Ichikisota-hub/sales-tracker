@@ -11,6 +11,7 @@ type RawRepData = {
   records: DailyRecord[]
   workSchedules: { date: string; work_status: string }[]
   planCases: number
+  planWorkingDays: number
 }
 
 // 曜日表示順: 水木金土日月火（火は定休日）
@@ -93,6 +94,7 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
           .filter(s => s.sales_rep_id === rep.id)
           .map(s => ({ date: s.schedule_date, work_status: s.work_status })),
         planCases: plan ? (Number(plan.plan_cases) || 0) : 0,
+        planWorkingDays: plan ? (Number(plan.plan_working_days) || 0) : 0,
       }
     })
 
@@ -129,6 +131,8 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
   }))
 
   // ━━━ 上段テーブル: 担当者別集計 ━━━
+  const today = new Date().toISOString().split('T')[0]
+
   type RepStat = {
     rep: SalesRep
     visits: number
@@ -136,7 +140,9 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
     ownerMeetings: number
     negotiations: number
     acquisitions: number
+    planWorkDays: number
     actualWorkingDays: number
+    remainingWorkingDays: number
     productivity: number
     planCases: number
     achievementRate: number  // acquisitions / planCases (0 if planCases=0)
@@ -145,6 +151,8 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
 
   const repStats: RepStat[] = filteredRaw.map(raw => {
     const records = filterRecords(raw.records)
+    const schedules = filterSchedules(raw.workSchedules)
+
     const visits = records.reduce((s, r) => s + (Number(r.visits) || 0), 0)
     const netMeetings = records.reduce((s, r) => s + (Number(r.net_meetings) || 0), 0)
     const ownerMeetings = records.reduce((s, r) => s + (Number(r.owner_meetings) || 0), 0)
@@ -155,13 +163,24 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
     ).length
     const productivity = actualWorkingDays > 0 ? acquisitions / actualWorkingDays : 0
 
+    // 計画稼働日: work_schedulesの稼働数、なければ planWorkingDays（週次は按分）
+    const schedWorking = schedules.filter(s => s.work_status === '稼働')
+    const planWorkDays = schedWorking.length > 0
+      ? schedWorking.length
+      : weekFilter
+        ? raw.planWorkingDays * (weekFilter.days / monthDays)
+        : raw.planWorkingDays
+
+    // 残稼働日: work_schedulesの今日以降の稼働予定
+    const remainingWorkingDays = schedWorking.filter(s => s.date >= today).length
+
     // 目標件数: 週次モードは按分
     const planCases = weekFilter
       ? raw.planCases * (weekFilter.days / monthDays)
       : raw.planCases
     const achievementRate = planCases > 0 ? acquisitions / planCases : 0
 
-    return { rep: raw.rep, visits, netMeetings, ownerMeetings, negotiations, acquisitions, actualWorkingDays, productivity, planCases, achievementRate, rank: 0 }
+    return { rep: raw.rep, visits, netMeetings, ownerMeetings, negotiations, acquisitions, planWorkDays, actualWorkingDays, remainingWorkingDays, productivity, planCases, achievementRate, rank: 0 }
   })
 
   // 獲得件数の降順でランク付け
@@ -181,7 +200,9 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
   const totalOwnerMeetings = repStats.reduce((s, r) => s + r.ownerMeetings, 0)
   const totalNegotiations = repStats.reduce((s, r) => s + r.negotiations, 0)
   const totalAcquisitions = repStats.reduce((s, r) => s + r.acquisitions, 0)
+  const totalPlanWorkDays = repStats.reduce((s, r) => s + r.planWorkDays, 0)
   const totalActualDays = repStats.reduce((s, r) => s + r.actualWorkingDays, 0)
+  const totalRemainingDays = repStats.reduce((s, r) => s + r.remainingWorkingDays, 0)
   const totalProductivity = totalActualDays > 0 ? totalAcquisitions / totalActualDays : 0
   const totalPlanCases = repStats.reduce((s, r) => s + r.planCases, 0)
   const totalAchievementRate = totalPlanCases > 0 ? totalAcquisitions / totalPlanCases : 0
@@ -337,6 +358,9 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
                 <th className="header-blue">主権対面</th>
                 <th className="header-blue">商談数</th>
                 <th className="header-green border-l-[3px] border-l-slate-400">生産性</th>
+                <th className="bg-purple-100 text-purple-700 text-xs font-bold py-1 px-1 text-center border-l-[3px] border-l-slate-400">計画稼働日</th>
+                <th className="bg-purple-100 text-purple-700 text-xs font-bold py-1 px-1 text-center">実稼働日</th>
+                <th className="bg-purple-100 text-purple-700 text-xs font-bold py-1 px-1 text-center">残稼働日</th>
                 <th className="bg-gray-100 text-gray-600 text-xs font-bold py-1 px-1 text-center border-l-[3px] border-l-slate-400">順位</th>
               </tr>
             </thead>
@@ -356,6 +380,9 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
                   <td className="bg-blue-50">{row.ownerMeetings > 0 ? row.ownerMeetings : dash}</td>
                   <td className="bg-blue-50">{row.negotiations > 0 ? row.negotiations : dash}</td>
                   <td className="bg-green-50 text-blue-700 font-bold border-l-[3px] border-l-slate-400">{row.productivity > 0 ? round1(row.productivity) : dash}</td>
+                  <td className="bg-purple-50 text-purple-700 border-l-[3px] border-l-slate-400">{row.planWorkDays > 0 ? Math.round(row.planWorkDays * 10) / 10 : dash}</td>
+                  <td className="bg-purple-50 text-purple-700 font-bold">{row.actualWorkingDays > 0 ? row.actualWorkingDays : dash}</td>
+                  <td className="bg-purple-50 text-purple-700">{row.remainingWorkingDays > 0 ? row.remainingWorkingDays : dash}</td>
                   <td className="text-gray-600 font-bold border-l-[3px] border-l-slate-400">{row.acquisitions > 0 ? `${row.rank}位` : dash}</td>
                 </tr>
               ))}
@@ -371,6 +398,9 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
                 <td>{totalOwnerMeetings > 0 ? totalOwnerMeetings : dash}</td>
                 <td>{totalNegotiations > 0 ? totalNegotiations : dash}</td>
                 <td className="text-blue-700 border-l-[3px] border-l-slate-400">{totalProductivity > 0 ? round1(totalProductivity) : dash}</td>
+                <td className="text-purple-700 border-l-[3px] border-l-slate-400">{totalPlanWorkDays > 0 ? Math.round(totalPlanWorkDays * 10) / 10 : dash}</td>
+                <td className="text-purple-700">{totalActualDays > 0 ? totalActualDays : dash}</td>
+                <td className="text-purple-700">{totalRemainingDays > 0 ? totalRemainingDays : dash}</td>
                 <td className="border-l-[3px] border-l-slate-400">{dash}</td>
               </tr>
               {totalActualDays > 0 && (
@@ -384,6 +414,9 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
                   <td className="font-bold">{round1(avgOwnerMeetings)}</td>
                   <td className="font-bold">{round1(avgNegotiations)}</td>
                   <td className="border-l-[3px] border-l-slate-400">{dash}</td>
+                  <td className="border-l-[3px] border-l-slate-400">{dash}</td>
+                  <td>{dash}</td>
+                  <td>{dash}</td>
                   <td className="border-l-[3px] border-l-slate-400">{dash}</td>
                 </tr>
               )}
