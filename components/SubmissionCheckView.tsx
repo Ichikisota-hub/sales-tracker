@@ -47,13 +47,23 @@ export default function SubmissionCheckView({ yearMonth, teams }: Props) {
     const dateFrom = `${y}-${m}-01`
     const dateTo = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
 
-    const [{ data: reps }, { data: records }, { data: reports }] = await Promise.all([
+    const [{ data: reps }, { data: schedules }, { data: records }, { data: reports }] = await Promise.all([
       supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
+      // ★ 稼働判定の正とする: work_schedules の '稼働' 日
+      supabase.from('work_schedules').select('sales_rep_id,schedule_date,work_status')
+        .gte('schedule_date', dateFrom).lte('schedule_date', dateTo).eq('work_status', '稼働'),
       supabase.from('daily_records').select('*').gte('record_date', dateFrom).lte('record_date', dateTo),
       supabase.from('daily_reports').select('sales_rep_id,report_date').gte('report_date', dateFrom).lte('report_date', dateTo),
     ])
 
     const repList: SalesRep[] = reps || []
+
+    // work_schedules を date→Set<rep_id> でインデックス（稼働予定者）
+    const schedIdx: Record<string, Set<string>> = {}
+    for (const s of schedules || []) {
+      if (!schedIdx[s.schedule_date]) schedIdx[s.schedule_date] = new Set()
+      schedIdx[s.schedule_date].add(s.sales_rep_id)
+    }
 
     // daily_records を date→rep_id→record でインデックス
     const recIdx: Record<string, Record<string, any>> = {}
@@ -72,23 +82,21 @@ export default function SubmissionCheckView({ yearMonth, teams }: Props) {
     const result: DayStatus[] = []
     for (let d = 1; d <= lastDay; d++) {
       const dateStr = `${y}-${m}-${String(d).padStart(2, '0')}`
-      const recsForDay = recIdx[dateStr] || {}
+      const scheduledRepIds = schedIdx[dateStr]
+      if (!scheduledRepIds || scheduledRepIds.size === 0) continue
 
-      // その日に「稼働」とマークしているrep
+      // work_schedules で稼働予定のrepを基準にする
       const workingReps: RepStatus[] = repList
-        .filter(rep => {
-          const rec = recsForDay[rep.id]
-          if (!rec) return false
-          return rec.attendance_status === '稼働' || rec.work_status === '稼働'
-        })
+        .filter(rep => scheduledRepIds.has(rep.id))
         .map(rep => {
-          const rec = recsForDay[rep.id]
-          const hasNumbers =
-            Number(rec.visits)        > 0 ||
-            Number(rec.net_meetings)  > 0 ||
-            Number(rec.owner_meetings)> 0 ||
-            Number(rec.negotiations)  > 0 ||
-            Number(rec.acquisitions)  > 0
+          const rec = (recIdx[dateStr] || {})[rep.id]
+          const hasNumbers = rec != null && (
+            Number(rec.visits)         > 0 ||
+            Number(rec.net_meetings)   > 0 ||
+            Number(rec.owner_meetings) > 0 ||
+            Number(rec.negotiations)   > 0 ||
+            Number(rec.acquisitions)   > 0
+          )
           const hasReport = reportSet.has(`${dateStr}__${rep.id}`)
           return { rep, hasNumbers, hasReport }
         })

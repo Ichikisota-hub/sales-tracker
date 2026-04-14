@@ -31,17 +31,29 @@ type RepRow = {
 function getWeeks(yearMonth: string) {
   const [y, m] = yearMonth.split('-').map(Number)
   const daysInMonth = new Date(y, m, 0).getDate()
+  // JS: 0=日,1=月,2=火,3=水,4=木,5=金,6=土
+  // 1日を含む週の水曜日を求める（1日から何日前か）
+  const firstDow = new Date(y, m - 1, 1).getDay()
+  const daysToWed = (firstDow - 3 + 7) % 7
+  let wedDay = 1 - daysToWed // 負になる場合は前月
+
   const weeks: { label: string; start: string; end: string; days: number }[] = []
-  let day = 1, wNum = 1
-  while (day <= daysInMonth) {
-    const end = Math.min(day + 6, daysInMonth)
-    weeks.push({
-      label: `第${wNum}週`,
-      start: `${yearMonth}-${String(day).padStart(2, '0')}`,
-      end: `${yearMonth}-${String(end).padStart(2, '0')}`,
-      days: end - day + 1,
-    })
-    day += 7; wNum++
+  let wNum = 1
+  while (wedDay <= daysInMonth) {
+    const monDay = wedDay + 5 // 水曜の5日後が月曜
+    const clippedStart = Math.max(wedDay, 1)
+    const clippedEnd = Math.min(monDay, daysInMonth)
+    if (clippedEnd >= 1) {
+      const startStr = `${yearMonth}-${String(clippedStart).padStart(2, '0')}`
+      const endStr = `${yearMonth}-${String(clippedEnd).padStart(2, '0')}`
+      let days = 0
+      for (let d = clippedStart; d <= clippedEnd; d++) {
+        if (new Date(y, m - 1, d).getDay() !== 2) days++ // 火曜(2)を除く
+      }
+      weeks.push({ label: `第${wNum}週`, start: startStr, end: endStr, days })
+      wNum++
+    }
+    wedDay += 7
   }
   return weeks
 }
@@ -133,8 +145,12 @@ export default function TeamSheetView({ yearMonth, teams }: Props) {
   const [selectedWeek, setSelectedWeek] = useState(0)
 
   const weeks = getWeeks(yearMonth)
-  const [y, m] = yearMonth.split('-').map(Number)
-  const monthDays = new Date(y, m, 0).getDate()
+  const [yNum, mNum] = yearMonth.split('-').map(Number)
+  const daysInMonth = new Date(yNum, mNum, 0).getDate()
+  let monthDays = 0
+  for (let d = 1; d <= daysInMonth; d++) {
+    if (new Date(yNum, mNum - 1, d).getDay() !== 2) monthDays++ // 火曜(2)を除く
+  }
 
   useEffect(() => {
     load()

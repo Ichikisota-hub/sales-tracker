@@ -13,24 +13,36 @@ type RawRepData = {
   planCases: number
 }
 
-// 曜日表示順: 月火水木金土日
-const DAY_LABELS = ['月', '火', '水', '木', '金', '土', '日']
-const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0] // JS getDay() の値
+// 曜日表示順: 水木金土日月火（火は定休日）
+const DAY_LABELS = ['水', '木', '金', '土', '日', '月', '火']
+const DAY_ORDER = [3, 4, 5, 6, 0, 1, 2] // JS getDay() の値
 
 function getWeeks(yearMonth: string) {
   const [y, m] = yearMonth.split('-').map(Number)
   const daysInMonth = new Date(y, m, 0).getDate()
+  // JS: 0=日,1=月,2=火,3=水,4=木,5=金,6=土
+  // 1日を含む週の水曜日を求める（1日から何日前か）
+  const firstDow = new Date(y, m - 1, 1).getDay()
+  const daysToWed = (firstDow - 3 + 7) % 7
+  let wedDay = 1 - daysToWed // 負になる場合は前月
+
   const weeks: { label: string; start: string; end: string; days: number }[] = []
-  let day = 1, wNum = 1
-  while (day <= daysInMonth) {
-    const end = Math.min(day + 6, daysInMonth)
-    weeks.push({
-      label: `第${wNum}週`,
-      start: `${yearMonth}-${String(day).padStart(2, '0')}`,
-      end: `${yearMonth}-${String(end).padStart(2, '0')}`,
-      days: end - day + 1,
-    })
-    day += 7; wNum++
+  let wNum = 1
+  while (wedDay <= daysInMonth) {
+    const monDay = wedDay + 5 // 水曜の5日後が月曜
+    const clippedStart = Math.max(wedDay, 1)
+    const clippedEnd = Math.min(monDay, daysInMonth)
+    if (clippedEnd >= 1) {
+      const startStr = `${yearMonth}-${String(clippedStart).padStart(2, '0')}`
+      const endStr = `${yearMonth}-${String(clippedEnd).padStart(2, '0')}`
+      let days = 0
+      for (let d = clippedStart; d <= clippedEnd; d++) {
+        if (new Date(y, m - 1, d).getDay() !== 2) days++ // 火曜(2)を除く
+      }
+      weeks.push({ label: `第${wNum}週`, start: startStr, end: endStr, days })
+      wNum++
+    }
+    wedDay += 7
   }
   return weeks
 }
@@ -43,8 +55,12 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
   const [selectedWeek, setSelectedWeek] = useState(0)
 
   const weeks = getWeeks(yearMonth)
-  const [, mStr] = yearMonth.split('-')
-  const monthDays = new Date(Number(yearMonth.split('-')[0]), Number(mStr), 0).getDate()
+  const [yNum, mNum] = yearMonth.split('-').map(Number)
+  const daysInMonth = new Date(yNum, mNum, 0).getDate()
+  let monthDays = 0
+  for (let d = 1; d <= daysInMonth; d++) {
+    if (new Date(yNum, mNum - 1, d).getDay() !== 2) monthDays++ // 火曜(2)を除く
+  }
 
   useEffect(() => {
     load()
@@ -366,8 +382,11 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
                 <th className="bg-gray-200 text-left px-2 sticky left-0 z-10" style={{ minWidth: 88 }}>項目</th>
                 {DAY_LABELS.map(l => (
                   <th key={l} className={`text-xs font-bold py-1 px-1 text-center ${
-                    l === '土' ? 'bg-blue-50 text-blue-600' : l === '日' ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-600'
-                  }`}>{l}</th>
+                    l === '土' ? 'bg-blue-50 text-blue-600' :
+                    l === '日' ? 'bg-red-50 text-red-600' :
+                    l === '火' ? 'bg-gray-300 text-gray-400' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>{l === '火' ? '火(休)' : l}</th>
                 ))}
                 <th className="bg-slate-200 text-slate-700 text-xs font-bold py-1 px-1 text-center">計</th>
               </tr>
