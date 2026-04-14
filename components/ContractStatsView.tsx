@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, Contract, SalesRep } from '@/lib/supabase'
 
-type ViewMode = '月別' | '人別' | '人×月' | 'ランキング'
+type ViewMode = '月別' | '人別' | '人×月' | 'ランキング' | '案件種別'
 
 type StatRow = {
   label: string
@@ -52,6 +52,7 @@ export default function ContractStatsView() {
   const [viewMode, setViewMode] = useState<ViewMode>('月別')
   const [selectedRepId, setSelectedRepId] = useState<string>('')
   const [rankingMonth, setRankingMonth] = useState(currentYearMonth)
+  const [providerMonth, setProviderMonth] = useState<string>('') // '' = 全期間
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { loadAll() }, [])
@@ -156,6 +157,37 @@ export default function ContractStatsView() {
       .sort((a, b) => b.constructionRate - a.constructionRate || b.openRate - a.openRate)
   }
 
+  function buildProviderMatrix() {
+    // 月フィルター適用
+    const filtered = providerMonth
+      ? contracts.filter(c => (c.acquired_date || '').startsWith(providerMonth))
+      : contracts
+
+    // プロバイダー名（wifi_provider_other は 'その他' にまとめる）
+    const getProvider = (c: Contract) => c.wifi_provider || 'その他'
+
+    // 全プロバイダーの集計（合計多い順）
+    const providerTotals: Record<string, number> = {}
+    filtered.forEach(c => {
+      const p = getProvider(c)
+      providerTotals[p] = (providerTotals[p] || 0) + 1
+    })
+    const providers = Object.keys(providerTotals).sort((a, b) => providerTotals[b] - providerTotals[a])
+
+    // 担当者ごとの集計
+    const repRows = reps.map(rep => {
+      const repContracts = filtered.filter(c => c.sales_rep_id === rep.id)
+      const byProvider: Record<string, number> = {}
+      repContracts.forEach(c => {
+        const p = getProvider(c)
+        byProvider[p] = (byProvider[p] || 0) + 1
+      })
+      return { rep, total: repContracts.length, byProvider }
+    }).filter(r => r.total > 0)
+
+    return { providers, providerTotals, repRows, total: filtered.length }
+  }
+
   function buildTotalRow(rows: StatRow[]): StatRow {
     return {
       label: '合計',
@@ -191,7 +223,7 @@ export default function ContractStatsView() {
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-base font-black text-slate-800">契約宅 統計</h2>
         <div className="flex bg-slate-100 rounded-xl p-1 gap-1 flex-wrap">
-          {(['月別', '人別', '人×月', 'ランキング'] as ViewMode[]).map(mode => (
+          {(['月別', '人別', '人×月', 'ランキング', '案件種別'] as ViewMode[]).map(mode => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
@@ -225,6 +257,26 @@ export default function ContractStatsView() {
             onChange={e => setRankingMonth(e.target.value)}
             className="border border-slate-200 bg-white rounded-xl px-3 py-1.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
           />
+        )}
+
+        {/* 案件種別: 月選択（全期間も可） */}
+        {viewMode === '案件種別' && (
+          <div className="flex items-center gap-2">
+            <input
+              type="month"
+              value={providerMonth}
+              onChange={e => setProviderMonth(e.target.value)}
+              className="border border-slate-200 bg-white rounded-xl px-3 py-1.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {providerMonth && (
+              <button
+                onClick={() => setProviderMonth('')}
+                className="text-xs px-3 py-1.5 rounded-lg bg-slate-200 text-slate-600 font-bold hover:bg-slate-300"
+              >
+                全期間
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -321,8 +373,98 @@ export default function ContractStatsView() {
         </div>
       )}
 
-      {/* 通常テーブル（ランキング以外） */}
-      {viewMode !== 'ランキング' && (
+      {/* 案件種別ビュー */}
+      {viewMode === '案件種別' && (() => {
+        const { providers, providerTotals, repRows, total } = buildProviderMatrix()
+        if (repRows.length === 0) return (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 py-10 text-center text-slate-400">
+            {providerMonth ? `${providerMonth.replace('-', '/')}のデータがありません` : 'データがありません'}
+          </div>
+        )
+        return (
+          <div className="space-y-4">
+            {/* 全体の円グラフ代わりのバー */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+              <div className="text-xs font-bold text-slate-500 mb-3">
+                プロバイダー別内訳（全体 {total}件）
+              </div>
+              <div className="space-y-2">
+                {providers.map(p => {
+                  const cnt = providerTotals[p]
+                  const pct = total > 0 ? cnt / total : 0
+                  return (
+                    <div key={p} className="flex items-center gap-3">
+                      <div className="w-20 text-xs font-bold text-slate-700 shrink-0 truncate">{p}</div>
+                      <div className="flex-1 h-5 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-blue-500 rounded-full transition-all"
+                          style={{ width: `${pct * 100}%` }}
+                        />
+                      </div>
+                      <div className="w-16 text-right text-xs font-bold text-slate-700 shrink-0">
+                        {cnt}件 <span className="text-slate-400 font-normal">({(pct * 100).toFixed(0)}%)</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* 担当者×プロバイダー クロス集計テーブル */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-700 text-white">
+                      <th className="text-left px-4 py-3 font-bold whitespace-nowrap sticky left-0 bg-slate-700 z-10">担当者</th>
+                      {providers.map(p => (
+                        <th key={p} className="text-center px-3 py-3 font-bold whitespace-nowrap">{p}</th>
+                      ))}
+                      <th className="text-center px-3 py-3 font-bold whitespace-nowrap bg-slate-600">合計</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {repRows.map((row, i) => (
+                      <tr
+                        key={row.rep.id}
+                        className={`border-t border-slate-100 hover:bg-slate-50 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+                      >
+                        <td className="px-4 py-2.5 font-bold text-slate-700 whitespace-nowrap sticky left-0 bg-inherit z-10">{row.rep.name}</td>
+                        {providers.map(p => {
+                          const cnt = row.byProvider[p] || 0
+                          const isTop = cnt > 0 && cnt === Math.max(...repRows.map(r => r.byProvider[p] || 0))
+                          return (
+                            <td key={p} className="px-3 py-2.5 text-center">
+                              {cnt > 0 ? (
+                                <span className={`font-bold ${isTop ? 'text-blue-600' : 'text-slate-700'}`}>{cnt}</span>
+                              ) : (
+                                <span className="text-slate-200">—</span>
+                              )}
+                            </td>
+                          )
+                        })}
+                        <td className="px-3 py-2.5 text-center font-black text-slate-800 bg-slate-50">{row.total}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-300 bg-slate-100">
+                      <td className="px-4 py-2.5 font-black text-slate-800 sticky left-0 bg-slate-100 z-10">合計</td>
+                      {providers.map(p => (
+                        <td key={p} className="px-3 py-2.5 text-center font-bold text-slate-800">{providerTotals[p]}</td>
+                      ))}
+                      <td className="px-3 py-2.5 text-center font-black text-slate-800">{total}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* 通常テーブル（ランキング・案件種別以外） */}
+      {viewMode !== 'ランキング' && viewMode !== '案件種別' && (
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-100">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
