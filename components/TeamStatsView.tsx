@@ -54,6 +54,7 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
   const [selectedTeamId, setSelectedTeamId] = useState<string | '__all__'>('__all__')
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month')
   const [selectedWeek, setSelectedWeek] = useState(0)
+  const [visitFilterOn, setVisitFilterOn] = useState(false)
 
   const weeks = getWeeks(yearMonth)
   const [yNum, mNum] = yearMonth.split('-').map(Number)
@@ -207,6 +208,11 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
   const totalPlanCases = repStats.reduce((s, r) => s + r.planCases, 0)
   const totalAchievementRate = totalPlanCases > 0 ? totalAcquisitions / totalPlanCases : 0
 
+  // 訪問数フィルター（400以下）
+  const VISIT_THRESHOLD = 400
+  const lowVisitReps = repStats.filter(r => r.actualWorkingDays > 0 && r.visits <= VISIT_THRESHOLD)
+  const displayRepStats = visitFilterOn ? lowVisitReps : repStats
+
   // 1日平均: 総稼働日数で割る
   const avgVisits        = totalActualDays > 0 ? totalVisits        / totalActualDays : 0
   const avgNetMeetings   = totalActualDays > 0 ? totalNetMeetings   / totalActualDays : 0
@@ -306,6 +312,17 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
             className={`text-xs px-4 py-1.5 rounded-lg font-bold transition-colors ${viewMode === 'week' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
           >週</button>
         </div>
+
+        <button
+          onClick={() => setVisitFilterOn(v => !v)}
+          className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-colors border ${
+            visitFilterOn
+              ? 'bg-red-500 text-white border-red-500'
+              : 'bg-white text-slate-600 border-slate-300 hover:border-red-400 hover:text-red-500'
+          }`}
+        >
+          400訪問以下 {visitFilterOn && <span className="ml-1 bg-white text-red-500 rounded px-1">{lowVisitReps.length}人</span>}
+        </button>
       </div>
 
       {/* 週選択 */}
@@ -365,7 +382,7 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
               </tr>
             </thead>
             <tbody>
-              {repStats.map(row => (
+              {displayRepStats.map(row => (
                 <tr key={row.rep.id} className={row.visits === 0 && row.acquisitions === 0 ? 'opacity-40' : ''}>
                   <td className="text-left px-2 font-medium bg-gray-50 whitespace-nowrap sticky left-0 z-10">
                     {row.rep.name}
