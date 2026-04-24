@@ -2,6 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import {
+  PenLine, LayoutDashboard, TrendingUp, Users,
+  Home as HomeIcon, BarChart2, CalendarCheck, Calendar, CalendarDays,
+  MapPin, Table, FileSpreadsheet, BarChart3,
+  FileText, CheckSquare, Settings, Building2, LogOut,
+  ChevronDown, Menu
+} from 'lucide-react'
 import { supabase, SalesRep, Team } from '@/lib/supabase'
 import { getMonthList, formatYearMonth, localYearMonth } from '@/lib/dateUtils'
 import { useOrganization } from '@/contexts/OrganizationContext'
@@ -102,37 +109,35 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-slate-900 gap-3">
-        <div className="w-8 h-8 border-2 border-slate-700 border-t-blue-500 rounded-full animate-spin" />
-        <div className="text-slate-500 text-sm font-medium">読み込み中...</div>
+      <div className="flex flex-col items-center justify-center h-screen gap-4"
+        style={{ background: 'linear-gradient(160deg, #0c1220 0%, #0f172a 100%)' }}>
+        <img src="/logo.png" alt="logo" className="h-12 w-auto opacity-80 mb-2" />
+        <div className="w-7 h-7 border-2 border-indigo-800 border-t-indigo-400 rounded-full animate-spin" />
+        <div className="text-slate-500 text-xs font-semibold tracking-widest uppercase">Loading...</div>
       </div>
     )
   }
 
   const mainTabs = [
-    { id: 'form'     as MainTab, label: '入力',    icon: '✏️' },
-    { id: 'status'   as MainTab, label: '現状整理', icon: '📋' },
-    { id: 'analysis' as MainTab, label: '分析',    icon: '📈' },
-    { id: 'overall'  as MainTab, label: '全体',    icon: '🏆' },
+    { id: 'form'     as MainTab, label: '入力',    Icon: PenLine },
+    { id: 'status'   as MainTab, label: '現状',    Icon: LayoutDashboard },
+    { id: 'analysis' as MainTab, label: '分析',    Icon: TrendingUp },
+    { id: 'overall'  as MainTab, label: '全体',    Icon: Users },
   ]
 
   const subTabs = [
-    { id: 'contracts'       as SubTab, label: '契約宅',    icon: '🏠' },
-    { id: 'contract_stats'  as SubTab, label: '契約宅統計', icon: '📉' },
-    { id: 'shift_submit' as SubTab, label: 'シフト提出', icon: '📅' },
-    { id: 'shift'        as SubTab, label: 'シフト確認', icon: '🗓️' },
-    { id: 'daily_shift'  as SubTab, label: '日別稼働',   icon: '📆' },
-    { id: 'area'         as SubTab, label: 'エリア',    icon: '📍' },
-    { id: 'sheet'        as SubTab, label: '表',        icon: '📊' },
-    { id: 'team_sheet'   as SubTab, label: 'チーム表',   icon: '📋' },
-    { id: 'stats_sheet'  as SubTab, label: '数値表',     icon: '📊' },
-    { id: 'daily_report'     as SubTab, label: '日報',     icon: '📝' },
-    { id: 'submission_check' as SubTab, label: '提出確認', icon: '✅' },
-    { id: 'settings'         as SubTab, label: '設定',     icon: '⚙️' },
-  ]
-
-  const adminMenuItems = [
-    { label: 'ログアウト', icon: '🚪', action: signOut },
+    { id: 'contracts'       as SubTab, label: '契約宅',    Icon: HomeIcon },
+    { id: 'contract_stats'  as SubTab, label: '契約統計',  Icon: BarChart2 },
+    { id: 'shift_submit'    as SubTab, label: 'シフト提出', Icon: CalendarCheck },
+    { id: 'shift'           as SubTab, label: 'シフト確認', Icon: Calendar },
+    { id: 'daily_shift'     as SubTab, label: '日別稼働',   Icon: CalendarDays },
+    { id: 'area'            as SubTab, label: 'エリア',    Icon: MapPin },
+    { id: 'sheet'           as SubTab, label: '表',        Icon: Table },
+    { id: 'team_sheet'      as SubTab, label: 'チーム表',   Icon: FileSpreadsheet },
+    { id: 'stats_sheet'     as SubTab, label: '数値表',     Icon: BarChart3 },
+    { id: 'daily_report'    as SubTab, label: '日報',       Icon: FileText },
+    { id: 'submission_check' as SubTab, label: '提出確認',  Icon: CheckSquare },
+    { id: 'settings'        as SubTab, label: '設定',       Icon: Settings },
   ]
 
   const currentTab = activeSubTab ?? activeTab
@@ -141,28 +146,33 @@ export default function Home() {
   const padContent = ['form', 'shift_submit'].includes(currentTab)
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen" style={{ background: '#eef1f6' }}>
       <TrialBanner />
       <div className="top-nav">
-        <div className="flex items-center gap-2 mb-2">
-          <img src="/logo.png" alt="ORIGIN SALES REPORTING" className="h-14 w-auto" />
+        {/* Row 1: Logo + Selectors */}
+        <div className="flex items-center gap-2 mb-2.5">
+          <img src="/logo.png" alt="ORIGIN SALES REPORTING" className="h-11 w-auto flex-shrink-0" />
 
           {isShiftSubmitTab ? (
-            <div className="flex gap-1">
+            <div className="flex gap-1.5">
               {scheduleMonthOptions.map(m => (
                 <button key={m} onClick={() => setScheduleMonth(m)}
-                  className={`text-xs font-bold px-2 py-1.5 rounded-lg transition-all ${
-                    scheduleMonth === m ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                  }`}>
-                  {m === localYearMonth() ? `今月` : `翌月`}
-                  <span className="text-[10px] opacity-70 ml-0.5">({formatYearMonth(m)})</span>
+                  className={`text-xs font-bold px-2.5 py-1.5 rounded-xl transition-all ${
+                    scheduleMonth === m
+                      ? 'text-white shadow-lg'
+                      : 'text-slate-400 hover:text-slate-300'
+                  }`}
+                  style={scheduleMonth === m ? { background: 'linear-gradient(135deg,#6366f1,#2563eb)', boxShadow: '0 4px 12px rgba(99,102,241,.4)' } : { background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.08)' }}>
+                  {m === localYearMonth() ? '今月' : '翌月'}
+                  <span className="text-[10px] opacity-60 ml-0.5">({formatYearMonth(m)})</span>
                 </button>
               ))}
             </div>
           ) : currentTab !== 'contracts' ? (
             <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
-              className="bg-slate-800 text-slate-200 text-xs font-semibold rounded-xl px-2.5 py-1.5 border border-slate-700 outline-none cursor-pointer">
-              {months.map(m => <option key={m} value={m}>{formatYearMonth(m)}</option>)}
+              className="text-slate-200 text-xs font-semibold rounded-xl px-2.5 py-1.5 outline-none cursor-pointer"
+              style={{ background: 'rgba(255,255,255,.09)', border: '1px solid rgba(255,255,255,.1)' }}>
+              {months.map(m => <option key={m} value={m} className="bg-slate-800">{formatYearMonth(m)}</option>)}
             </select>
           ) : null}
 
@@ -172,7 +182,8 @@ export default function Home() {
               setSelectedRep(rep)
               if (rep) localStorage.setItem('selectedRepId', rep.id)
             }}
-              className="bg-slate-800 text-slate-200 text-xs font-semibold rounded-xl px-2.5 py-1.5 border border-slate-700 outline-none cursor-pointer max-w-[120px]">
+              className="text-slate-200 text-xs font-semibold rounded-xl px-2.5 py-1.5 outline-none cursor-pointer max-w-[110px]"
+              style={{ background: 'rgba(255,255,255,.09)', border: '1px solid rgba(255,255,255,.1)' }}>
               {teams.length > 0 ? (
                 <>
                   {teams.map(team => {
@@ -180,75 +191,94 @@ export default function Home() {
                     if (teamReps.length === 0) return null
                     return (
                       <optgroup key={team.id} label={team.name}>
-                        {teamReps.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                        {teamReps.map(r => <option key={r.id} value={r.id} className="bg-slate-800">{r.name}</option>)}
                       </optgroup>
                     )
                   })}
                   {reps.filter(r => !r.team_id).length > 0 && (
                     <optgroup label="未所属">
-                      {reps.filter(r => !r.team_id).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                      {reps.filter(r => !r.team_id).map(r => <option key={r.id} value={r.id} className="bg-slate-800">{r.name}</option>)}
                     </optgroup>
                   )}
                 </>
               ) : (
-                reps.map(r => <option key={r.id} value={r.id}>{r.name}</option>)
+                reps.map(r => <option key={r.id} value={r.id} className="bg-slate-800">{r.name}</option>)
               )}
             </select>
           )}
         </div>
 
-        <div className="flex items-center gap-1">
+        {/* Row 2: Main tabs + Sub menu */}
+        <div className="flex items-center gap-1.5">
           <div className="tab-bar flex-1">
-            {mainTabs.map(tab => (
-              <button key={tab.id} onClick={() => openMainTab(tab.id)}
-                className={`tab-btn ${activeTab === tab.id && !activeSubTab ? 'tab-btn-active' : 'tab-btn-inactive'}`}>
-                {tab.icon} {tab.label}
-              </button>
-            ))}
+            {mainTabs.map(tab => {
+              const active = activeTab === tab.id && !activeSubTab
+              return (
+                <button key={tab.id} onClick={() => openMainTab(tab.id)}
+                  className={`tab-btn ${active ? 'tab-btn-active' : 'tab-btn-inactive'}`}>
+                  <tab.Icon size={14} strokeWidth={2.2} />
+                  <span>{tab.label}</span>
+                </button>
+              )
+            })}
           </div>
 
           <div className="relative" ref={subMenuRef}>
             <button
               onClick={() => setSubMenuOpen(v => !v)}
-              className={`tab-btn flex-shrink-0 flex items-center gap-1 px-2 transition-all ${
-                activeSubTab ? 'tab-btn-active' : subMenuOpen ? 'bg-slate-600 text-white rounded-lg' : 'tab-btn-inactive'
+              className={`flex items-center gap-1 px-2.5 py-2 rounded-xl font-bold text-xs transition-all border ${
+                activeSubTab
+                  ? 'text-white border-transparent'
+                  : subMenuOpen
+                  ? 'text-white border-transparent'
+                  : 'text-slate-400 border-transparent'
               }`}
-              style={{minWidth: activeSubTab ? 'auto' : 34}}>
+              style={activeSubTab || subMenuOpen
+                ? { background: 'linear-gradient(135deg,#6366f1,#2563eb)', boxShadow: '0 2px 12px rgba(99,102,241,.45)' }
+                : { background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.08)' }
+              }>
               {activeSubTab ? (
                 <>
-                  <span>{subTabs.find(t => t.id === activeSubTab)?.icon}</span>
-                  <span className="text-[11px]">{subTabs.find(t => t.id === activeSubTab)?.label}</span>
-                  <span className="text-[10px] opacity-70">▾</span>
+                  {(() => { const t = subTabs.find(t => t.id === activeSubTab); return t ? <t.Icon size={13} /> : null })()}
+                  <span className="text-[11px] max-w-[48px] truncate">{subTabs.find(t => t.id === activeSubTab)?.label}</span>
+                  <ChevronDown size={10} className="opacity-70" />
                 </>
-              ) : '≡'}
+              ) : (
+                <Menu size={16} />
+              )}
             </button>
 
             {subMenuOpen && (
-              <div className="absolute right-0 top-full mt-1.5 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-50 w-[272px]">
-                <div className="p-2 grid grid-cols-2 gap-1">
-                  {subTabs.map(tab => (
-                    <button key={tab.id} onClick={() => openSubTab(tab.id)}
-                      className={`flex items-center gap-2 px-3 py-2.5 text-sm font-bold text-left rounded-xl transition-colors ${
-                        activeSubTab === tab.id ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'
-                      }`}>
-                      <span className="text-base">{tab.icon}</span>
-                      <span>{tab.label}</span>
-                    </button>
-                  ))}
+              <div className="absolute right-0 top-full mt-2 bg-white rounded-2xl overflow-hidden z-50 w-[280px]"
+                style={{ boxShadow: '0 16px 48px rgba(0,0,0,.18), 0 4px 16px rgba(0,0,0,.10)', border: '1px solid rgba(226,232,240,0.8)' }}>
+                <div className="px-3 pt-3 pb-1">
+                  <div className="text-[10px] font-700 text-slate-400 tracking-widest uppercase mb-2 px-1">メニュー</div>
+                  <div className="grid grid-cols-2 gap-1">
+                    {subTabs.map(tab => (
+                      <button key={tab.id} onClick={() => openSubTab(tab.id)}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl transition-all text-left ${
+                          activeSubTab === tab.id
+                            ? 'text-indigo-700 font-bold'
+                            : 'text-slate-600 font-semibold hover:bg-slate-50'
+                        }`}
+                        style={activeSubTab === tab.id ? { background: 'linear-gradient(135deg,#eef2ff,#eff6ff)' } : {}}>
+                        <tab.Icon size={15} strokeWidth={2} className={activeSubTab === tab.id ? 'text-indigo-500' : 'text-slate-400'} />
+                        <span className="text-[12.5px]">{tab.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="border-t border-slate-100 p-2">
+                <div className="border-t border-slate-100 px-3 py-2 mt-1">
                   <Link href="/admin" onClick={() => setSubMenuOpen(false)}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm font-bold text-left rounded-xl transition-colors hover:bg-slate-50 text-slate-500">
-                    <span>🏢</span>
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold text-left rounded-xl transition-colors hover:bg-slate-50 text-slate-500">
+                    <Building2 size={15} className="text-slate-400" />
                     <span>組織管理</span>
                   </Link>
-                  {adminMenuItems.map((item, i) => (
-                    <button key={i} onClick={() => { setSubMenuOpen(false); item.action?.() }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm font-bold text-left rounded-xl transition-colors hover:bg-slate-50 text-slate-500">
-                      <span>{item.icon}</span>
-                      <span>{item.label}</span>
-                    </button>
-                  ))}
+                  <button onClick={() => { setSubMenuOpen(false); signOut() }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold text-left rounded-xl transition-colors hover:bg-red-50 text-slate-500 hover:text-red-500">
+                    <LogOut size={15} className="text-slate-400" />
+                    <span>ログアウト</span>
+                  </button>
                 </div>
               </div>
             )}

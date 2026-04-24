@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -39,56 +40,106 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+      style={{ background: 'linear-gradient(160deg, #0c1220 0%, #0f172a 60%, #111827 100%)' }}>
+
+      {/* Background decorative blobs */}
+      <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)', filter: 'blur(40px)' }} />
+      <div className="absolute bottom-0 right-1/4 w-80 h-80 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(37,99,235,0.10) 0%, transparent 70%)', filter: 'blur(40px)' }} />
+
+      <div className="w-full max-w-sm relative z-10">
+        {/* Logo area */}
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="ORIGIN SALES REPORTING" className="h-14 w-auto mx-auto mb-4" />
-          <h1 className="text-white text-xl font-bold">ログイン</h1>
+          <img src="/logo.png" alt="ORIGIN SALES REPORTING" className="h-14 w-auto mx-auto mb-5" />
+          <p className="text-slate-500 text-sm">営業活動数値管理システム</p>
         </div>
 
-        <form onSubmit={handleLogin} className="bg-slate-800 rounded-2xl p-6 space-y-4">
+        {/* Card */}
+        <div className="rounded-2xl p-6"
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+          }}>
+
           {error && (
-            <div className="bg-red-500/20 border border-red-500/40 text-red-300 text-sm rounded-xl px-4 py-3">
-              {error}
+            <div className="bg-red-500/10 border border-red-500/25 text-red-400 text-sm rounded-xl px-4 py-3 mb-4 flex items-start gap-2">
+              <span className="mt-0.5 flex-shrink-0">⚠</span>
+              <span>{error}</span>
             </div>
           )}
 
-          <div>
-            <label className="block text-slate-400 text-xs font-semibold mb-1.5">メールアドレス</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              className="w-full bg-slate-700 text-white text-sm rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 border border-slate-600"
-              placeholder="you@example.com"
-            />
-          </div>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-slate-400 text-xs font-semibold mb-1.5 tracking-wide">
+                メールアドレス
+              </label>
+              <div className="relative">
+                <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  className="w-full text-white text-sm rounded-xl pl-10 pr-4 py-3 outline-none transition-all"
+                  style={{
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                  }}
+                  onFocus={e => { e.target.style.borderColor = 'rgba(99,102,241,0.6)'; e.target.style.background = 'rgba(99,102,241,0.06)' }}
+                  onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; e.target.style.background = 'rgba(255,255,255,0.06)' }}
+                  placeholder="you@example.com"
+                />
+              </div>
+            </div>
 
-          <div>
-            <label className="block text-slate-400 text-xs font-semibold mb-1.5">パスワード</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-              className="w-full bg-slate-700 text-white text-sm rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 border border-slate-600"
-              placeholder="••••••••"
-            />
-          </div>
+            <div>
+              <label className="block text-slate-400 text-xs font-semibold mb-1.5 tracking-wide">
+                パスワード
+              </label>
+              <div className="relative">
+                <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  className="w-full text-white text-sm rounded-xl pl-10 pr-4 py-3 outline-none transition-all"
+                  style={{
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                  }}
+                  onFocus={e => { e.target.style.borderColor = 'rgba(99,102,241,0.6)'; e.target.style.background = 'rgba(99,102,241,0.06)' }}
+                  onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; e.target.style.background = 'rgba(255,255,255,0.06)' }}
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm rounded-xl py-3 transition-colors"
-          >
-            {loading ? 'ログイン中...' : 'ログイン'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 text-white font-bold text-sm rounded-xl py-3.5 transition-all mt-2 disabled:opacity-50"
+              style={{
+                background: loading ? 'rgba(99,102,241,0.5)' : 'linear-gradient(135deg, #6366f1, #2563eb)',
+                boxShadow: loading ? 'none' : '0 6px 20px rgba(99,102,241,0.4)',
+              }}>
+              {loading ? (
+                <><Loader2 size={16} className="animate-spin" /><span>ログイン中...</span></>
+              ) : (
+                <><span>ログイン</span><ArrowRight size={16} /></>
+              )}
+            </button>
+          </form>
+        </div>
 
-        <p className="text-center text-slate-500 text-sm mt-4">
+        <p className="text-center text-slate-600 text-sm mt-5">
           アカウントをお持ちでない方は{' '}
-          <Link href="/signup" className="text-blue-400 hover:text-blue-300 font-semibold">
+          <Link href="/signup" className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
             新規登録
           </Link>
         </p>
