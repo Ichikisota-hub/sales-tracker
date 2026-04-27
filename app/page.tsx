@@ -44,6 +44,7 @@ type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 
 
 export default function Home() {
   const { signOut } = useAuth()
+  const { membership, isManager, role, loading: orgLoading } = useOrganization()
   const [reps, setReps] = useState<SalesRep[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null)
@@ -81,15 +82,29 @@ export default function Home() {
       supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
       supabase.from('teams').select('*').order('display_order'),
     ])
-    if (data) {
-      setReps(data)
-      const savedId = localStorage.getItem('selectedRepId')
-      const saved = savedId ? data.find(r => r.id === savedId) : null
-      setSelectedRep((prev: SalesRep | null) => prev ?? saved ?? (data.length > 0 ? data[0] : null))
-    }
+    if (data) setReps(data)
     setTeams(teamData || [])
     setLoading(false)
   }
+
+  // rep自動選択: membership と reps が揃ったタイミングで実行
+  useEffect(() => {
+    if (reps.length === 0) return
+
+    if (!isManager) {
+      // member: 紐付き担当者のみ（sales_rep_id がなければ null）
+      const linked = membership?.sales_rep_id
+        ? reps.find(r => r.id === membership.sales_rep_id) ?? null
+        : null
+      setSelectedRep(linked)
+    } else {
+      // admin / manager: sales_rep_id → localStorage → 先頭の順でデフォルト選択
+      const linkedId = membership?.sales_rep_id
+      const savedId = localStorage.getItem('selectedRepId')
+      const preferred = reps.find(r => r.id === (linkedId || savedId)) ?? reps[0] ?? null
+      setSelectedRep(prev => prev ?? preferred)
+    }
+  }, [reps, membership, isManager])
 
   function openSubTab(tab: SubTab) {
     setActiveSubTab(tab)
@@ -107,13 +122,30 @@ export default function Home() {
     setActiveSubTab(null)
   }
 
-  if (loading) {
+  if (loading || orgLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4"
         style={{ background: 'linear-gradient(160deg, #0c1220 0%, #0f172a 100%)' }}>
         <img src="/logo.png" alt="logo" className="h-12 w-auto opacity-80 mb-2" />
         <div className="w-7 h-7 border-2 border-indigo-800 border-t-indigo-400 rounded-full animate-spin" />
         <div className="text-slate-500 text-xs font-semibold tracking-widest uppercase">Loading...</div>
+      </div>
+    )
+  }
+
+  // member で担当者が紐付いていない場合
+  if (!isManager && role !== null && !selectedRep) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen gap-4"
+        style={{ background: 'linear-gradient(160deg, #0c1220 0%, #0f172a 100%)' }}>
+        <img src="/logo.png" alt="logo" className="h-12 w-auto opacity-80 mb-2" />
+        <p className="text-slate-300 text-sm font-semibold text-center leading-relaxed px-8">
+          担当者が設定されていません。<br />管理者に連絡してください。
+        </p>
+        <button onClick={signOut}
+          className="text-slate-500 text-xs mt-4 hover:text-slate-300 transition-colors underline">
+          ログアウト
+        </button>
       </div>
     )
   }
@@ -177,34 +209,41 @@ export default function Home() {
           ) : null}
 
           {needsRep && (
-            <select value={selectedRep?.id ?? ''} onChange={e => {
-              const rep = reps.find(r => r.id === e.target.value) || null
-              setSelectedRep(rep)
-              if (rep) localStorage.setItem('selectedRepId', rep.id)
-            }}
-              className="text-slate-200 text-xs font-semibold rounded-xl px-2.5 py-1.5 outline-none cursor-pointer max-w-[110px]"
-              style={{ background: 'rgba(255,255,255,.09)', border: '1px solid rgba(255,255,255,.1)' }}>
-              {teams.length > 0 ? (
-                <>
-                  {teams.map(team => {
-                    const teamReps = reps.filter(r => r.team_id === team.id)
-                    if (teamReps.length === 0) return null
-                    return (
-                      <optgroup key={team.id} label={team.name}>
-                        {teamReps.map(r => <option key={r.id} value={r.id} className="bg-slate-800">{r.name}</option>)}
+            isManager ? (
+              <select value={selectedRep?.id ?? ''} onChange={e => {
+                const rep = reps.find(r => r.id === e.target.value) || null
+                setSelectedRep(rep)
+                if (rep) localStorage.setItem('selectedRepId', rep.id)
+              }}
+                className="text-slate-200 text-xs font-semibold rounded-xl px-2.5 py-1.5 outline-none cursor-pointer max-w-[110px]"
+                style={{ background: 'rgba(255,255,255,.09)', border: '1px solid rgba(255,255,255,.1)' }}>
+                {teams.length > 0 ? (
+                  <>
+                    {teams.map(team => {
+                      const teamReps = reps.filter(r => r.team_id === team.id)
+                      if (teamReps.length === 0) return null
+                      return (
+                        <optgroup key={team.id} label={team.name}>
+                          {teamReps.map(r => <option key={r.id} value={r.id} className="bg-slate-800">{r.name}</option>)}
+                        </optgroup>
+                      )
+                    })}
+                    {reps.filter(r => !r.team_id).length > 0 && (
+                      <optgroup label="未所属">
+                        {reps.filter(r => !r.team_id).map(r => <option key={r.id} value={r.id} className="bg-slate-800">{r.name}</option>)}
                       </optgroup>
-                    )
-                  })}
-                  {reps.filter(r => !r.team_id).length > 0 && (
-                    <optgroup label="未所属">
-                      {reps.filter(r => !r.team_id).map(r => <option key={r.id} value={r.id} className="bg-slate-800">{r.name}</option>)}
-                    </optgroup>
-                  )}
-                </>
-              ) : (
-                reps.map(r => <option key={r.id} value={r.id} className="bg-slate-800">{r.name}</option>)
-              )}
-            </select>
+                    )}
+                  </>
+                ) : (
+                  reps.map(r => <option key={r.id} value={r.id} className="bg-slate-800">{r.name}</option>)
+                )}
+              </select>
+            ) : selectedRep ? (
+              <span className="text-slate-200 text-xs font-semibold rounded-xl px-2.5 py-1.5"
+                style={{ background: 'rgba(255,255,255,.09)', border: '1px solid rgba(255,255,255,.1)' }}>
+                {selectedRep.name}
+              </span>
+            ) : null
           )}
         </div>
 
