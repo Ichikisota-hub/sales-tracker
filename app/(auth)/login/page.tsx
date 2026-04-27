@@ -21,13 +21,19 @@ export default function LoginPage() {
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
-      setError(`ログイン失敗: ${error.message}`)
+      if (error.message.includes('Email not confirmed') || error.message.includes('email_not_confirmed')) {
+        setError('メールアドレスが未確認です。管理者に連絡するか、登録メールの確認リンクをクリックしてください。')
+      } else if (error.message.includes('Invalid login credentials')) {
+        setError('メールアドレスまたはパスワードが正しくありません。')
+      } else {
+        setError(`ログイン失敗: ${error.message}`)
+      }
       setLoading(false)
       return
     }
 
     if (!data.session) {
-      setError('セッションの取得に失敗しました。もう一度お試しください。')
+      setError('セッションの取得に失敗しました。メール確認が必要な場合は登録時に届いたメールを確認してください。')
       setLoading(false)
       return
     }

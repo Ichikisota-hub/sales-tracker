@@ -30,7 +30,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: orgError?.message || '組織の作成に失敗しました' }, { status: 500 })
   }
 
-  // 2. 作成者を admin として organization_members に追加
+  // 2. メールアドレスを確認済みにする（メール確認フローをスキップ）
+  const { error: confirmError } = await supabase.auth.admin.updateUserById(userId, {
+    email_confirm: true,
+  })
+  if (confirmError) {
+    console.error('email confirm error:', confirmError)
+    // 失敗しても続行（Supabase設定でメール確認不要の場合もある）
+  }
+
+  // 3. 作成者を admin として organization_members に追加
   const { error: memberError } = await supabase
     .from('organization_members')
     .insert({
