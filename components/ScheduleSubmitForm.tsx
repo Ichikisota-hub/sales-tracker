@@ -48,10 +48,15 @@ function isAfter25th(yearMonth: string): boolean {
   const todayDay = today.getDate()
   const todayYear = today.getFullYear()
   const todayMonth = today.getMonth() + 1
+
+  // 当月はロック解除（今月中に修正が必要な場合のため）
+  const currentYM = `${todayYear}-${String(todayMonth).padStart(2, '0')}`
+  if (yearMonth === currentYM) return false
+
   const [y, m] = yearMonth.split('-').map(Number)
-  const currentMonth = todayYear * 12 + todayMonth
+  const currentMonthNum = todayYear * 12 + todayMonth
   const targetMonthNum = y * 12 + m
-  if (targetMonthNum >= currentMonth) return todayDay > 25
+  if (targetMonthNum >= currentMonthNum) return todayDay > 25
   return true
 }
 
