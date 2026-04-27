@@ -39,7 +39,7 @@ export default function MemberList({ refreshKey }: Props) {
     setLoading(true)
     const [membersRes, repsRes] = await Promise.all([
       fetch(`/api/admin/members?organizationId=${organizationId}`),
-      supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
+      supabase.from('sales_reps').select('*').eq('is_active', true).eq('organization_id', organizationId).order('display_order'),
     ])
 
     const membersData = await membersRes.json()
