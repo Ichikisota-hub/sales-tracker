@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 
 const SUPERADMIN_KEY = 'Origin0201'
 const STORAGE_KEY = 'superadmin_unlocked'
@@ -283,12 +284,18 @@ export default function SuperAdminPage() {
           <h1 className="font-bold text-lg">🔐 システム管理</h1>
           <p className="text-slate-400 text-xs mt-0.5">ORIGIN Sales Tracker — 全組織管理</p>
         </div>
-        <button
-          onClick={handleLogout}
-          className="text-slate-400 hover:text-white text-sm transition-colors"
-        >
-          ログアウト
-        </button>
+        <div className="flex items-center gap-4">
+          <Link href="/"
+            className="text-indigo-400 hover:text-indigo-300 text-sm font-semibold transition-colors">
+            ← 管理画面へ
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="text-slate-400 hover:text-white text-sm transition-colors"
+          >
+            ログアウト
+          </button>
+        </div>
       </div>
 
       <div className="p-6 max-w-6xl mx-auto">
