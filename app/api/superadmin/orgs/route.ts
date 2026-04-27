@@ -54,6 +54,49 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(result)
 }
 
+export async function POST(req: NextRequest) {
+  if (!checkAuth(req)) {
+    return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
+  }
+
+  const { name, slug, plan, max_members, trial_ends_at } = await req.json()
+  if (!name || !slug) {
+    return NextResponse.json({ error: '組織名とスラッグは必須です' }, { status: 400 })
+  }
+
+  const supabase = getServiceClient()
+
+  // slug 重複チェック
+  const { data: existing } = await supabase
+    .from('organizations')
+    .select('id')
+    .eq('slug', slug)
+    .maybeSingle()
+
+  if (existing) {
+    return NextResponse.json({ error: 'このスラッグはすでに使用されています' }, { status: 400 })
+  }
+
+  const { data, error } = await supabase
+    .from('organizations')
+    .insert({
+      name,
+      slug,
+      plan: plan ?? 'trial',
+      max_members: max_members ?? 10,
+      trial_ends_at: trial_ends_at || null,
+      is_active: true,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json(data, { status: 201 })
+}
+
 export async function DELETE(req: NextRequest) {
   if (!checkAuth(req)) {
     return NextResponse.json({ error: '認証が必要です' }, { status: 401 })

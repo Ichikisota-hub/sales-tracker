@@ -57,6 +57,12 @@ export default function SuperAdminPage() {
   const [membersLoading, setMembersLoading] = useState(false)
   const [deletingMemberId, setDeletingMemberId] = useState<string | null>(null)
 
+  // 新規組織追加
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [newOrg, setNewOrg] = useState({ name: '', slug: '', plan: 'trial', max_members: 10, trial_ends_at: '' })
+  const [adding, setAdding] = useState(false)
+  const [addError, setAddError] = useState('')
+
   useEffect(() => {
     if (localStorage.getItem(STORAGE_KEY) === 'true') {
       setUnlocked(true)
@@ -76,6 +82,35 @@ export default function SuperAdminPage() {
       setOrgs(await res.json())
     }
     setLoading(false)
+  }
+
+  async function addOrg() {
+    if (!newOrg.name.trim() || !newOrg.slug.trim()) {
+      setAddError('組織名とスラッグは必須です')
+      return
+    }
+    setAdding(true)
+    setAddError('')
+    const res = await fetch('/api/superadmin/orgs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-superadmin-key': SUPERADMIN_KEY },
+      body: JSON.stringify({
+        name: newOrg.name.trim(),
+        slug: newOrg.slug.trim(),
+        plan: newOrg.plan,
+        max_members: Number(newOrg.max_members),
+        trial_ends_at: newOrg.trial_ends_at || null,
+      }),
+    })
+    if (res.ok) {
+      setNewOrg({ name: '', slug: '', plan: 'trial', max_members: 10, trial_ends_at: '' })
+      setShowAddForm(false)
+      await loadOrgs()
+    } else {
+      const data = await res.json()
+      setAddError(data.error || '作成に失敗しました')
+    }
+    setAdding(false)
   }
 
   function handleLogin() {
@@ -281,13 +316,96 @@ export default function SuperAdminPage() {
         <div className="bg-slate-800 rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-700 flex items-center justify-between">
             <h2 className="font-bold">組織一覧</h2>
-            <button
-              onClick={loadOrgs}
-              className="text-slate-400 hover:text-white text-sm transition-colors"
-            >
-              ↻ 更新
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={loadOrgs}
+                className="text-slate-400 hover:text-white text-sm transition-colors"
+              >
+                ↻ 更新
+              </button>
+              <button
+                onClick={() => { setShowAddForm(v => !v); setAddError('') }}
+                className="text-sm px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors"
+              >
+                + 組織を追加
+              </button>
+            </div>
           </div>
+
+          {/* 新規組織追加フォーム */}
+          {showAddForm && (
+            <div className="border-b border-slate-700 bg-slate-900 px-5 py-5">
+              <h3 className="text-sm font-bold text-slate-300 mb-4">新規組織を追加</h3>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">組織名 *</label>
+                  <input
+                    type="text"
+                    value={newOrg.name}
+                    onChange={e => setNewOrg(v => ({ ...v, name: e.target.value }))}
+                    placeholder="例: 株式会社サンプル"
+                    className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">スラッグ * (英数字・ハイフン)</label>
+                  <input
+                    type="text"
+                    value={newOrg.slug}
+                    onChange={e => setNewOrg(v => ({ ...v, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') }))}
+                    placeholder="例: sample-corp"
+                    className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">プラン</label>
+                  <select
+                    value={newOrg.plan}
+                    onChange={e => setNewOrg(v => ({ ...v, plan: e.target.value }))}
+                    className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="trial">trial（トライアル）</option>
+                    <option value="paid">paid（有料）</option>
+                    <option value="free">free（無料）</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">メンバー上限</label>
+                  <input
+                    type="number"
+                    value={newOrg.max_members}
+                    onChange={e => setNewOrg(v => ({ ...v, max_members: Number(e.target.value) }))}
+                    className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">トライアル期限（任意）</label>
+                  <input
+                    type="date"
+                    value={newOrg.trial_ends_at}
+                    onChange={e => setNewOrg(v => ({ ...v, trial_ends_at: e.target.value }))}
+                    className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+              {addError && <p className="text-red-400 text-xs mb-3">{addError}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={addOrg}
+                  disabled={adding}
+                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold px-5 py-2 rounded-lg text-sm transition-colors"
+                >
+                  {adding ? '作成中...' : '作成する'}
+                </button>
+                <button
+                  onClick={() => { setShowAddForm(false); setAddError('') }}
+                  className="bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold px-4 py-2 rounded-lg text-sm transition-colors"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          )}
 
           {loading ? (
             <div className="p-8 text-center text-slate-400 text-sm">読み込み中...</div>
