@@ -150,26 +150,27 @@ export default function Home() {
     )
   }
 
+  // memberロールは自分のデータのみ表示（全体・チーム系タブを非表示）
   const mainTabs = [
     { id: 'form'     as MainTab, label: '入力',    Icon: PenLine },
     { id: 'status'   as MainTab, label: '現状',    Icon: LayoutDashboard },
     { id: 'analysis' as MainTab, label: '分析',    Icon: TrendingUp },
-    { id: 'overall'  as MainTab, label: '全体',    Icon: Users },
+    ...(isManager ? [{ id: 'overall' as MainTab, label: '全体', Icon: Users }] : []),
   ]
 
   const subTabs = [
-    { id: 'contracts'       as SubTab, label: '契約宅',    Icon: HomeIcon },
-    { id: 'contract_stats'  as SubTab, label: '契約統計',  Icon: BarChart2 },
+    ...(isManager ? [{ id: 'contracts' as SubTab, label: '契約宅', Icon: HomeIcon }] : []),
+    ...(isManager ? [{ id: 'contract_stats' as SubTab, label: '契約統計', Icon: BarChart2 }] : []),
     { id: 'shift_submit'    as SubTab, label: 'シフト提出', Icon: CalendarCheck },
-    { id: 'shift'           as SubTab, label: 'シフト確認', Icon: Calendar },
-    { id: 'daily_shift'     as SubTab, label: '日別稼働',   Icon: CalendarDays },
-    { id: 'area'            as SubTab, label: 'エリア',    Icon: MapPin },
+    ...(isManager ? [{ id: 'shift' as SubTab, label: 'シフト確認', Icon: Calendar }] : []),
+    ...(isManager ? [{ id: 'daily_shift' as SubTab, label: '日別稼働', Icon: CalendarDays }] : []),
+    ...(isManager ? [{ id: 'area' as SubTab, label: 'エリア', Icon: MapPin }] : []),
     { id: 'sheet'           as SubTab, label: '表',        Icon: Table },
-    { id: 'team_sheet'      as SubTab, label: 'チーム表',   Icon: FileSpreadsheet },
-    { id: 'stats_sheet'     as SubTab, label: '数値表',     Icon: BarChart3 },
+    ...(isManager ? [{ id: 'team_sheet' as SubTab, label: 'チーム表', Icon: FileSpreadsheet }] : []),
+    ...(isManager ? [{ id: 'stats_sheet' as SubTab, label: '数値表', Icon: BarChart3 }] : []),
     { id: 'daily_report'    as SubTab, label: '日報',       Icon: FileText },
-    { id: 'submission_check' as SubTab, label: '提出確認',  Icon: CheckSquare },
-    { id: 'settings'        as SubTab, label: '設定',       Icon: Settings },
+    ...(isManager ? [{ id: 'submission_check' as SubTab, label: '提出確認', Icon: CheckSquare }] : []),
+    ...(isManager ? [{ id: 'settings' as SubTab, label: '設定', Icon: Settings }] : []),
   ]
 
   const currentTab = activeSubTab ?? activeTab
