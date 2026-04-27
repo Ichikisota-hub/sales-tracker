@@ -5,6 +5,12 @@ import { useEffect, useState } from 'react'
 const SUPERADMIN_KEY = 'Origin0201'
 const STORAGE_KEY = 'superadmin_unlocked'
 
+const ROLE_LABELS: Record<string, string> = {
+  admin: '管理者',
+  manager: 'マネージャー',
+  member: 'メンバー',
+}
+
 interface Org {
   id: string
   name: string
@@ -15,6 +21,15 @@ interface Org {
   is_active: boolean
   created_at: string
   member_count: number
+}
+
+interface Member {
+  id: string
+  user_id: string
+  email: string
+  role: string
+  joined_at: string
+  sales_rep_id: string | null
 }
 
 interface EditState {
@@ -34,6 +49,13 @@ export default function SuperAdminPage() {
   const [editState, setEditState] = useState<EditState | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  // メンバー管理
+  const [membersOrgId, setMembersOrgId] = useState<string | null>(null)
+  const [members, setMembers] = useState<Member[]>([])
+  const [membersLoading, setMembersLoading] = useState(false)
+  const [deletingMemberId, setDeletingMemberId] = useState<string | null>(null)
 
   useEffect(() => {
     if (localStorage.getItem(STORAGE_KEY) === 'true') {
@@ -82,6 +104,7 @@ export default function SuperAdminPage() {
       trial_ends_at: org.trial_ends_at?.slice(0, 10) || '',
     })
     setSaveError('')
+    setMembersOrgId(null)
   }
 
   function cancelEdit() {
@@ -117,6 +140,69 @@ export default function SuperAdminPage() {
       setSaveError(data.error || '保存に失敗しました')
     }
     setSaving(false)
+  }
+
+  async function deleteOrg(org: Org) {
+    if (!confirm(`「${org.name}」を削除しますか？\nメンバーデータも全て削除されます。この操作は取り消せません。`)) return
+    setDeletingId(org.id)
+    const res = await fetch('/api/superadmin/orgs', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-superadmin-key': SUPERADMIN_KEY,
+      },
+      body: JSON.stringify({ id: org.id }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      alert(`削除失敗: ${data.error}`)
+    } else {
+      await loadOrgs()
+      if (membersOrgId === org.id) setMembersOrgId(null)
+      if (editingId === org.id) { setEditingId(null); setEditState(null) }
+    }
+    setDeletingId(null)
+  }
+
+  async function toggleMembers(orgId: string) {
+    if (membersOrgId === orgId) {
+      setMembersOrgId(null)
+      setMembers([])
+      return
+    }
+    setMembersOrgId(orgId)
+    setEditingId(null)
+    setEditState(null)
+    setMembersLoading(true)
+    const res = await fetch(`/api/superadmin/members?orgId=${orgId}`, {
+      headers: { 'x-superadmin-key': SUPERADMIN_KEY },
+    })
+    if (res.ok) setMembers(await res.json())
+    setMembersLoading(false)
+  }
+
+  async function deleteMember(member: Member) {
+    if (!confirm(`「${member.email}」をこの組織から削除しますか？`)) return
+    setDeletingMemberId(member.id)
+    const res = await fetch('/api/superadmin/members', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-superadmin-key': SUPERADMIN_KEY,
+      },
+      body: JSON.stringify({ memberId: member.id }),
+    })
+    if (res.ok) {
+      setMembers(prev => prev.filter(m => m.id !== member.id))
+      // org の member_count を更新
+      setOrgs(prev => prev.map(o =>
+        o.id === membersOrgId ? { ...o, member_count: Math.max(0, o.member_count - 1) } : o
+      ))
+    } else {
+      const data = await res.json()
+      alert(`削除失敗: ${data.error}`)
+    }
+    setDeletingMemberId(null)
   }
 
   if (!unlocked) {
@@ -212,7 +298,7 @@ export default function SuperAdminPage() {
               {orgs.map(org => (
                 <div key={org.id}>
                   {/* 通常行 */}
-                  <div className="px-5 py-4 flex items-center gap-4">
+                  <div className="px-5 py-4 flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-white truncate">{org.name}</span>
@@ -232,13 +318,79 @@ export default function SuperAdminPage() {
                         <span>登録: {org.created_at.slice(0, 10)}</span>
                       </div>
                     </div>
-                    <button
-                      onClick={() => editingId === org.id ? cancelEdit() : startEdit(org)}
-                      className="shrink-0 text-sm px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition-colors"
-                    >
-                      {editingId === org.id ? 'キャンセル' : '編集'}
-                    </button>
+
+                    {/* ボタン群 */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => toggleMembers(org.id)}
+                        className={`text-sm px-3 py-1.5 rounded-lg transition-colors ${
+                          membersOrgId === org.id
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        メンバー
+                      </button>
+                      <button
+                        onClick={() => editingId === org.id ? cancelEdit() : startEdit(org)}
+                        className="text-sm px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition-colors"
+                      >
+                        {editingId === org.id ? 'キャンセル' : '編集'}
+                      </button>
+                      <button
+                        onClick={() => deleteOrg(org)}
+                        disabled={deletingId === org.id}
+                        className="text-sm px-3 py-1.5 rounded-lg bg-red-900/60 hover:bg-red-800 text-red-300 hover:text-white transition-colors disabled:opacity-50"
+                      >
+                        {deletingId === org.id ? '削除中...' : '削除'}
+                      </button>
+                    </div>
                   </div>
+
+                  {/* メンバー一覧パネル */}
+                  {membersOrgId === org.id && (
+                    <div className="border-t border-slate-700 bg-slate-950 px-5 py-4">
+                      <h3 className="text-sm font-bold text-slate-300 mb-3">
+                        メンバー管理 — {org.name}
+                      </h3>
+                      {membersLoading ? (
+                        <p className="text-slate-400 text-sm">読み込み中...</p>
+                      ) : members.length === 0 ? (
+                        <p className="text-slate-500 text-sm">メンバーがいません</p>
+                      ) : (
+                        <div className="divide-y divide-slate-800">
+                          {members.map(m => (
+                            <div key={m.id} className="flex items-center gap-3 py-2.5">
+                              <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                                style={{ background: 'linear-gradient(135deg,#6366f1,#2563eb)', color: 'white' }}>
+                                {m.email.slice(0, 1).toUpperCase()}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-white font-semibold truncate">{m.email}</p>
+                                <p className="text-xs text-slate-500">
+                                  参加: {new Date(m.joined_at).toLocaleDateString('ja-JP')}
+                                </p>
+                              </div>
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                                m.role === 'admin' ? 'bg-red-900/60 text-red-300' :
+                                m.role === 'manager' ? 'bg-blue-900/60 text-blue-300' :
+                                'bg-slate-700 text-slate-400'
+                              }`}>
+                                {ROLE_LABELS[m.role] ?? m.role}
+                              </span>
+                              <button
+                                onClick={() => deleteMember(m)}
+                                disabled={deletingMemberId === m.id}
+                                className="text-xs px-2.5 py-1 rounded-lg bg-red-900/50 hover:bg-red-800 text-red-300 hover:text-white transition-colors disabled:opacity-50 shrink-0"
+                              >
+                                {deletingMemberId === m.id ? '削除中...' : '削除'}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* 編集パネル */}
                   {editingId === org.id && editState && (

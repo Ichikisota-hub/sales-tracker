@@ -54,6 +54,40 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(result)
 }
 
+export async function DELETE(req: NextRequest) {
+  if (!checkAuth(req)) {
+    return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
+  }
+
+  const { id } = await req.json()
+  if (!id) {
+    return NextResponse.json({ error: 'id が必要です' }, { status: 400 })
+  }
+
+  const supabase = getServiceClient()
+
+  // メンバーを先に削除してから組織を削除
+  const { error: membersError } = await supabase
+    .from('organization_members')
+    .delete()
+    .eq('organization_id', id)
+
+  if (membersError) {
+    return NextResponse.json({ error: membersError.message }, { status: 500 })
+  }
+
+  const { error } = await supabase
+    .from('organizations')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true })
+}
+
 export async function PATCH(req: NextRequest) {
   if (!checkAuth(req)) {
     return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
