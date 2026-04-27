@@ -38,7 +38,8 @@ export default function LoginPage() {
       return
     }
 
-    if (data.user?.email === 'origin.compamy001@gmail.com') {
+    const SUPERADMIN_EMAILS = ['origin.compamy001@gmail.com', 'souta51203@gmail.com']
+    if (data.user?.email && SUPERADMIN_EMAILS.includes(data.user.email)) {
       window.location.href = '/superadmin'
     } else {
       window.location.href = '/'

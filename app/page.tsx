@@ -7,7 +7,7 @@ import {
   Home as HomeIcon, BarChart2, CalendarCheck, Calendar, CalendarDays,
   MapPin, Table, FileSpreadsheet, BarChart3,
   FileText, CheckSquare, Settings, Building2, LogOut,
-  ChevronDown, Menu
+  ChevronDown, Menu, Shield
 } from 'lucide-react'
 import { supabase, SalesRep, Team } from '@/lib/supabase'
 import { getMonthList, formatYearMonth, localYearMonth } from '@/lib/dateUtils'
@@ -43,7 +43,8 @@ type MainTab = 'form' | 'status' | 'analysis' | 'overall'
 type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings' | 'daily_report' | 'team_sheet' | 'stats_sheet' | 'submission_check' | 'contract_stats'
 
 export default function Home() {
-  const { signOut } = useAuth()
+  const { signOut, user } = useAuth()
+  const isSuperAdmin = user?.email === 'souta51203@gmail.com' || user?.email === 'origin.compamy001@gmail.com'
   const { membership, isManager, role, loading: orgLoading } = useOrganization()
   const [reps, setReps] = useState<SalesRep[]>([])
   const [teams, setTeams] = useState<Team[]>([])
@@ -314,6 +315,13 @@ export default function Home() {
                     <Building2 size={15} className="text-slate-400" />
                     <span>組織管理</span>
                   </Link>
+                  {isSuperAdmin && (
+                    <Link href="/superadmin" onClick={() => setSubMenuOpen(false)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold text-left rounded-xl transition-colors hover:bg-indigo-50 text-indigo-500">
+                      <Shield size={15} className="text-indigo-400" />
+                      <span>システム管理</span>
+                    </Link>
+                  )}
                   <button onClick={() => { setSubMenuOpen(false); signOut() }}
                     className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold text-left rounded-xl transition-colors hover:bg-red-50 text-slate-500 hover:text-red-500">
                     <LogOut size={15} className="text-slate-400" />
