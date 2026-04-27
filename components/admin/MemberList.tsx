@@ -87,9 +87,9 @@ export default function MemberList({ refreshKey }: Props) {
 
       {/* ヘッダー行（管理者のみ） */}
       {isAdmin && members.length > 0 && (
-        <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 px-4 py-2 bg-slate-50 border-b border-slate-100">
+        <div className="grid grid-cols-[1fr_180px_auto_auto] items-center gap-2 px-4 py-2 bg-slate-50 border-b border-slate-100">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">メールアドレス</span>
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">担当者紐付け</span>
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">担当者を紐付ける</span>
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">ロール</span>
           <span />
         </div>
@@ -127,15 +127,19 @@ export default function MemberList({ refreshKey }: Props) {
 
               {/* 担当者紐付けドロップダウン（管理者のみ） */}
               {isAdmin && (
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-1.5 w-[180px] flex-shrink-0">
                   {savingId === m.id ? (
-                    <Loader2 size={14} className="animate-spin text-indigo-400" />
+                    <Loader2 size={14} className="animate-spin text-indigo-400 flex-shrink-0" />
                   ) : null}
                   <select
                     value={m.sales_rep_id ?? ''}
                     onChange={e => changeSalesRep(m.id, e.target.value)}
                     disabled={savingId === m.id}
-                    className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 outline-none bg-white text-slate-700 max-w-[100px]"
+                    className={`flex-1 text-xs border rounded-lg px-2 py-1.5 outline-none bg-white transition-colors ${
+                      m.sales_rep_id
+                        ? 'border-indigo-200 text-indigo-700 bg-indigo-50 font-semibold'
+                        : 'border-slate-200 text-slate-500'
+                    }`}
                   >
                     <option value="">未紐付け</option>
                     {reps.map(r => (
