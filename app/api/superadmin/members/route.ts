@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email,
-      options: { redirectTo: `${appUrl}/` },
+      options: { redirectTo: `${appUrl}/reset-password` },
     })
     if (!linkError) {
       inviteLink = linkData.properties?.action_link ?? null
