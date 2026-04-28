@@ -63,24 +63,36 @@ export async function POST(req: NextRequest) {
 
   // 既存ユーザーを検索
   const { data: { users } } = await supabase.auth.admin.listUsers({ perPage: 1000 })
-  const existingUser = users.find(u => u.email === email)
+  const existingUser = users.find(u => u.email?.toLowerCase() === email.toLowerCase())
 
-  let targetUser = existingUser
+  let targetUser = existingUser ?? null
   let inviteLink: string | null = null
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sales-tracker-pied.vercel.app'
+
   if (!existingUser) {
-    // 招待リンクを生成（メール送信なし・LINEで共有するため）
+    // 新規: 招待リンクを生成
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: 'invite',
       email,
       options: {
         data: { invited_to_org: orgId },
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/`,
+        redirectTo: `${appUrl}/`,
       },
     })
-    if (linkError) return NextResponse.json({ error: linkError.message }, { status: 500 })
+    if (linkError) return NextResponse.json({ error: `招待リンク生成失敗: ${linkError.message}` }, { status: 500 })
     targetUser = linkData.user
     inviteLink = linkData.properties?.action_link ?? null
+  } else {
+    // 既存ユーザー: マジックリンク（ワンクリックログイン）を生成
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'magiclink',
+      email,
+      options: { redirectTo: `${appUrl}/` },
+    })
+    if (!linkError) {
+      inviteLink = linkData.properties?.action_link ?? null
+    }
   }
 
   if (!targetUser) return NextResponse.json({ error: 'ユーザー作成に失敗しました' }, { status: 500 })
@@ -109,7 +121,7 @@ export async function POST(req: NextRequest) {
     success: true,
     email,
     userId: targetUser.id,
-    inviteLink,  // 新規ユーザーの場合のみ返す
+    inviteLink,
     isExisting: !!existingUser,
   })
 }
