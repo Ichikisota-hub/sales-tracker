@@ -55,14 +55,20 @@ export async function POST(req: NextRequest) {
   const { error } = await supabase.from('organizations').update({ settings: merged }).eq('id', ORIGIN_ORG_ID)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Supabaseに存在しなければ招待メール送信
+  // Supabaseに存在しなければ招待リンク生成
   const { data: { users } } = await supabase.auth.admin.listUsers({ perPage: 1000 })
   const exists = users.find(u => u.email?.toLowerCase() === newEmail)
+  let inviteLink: string | null = null
   if (!exists) {
-    await supabase.auth.admin.inviteUserByEmail(newEmail, { data: { superadmin: true } })
+    const { data: linkData } = await supabase.auth.admin.generateLink({
+      type: 'invite',
+      email: newEmail,
+      options: { data: { superadmin: true } },
+    })
+    inviteLink = linkData?.properties?.action_link ?? null
   }
 
-  return NextResponse.json({ success: true, emails: newList })
+  return NextResponse.json({ success: true, emails: newList, inviteLink })
 }
 
 // DELETE: superadmin削除

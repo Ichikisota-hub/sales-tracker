@@ -74,6 +74,8 @@ export default function SuperAdminPage() {
   const [inviteRole, setInviteRole] = useState('member')
   const [inviting, setInviting] = useState(false)
   const [inviteMsg, setInviteMsg] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [inviteLink, setInviteLink] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   // 新規組織追加
   const [showAddForm, setShowAddForm] = useState(false)
@@ -87,6 +89,8 @@ export default function SuperAdminPage() {
   const [saAdding, setSaAdding] = useState(false)
   const [saMsg, setSaMsg] = useState<{ ok: boolean; msg: string } | null>(null)
   const [showSaPanel, setShowSaPanel] = useState(false)
+  const [saInviteLink, setSaInviteLink] = useState<string | null>(null)
+  const [saCopied, setSaCopied] = useState(false)
 
   useEffect(() => {
     if (localStorage.getItem(STORAGE_KEY) === 'true') {
@@ -116,7 +120,12 @@ export default function SuperAdminPage() {
     })
     const d = await res.json()
     setSaMsg({ ok: res.ok, msg: res.ok ? `${newSaEmail} をsuperadminに追加しました` : d.error })
-    if (res.ok) { setNewSaEmail(''); setSuperadminEmails(d.emails || []) }
+    if (res.ok) {
+      setNewSaEmail('')
+      setSuperadminEmails(d.emails || [])
+      setSaInviteLink(d.inviteLink || null)
+      setSaCopied(false)
+    }
     setSaAdding(false)
   }
 
@@ -337,8 +346,10 @@ export default function SuperAdminPage() {
       body: JSON.stringify({ orgId, email: inviteEmail.trim(), role: inviteRole }),
     })
     const d = await res.json()
-    setInviteMsg({ ok: res.ok, msg: res.ok ? `${d.email} を招待しました` : d.error })
+    setInviteMsg({ ok: res.ok, msg: res.ok ? (d.isExisting ? `${d.email} を組織に追加しました（既存ユーザー）` : `${d.email} の招待リンクを発行しました`) : d.error })
     if (res.ok) {
+      setInviteLink(d.inviteLink || null)
+      setCopied(false)
       setInviteEmail('')
       // メンバーリストを直接リロード（ダブルトグルバグ回避）
       setMembersLoading(true)
@@ -489,6 +500,25 @@ export default function SuperAdminPage() {
                 <p className={`mt-2 text-xs font-medium ${saMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>
                   {saMsg.msg}
                 </p>
+              )}
+              {saInviteLink && (
+                <div className="mt-3 bg-slate-800 border border-purple-700/50 rounded-xl p-3">
+                  <p className="text-xs text-purple-300 font-bold mb-2">📎 招待リンク（LINEで送付してください）</p>
+                  <div className="flex gap-2 items-start">
+                    <p className="text-xs text-slate-300 break-all flex-1 leading-relaxed">{saInviteLink}</p>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(saInviteLink)
+                        setSaCopied(true)
+                        setTimeout(() => setSaCopied(false), 2000)
+                      }}
+                      className="shrink-0 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      {saCopied ? 'コピー済み ✓' : 'コピー'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-2">※ リンクの有効期限は24時間です</p>
+                </div>
               )}
             </div>
           )}
@@ -663,12 +693,12 @@ export default function SuperAdminPage() {
                       {/* 招待フォーム */}
                       {inviteOrgId === org.id && (
                         <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 mb-4">
-                          <p className="text-xs text-slate-400 mb-3">メールアドレスで招待または既存アカウントを追加します</p>
+                          <p className="text-xs text-slate-400 mb-3">招待リンクを発行してLINEで共有できます</p>
                           <div className="flex gap-2 flex-wrap">
                             <input
                               type="email"
                               value={inviteEmail}
-                              onChange={e => setInviteEmail(e.target.value)}
+                              onChange={e => { setInviteEmail(e.target.value); setInviteLink(null) }}
                               placeholder="メールアドレス"
                               className="flex-1 min-w-40 bg-slate-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                             />
@@ -686,13 +716,33 @@ export default function SuperAdminPage() {
                               disabled={inviting}
                               className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-sm transition-colors"
                             >
-                              {inviting ? '送信中...' : '招待'}
+                              {inviting ? '発行中...' : 'リンク発行'}
                             </button>
                           </div>
                           {inviteMsg && (
                             <p className={`mt-2 text-xs font-medium ${inviteMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>
                               {inviteMsg.msg}
                             </p>
+                          )}
+                          {/* 招待リンク表示 */}
+                          {inviteLink && (
+                            <div className="mt-3 bg-slate-800 border border-indigo-700/50 rounded-xl p-3">
+                              <p className="text-xs text-indigo-300 font-bold mb-2">📎 招待リンク（LINEで送付してください）</p>
+                              <div className="flex gap-2 items-start">
+                                <p className="text-xs text-slate-300 break-all flex-1 leading-relaxed">{inviteLink}</p>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(inviteLink)
+                                    setCopied(true)
+                                    setTimeout(() => setCopied(false), 2000)
+                                  }}
+                                  className="shrink-0 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                                >
+                                  {copied ? 'コピー済み ✓' : 'コピー'}
+                                </button>
+                              </div>
+                              <p className="text-xs text-slate-500 mt-2">※ リンクの有効期限は24時間です</p>
+                            </div>
                           )}
                         </div>
                       )}

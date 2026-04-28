@@ -63,15 +63,21 @@ export async function POST(req: NextRequest) {
 
   // 既存ユーザーを検索
   const { data: { users } } = await supabase.auth.admin.listUsers({ perPage: 1000 })
-  let targetUser = users.find(u => u.email === email)
+  const existingUser = users.find(u => u.email === email)
 
-  // 存在しなければ招待メールを送る
-  if (!targetUser) {
-    const { data: invited, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
-      data: { invited_to_org: orgId },
+  let targetUser = existingUser
+  let inviteLink: string | null = null
+
+  if (!existingUser) {
+    // 招待リンクを生成（メール送信なし・LINEで共有するため）
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'invite',
+      email,
+      options: { data: { invited_to_org: orgId } },
     })
-    if (inviteError) return NextResponse.json({ error: inviteError.message }, { status: 500 })
-    targetUser = invited.user
+    if (linkError) return NextResponse.json({ error: linkError.message }, { status: 500 })
+    targetUser = linkData.user
+    inviteLink = linkData.properties?.action_link ?? null
   }
 
   if (!targetUser) return NextResponse.json({ error: 'ユーザー作成に失敗しました' }, { status: 500 })
@@ -96,7 +102,13 @@ export async function POST(req: NextRequest) {
 
   if (memberError) return NextResponse.json({ error: memberError.message }, { status: 500 })
 
-  return NextResponse.json({ success: true, email, userId: targetUser.id })
+  return NextResponse.json({
+    success: true,
+    email,
+    userId: targetUser.id,
+    inviteLink,  // 新規ユーザーの場合のみ返す
+    isExisting: !!existingUser,
+  })
 }
 
 // パスワードリセットメール送信 / メンバー削除 (PATCH / DELETE)
