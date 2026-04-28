@@ -5,6 +5,7 @@ import { supabase, DailyRecord, MonthlyPlan } from '@/lib/supabase'
 import { getDaysArray, localToday } from '@/lib/dateUtils'
 import { KANSAI_AREAS, PREF_LIST } from '@/lib/areas'
 import DailyReportForm from '@/components/DailyReportForm'
+import { syncSheets } from '@/lib/syncSheets'
 
 // 稼働・休日のみ（同行・有休・研修・出張は削除）
 const WORK_STATUSES = ['稼働', '休日']
@@ -126,6 +127,7 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
     setHasDraft(false)
     setSaving(false)
     setSaved(true)
+    syncSheets()
     setTimeout(() => setSaved(false), 2500)
   }
 

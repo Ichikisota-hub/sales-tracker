@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase, DailyRecord } from '@/lib/supabase'
+import { syncSheets } from '@/lib/syncSheets'
 
 type Props = {
   repId: string
@@ -176,6 +177,7 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
         .from('daily_reports')
         .upsert(payload, { onConflict: 'sales_rep_id,report_date' })
       setSaved(true)
+      syncSheets()
       const text = buildReport()
       const ok = await copyToClipboard(text)
       if (ok) {

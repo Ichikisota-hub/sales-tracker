@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { supabase, SalesRep, Contract } from '@/lib/supabase'
 import { KANSAI_AREAS, PREF_LIST } from '@/lib/areas'
+import { syncSheets } from '@/lib/syncSheets'
 
 const WIFI_OPTIONS = [
   'ベイコム', 'eo光', 'J:com', 'Nuro光', 'SB光', 'SB air',
@@ -68,6 +69,7 @@ export default function ContractAddForm({ reps, defaultRepId, onSaved, onCancel 
     })
     setSaving(false)
     if (e) { setError(e.message); return }
+    syncSheets()
     onSaved()
   }
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, SalesRep, Contract } from '@/lib/supabase'
+import { syncSheets } from '@/lib/syncSheets'
 
 const STATUS_OPTIONS = ['手続き中', '工事日決定', '開通', 'キャンセル']
 
@@ -124,6 +125,7 @@ export default function ContractListView({ reps, selectedRepId, onAdd, orgIds }:
     await supabase.from('contracts').update(updates).eq('id', id)
     setSaving(false)
     setEditingId(null)
+    syncSheets()
     loadContracts()
   }
 
@@ -133,6 +135,7 @@ export default function ContractListView({ reps, selectedRepId, onAdd, orgIds }:
     await supabase.from('contracts').delete().eq('id', id)
     setDeleting(false)
     setDeletingId(null)
+    syncSheets()
     loadContracts()
   }
 

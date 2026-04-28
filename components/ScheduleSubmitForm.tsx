@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getDaysArray } from '@/lib/dateUtils'
+import { syncSheets } from '@/lib/syncSheets'
 
 const WORK_STATUSES = ['稼働', '休日']
 
@@ -211,6 +212,7 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
       }
 
       setSaved(true)
+      syncSheets()
       setTimeout(() => setSaved(false), 3000)
     } catch (err: unknown) {
       let message = '不明なエラー'

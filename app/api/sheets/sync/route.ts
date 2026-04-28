@@ -1,42 +1,71 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { syncAllToSheets } from '@/lib/googleSheets'
 
-// 組織のgoogle_sheet_idを取得
-async function getOrgSheetId(organizationId: string): Promise<string | null> {
-  const { createClient } = await import('@supabase/supabase-js')
-  const supabase = createClient(
+function getServiceClient() {
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
-  const { data } = await supabase.from('organizations').select('settings').eq('id', organizationId).single()
-  return (data?.settings as any)?.google_sheet_id || null
+}
+
+// セッションからユーザーの組織とシートIDを自動取得
+async function getOrgFromSession(req: NextRequest): Promise<{ orgId: string; spreadsheetId: string } | null> {
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+  )
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const service = getServiceClient()
+  const { data: member } = await service
+    .from('organization_members')
+    .select('organization_id, organizations(settings)')
+    .eq('user_id', user.id)
+    .order('joined_at')
+    .limit(1)
+    .single()
+
+  if (!member) return null
+  const orgId = member.organization_id
+  const spreadsheetId = (member as any).organizations?.settings?.google_sheet_id
+  if (!spreadsheetId) return null
+  return { orgId, spreadsheetId }
 }
 
 // POST /api/sheets/sync
-// body: { spreadsheetId?: string, orgIds?: string[] }
+// body は省略可。省略時はセッションから組織を自動検出
 export async function POST(req: NextRequest) {
   if (!process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
-    return NextResponse.json(
-      { error: 'GOOGLE_SERVICE_ACCOUNT_KEY が設定されていません。環境変数を確認してください。' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'GOOGLE_SERVICE_ACCOUNT_KEY が設定されていません' }, { status: 500 })
   }
 
   try {
     const body = await req.json().catch(() => ({}))
     let { spreadsheetId, orgIds } = body as { spreadsheetId?: string; orgIds?: string[] }
 
-    // spreadsheetId が指定されていなければ、orgIds[0] の設定から取得
-    if (!spreadsheetId && orgIds && orgIds.length > 0) {
-      spreadsheetId = (await getOrgSheetId(orgIds[0])) || undefined
+    // パラメータが省略された場合はセッションから取得
+    if (!spreadsheetId || !orgIds) {
+      const org = await getOrgFromSession(req)
+      if (org) {
+        spreadsheetId = spreadsheetId || org.spreadsheetId
+        orgIds = orgIds || [org.orgId]
+      }
+    } else if (!spreadsheetId && orgIds && orgIds.length > 0) {
+      const service = getServiceClient()
+      const { data } = await service.from('organizations').select('settings').eq('id', orgIds[0]).single()
+      spreadsheetId = (data?.settings as any)?.google_sheet_id
     }
 
     if (!spreadsheetId) {
       return NextResponse.json(
-        { error: 'spreadsheetId が指定されていません。組織設定でスプレッドシートIDを登録してください。' },
+        { error: 'spreadsheetId が見つかりません。組織設定でスプレッドシートIDを登録してください。' },
         { status: 400 }
       )
     }
@@ -63,8 +92,6 @@ export async function GET() {
   const hasKey = !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY
   return NextResponse.json({
     configured: hasKey,
-    message: hasKey
-      ? 'Service Account が設定済みです'
-      : 'GOOGLE_SERVICE_ACCOUNT_KEY が未設定です',
+    message: hasKey ? 'Service Account が設定済みです' : 'GOOGLE_SERVICE_ACCOUNT_KEY が未設定です',
   })
 }
