@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase, SalesRep, Team } from '@/lib/supabase'
 import { calcMonthlyStats, round1, MonthlyStats } from '@/lib/calcUtils'
 
-type Props = { yearMonth: string; teams: Team[] }
+type Props = { yearMonth: string; teams: Team[]; orgIds?: string[] }
 type RepStats = { rep: SalesRep; stats: MonthlyStats }
 
 type TeamStats = {
@@ -18,7 +18,7 @@ type TeamStats = {
   rank: number
 }
 
-export default function OverallView({ yearMonth, teams }: Props) {
+export default function OverallView({ yearMonth, teams, orgIds }: Props) {
   const [data, setData] = useState<RepStats[]>([])
   const [loading, setLoading] = useState(true)
   const [sortKey, setSortKey] = useState<'name' | 'forecast' | 'acquisitions' | 'productivity'>('forecast')
@@ -26,23 +26,33 @@ export default function OverallView({ yearMonth, teams }: Props) {
   const [viewMode, setViewMode] = useState<'individual' | 'team'>('individual')
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null)
 
-  useEffect(() => { loadAll() }, [yearMonth])
+  useEffect(() => { loadAll() }, [yearMonth, orgIds?.join(',')])
 
   async function loadAll() {
     setLoading(true)
     const [y, m] = yearMonth.split('-')
     const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
     const lastDayStr = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
-    const [{ data: reps }, { data: allRecords }, { data: allPlans }, { data: allSchedules }] = await Promise.all([
-      supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
-      supabase.from('daily_records').select('*')
-        .gte('record_date', `${y}-${m}-01`).lte('record_date', lastDayStr),
-      supabase.from('monthly_plans').select('*').eq('year_month', yearMonth),
-      supabase.from('work_schedules').select('sales_rep_id,schedule_date')
-        .eq('work_status', '稼働')
-        .gte('schedule_date', `${y}-${m}-01`).lte('schedule_date', lastDayStr),
-    ])
-    if (!reps) { setLoading(false); return }
+
+    let reps: any[], allRecords: any[], allPlans: any[], allSchedules: any[]
+    if (orgIds && orgIds.length > 1) {
+      const res = await fetch(`/api/combined/data?orgIds=${orgIds.join(',')}&yearMonth=${yearMonth}`)
+      const d = await res.json()
+      reps = d.reps; allRecords = d.records; allPlans = d.plans
+      allSchedules = d.schedules.filter((s: any) => s.work_status === '稼働')
+    } else {
+      const [r1, r2, r3, r4] = await Promise.all([
+        supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
+        supabase.from('daily_records').select('*')
+          .gte('record_date', `${y}-${m}-01`).lte('record_date', lastDayStr),
+        supabase.from('monthly_plans').select('*').eq('year_month', yearMonth),
+        supabase.from('work_schedules').select('sales_rep_id,schedule_date')
+          .eq('work_status', '稼働')
+          .gte('schedule_date', `${y}-${m}-01`).lte('schedule_date', lastDayStr),
+      ])
+      reps = r1.data ?? []; allRecords = r2.data ?? []; allPlans = r3.data ?? []; allSchedules = r4.data ?? []
+    }
+    if (!reps || reps.length === 0) { setLoading(false); return }
     const scheduleMap: Record<string, string[]> = {}
     for (const s of allSchedules || []) {
       if (!scheduleMap[s.sales_rep_id]) scheduleMap[s.sales_rep_id] = []

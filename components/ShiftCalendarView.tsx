@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase, SalesRep, Team } from '@/lib/supabase'
 import { getDaysArray } from '@/lib/dateUtils'
 
-type Props = { yearMonth: string; teams: Team[] }
+type Props = { yearMonth: string; teams: Team[]; orgIds?: string[] }
 
 type ScheduleRow = {
   sales_rep_id: string
@@ -16,7 +16,7 @@ type ScheduleRow = {
 
 type BulkResult = { name: string; matched: string | null; days: number; status: string }
 
-export default function ShiftCalendarView({ yearMonth, teams }: Props) {
+export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
   const [reps, setReps] = useState<SalesRep[]>([])
   const [schedules, setSchedules] = useState<ScheduleRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -26,21 +26,29 @@ export default function ShiftCalendarView({ yearMonth, teams }: Props) {
 
   const days = getDaysArray(yearMonth)
 
-  useEffect(() => { loadAll() }, [yearMonth])
+  useEffect(() => { loadAll() }, [yearMonth, orgIds?.join(',')])
 
   async function loadAll() {
     setLoading(true)
     setBulkResults(null)
     const [y, m] = yearMonth.split('-')
     const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
-    const [{ data: repData }, { data: schedData }] = await Promise.all([
-      supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
-      supabase.from('work_schedules').select('*')
-        .gte('schedule_date', `${y}-${m}-01`)
-        .lte('schedule_date', `${y}-${m}-${String(lastDay).padStart(2, '0')}`),
-    ])
-    setReps(repData || [])
-    setSchedules(schedData || [])
+
+    if (orgIds && orgIds.length > 1) {
+      const res = await fetch(`/api/combined/data?orgIds=${orgIds.join(',')}&yearMonth=${yearMonth}`)
+      const d = await res.json()
+      setReps(d.reps || [])
+      setSchedules(d.schedules || [])
+    } else {
+      const [{ data: repData }, { data: schedData }] = await Promise.all([
+        supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
+        supabase.from('work_schedules').select('*')
+          .gte('schedule_date', `${y}-${m}-01`)
+          .lte('schedule_date', `${y}-${m}-${String(lastDay).padStart(2, '0')}`),
+      ])
+      setReps(repData || [])
+      setSchedules(schedData || [])
+    }
     setLoading(false)
   }
 

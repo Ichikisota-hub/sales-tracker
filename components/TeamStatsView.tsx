@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase, SalesRep, Team, DailyRecord } from '@/lib/supabase'
 import { round1 } from '@/lib/calcUtils'
 
-type Props = { yearMonth: string; teams: Team[] }
+type Props = { yearMonth: string; teams: Team[]; orgIds?: string[] }
 
 type RawRepData = {
   rep: SalesRep
@@ -48,7 +48,7 @@ function getWeeks(yearMonth: string) {
   return weeks
 }
 
-export default function TeamStatsView({ yearMonth, teams }: Props) {
+export default function TeamStatsView({ yearMonth, teams, orgIds }: Props) {
   const [rawData, setRawData] = useState<RawRepData[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedTeamId, setSelectedTeamId] = useState<string | '__all__'>('__all__')
@@ -67,7 +67,7 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
   useEffect(() => {
     load()
     if (selectedWeek >= weeks.length) setSelectedWeek(0)
-  }, [yearMonth])
+  }, [yearMonth, orgIds?.join(',')])
 
   async function load() {
     setLoading(true)
@@ -76,17 +76,26 @@ export default function TeamStatsView({ yearMonth, teams }: Props) {
     const dateFrom = `${yStr}-${mStr}-01`
     const dateTo = `${yStr}-${mStr}-${String(lastDay).padStart(2, '0')}`
 
-    const [{ data: reps }, { data: records }, { data: schedules }, { data: plans }] = await Promise.all([
-      supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
-      supabase.from('daily_records').select('*').gte('record_date', dateFrom).lte('record_date', dateTo),
-      supabase.from('work_schedules').select('sales_rep_id,schedule_date,work_status')
-        .gte('schedule_date', dateFrom).lte('schedule_date', dateTo),
-      supabase.from('monthly_plans').select('*').eq('year_month', yearMonth),
-    ])
+    let reps: any[], records: any[], schedules: any[], plans: any[]
 
-    if (!reps) { setLoading(false); return }
+    if (orgIds && orgIds.length > 1) {
+      const res = await fetch(`/api/combined/data?orgIds=${orgIds.join(',')}&yearMonth=${yearMonth}`)
+      const d = await res.json()
+      reps = d.reps; records = d.records; schedules = d.schedules; plans = d.plans
+    } else {
+      const [r1, r2, r3, r4] = await Promise.all([
+        supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
+        supabase.from('daily_records').select('*').gte('record_date', dateFrom).lte('record_date', dateTo),
+        supabase.from('work_schedules').select('sales_rep_id,schedule_date,work_status')
+          .gte('schedule_date', dateFrom).lte('schedule_date', dateTo),
+        supabase.from('monthly_plans').select('*').eq('year_month', yearMonth),
+      ])
+      reps = r1.data ?? []; records = r2.data ?? []; schedules = r3.data ?? []; plans = r4.data ?? []
+    }
 
-    const raw: RawRepData[] = reps.map(rep => {
+    if (!reps || reps.length === 0) { setLoading(false); return }
+
+    const raw: RawRepData[] = reps.map((rep: any) => {
       const plan = (plans || []).find(p => p.sales_rep_id === rep.id)
       return {
         rep,

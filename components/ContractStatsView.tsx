@@ -46,7 +46,7 @@ function currentYearMonth() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-export default function ContractStatsView() {
+export default function ContractStatsView({ orgIds }: { orgIds?: string[] }) {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [reps, setReps] = useState<SalesRep[]>([])
   const [viewMode, setViewMode] = useState<ViewMode>('月別')
@@ -55,16 +55,23 @@ export default function ContractStatsView() {
   const [providerMonth, setProviderMonth] = useState<string>('') // '' = 全期間
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => { loadAll() }, [])
+  useEffect(() => { loadAll() }, [orgIds?.join(',')])
 
   async function loadAll() {
     setLoading(true)
-    const [{ data: contractData }, { data: repData }] = await Promise.all([
-      supabase.from('contracts').select('*').order('acquired_date', { ascending: false }),
-      supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
-    ])
-    setContracts(contractData || [])
-    setReps(repData || [])
+    if (orgIds && orgIds.length > 1) {
+      const res = await fetch(`/api/combined/data?orgIds=${orgIds.join(',')}&yearMonth=${new Date().toISOString().slice(0,7)}`)
+      const d = await res.json()
+      setContracts(d.contracts || [])
+      setReps(d.reps || [])
+    } else {
+      const [{ data: contractData }, { data: repData }] = await Promise.all([
+        supabase.from('contracts').select('*').order('acquired_date', { ascending: false }),
+        supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
+      ])
+      setContracts(contractData || [])
+      setReps(repData || [])
+    }
     setLoading(false)
   }
 

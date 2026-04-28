@@ -16,6 +16,7 @@ type Props = {
   reps: SalesRep[]
   selectedRepId: string | null
   onAdd: () => void
+  orgIds?: string[]
 }
 
 // 今日との日数差（正=過去、負=未来）
@@ -58,7 +59,7 @@ function isConstructionPast(c: Contract): boolean {
   return daysDiff(c.construction_date) > 0
 }
 
-export default function ContractListView({ reps, selectedRepId, onAdd }: Props) {
+export default function ContractListView({ reps, selectedRepId, onAdd, orgIds }: Props) {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
   const [filterRep, setFilterRep] = useState<string>(selectedRepId || 'all')
@@ -75,11 +76,19 @@ export default function ContractListView({ reps, selectedRepId, onAdd }: Props) 
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  useEffect(() => { loadContracts() }, [])
+  useEffect(() => { loadContracts() }, [orgIds?.join(',')])
 
   async function loadContracts() {
     setLoading(true)
     const today = new Date().toISOString().split('T')[0]
+
+    if (orgIds && orgIds.length > 1) {
+      const res = await fetch(`/api/combined/data?orgIds=${orgIds.join(',')}&yearMonth=${new Date().toISOString().slice(0,7)}`)
+      const d = await res.json()
+      setContracts(d.contracts || [])
+      setLoading(false)
+      return
+    }
 
     // 工事日が過ぎていて「工事日決定」のままの契約を「開通」に自動更新
     const { data: toUpdate } = await supabase

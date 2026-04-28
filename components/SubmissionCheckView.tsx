@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, SalesRep, Team } from '@/lib/supabase'
 
-type Props = { yearMonth: string; teams: Team[] }
+type Props = { yearMonth: string; teams: Team[]; orgIds?: string[] }
 
 type RepStatus = {
   rep: SalesRep
@@ -32,13 +32,13 @@ function isPast(dateStr: string): boolean {
   return dateStr < new Date().toISOString().split('T')[0]
 }
 
-export default function SubmissionCheckView({ yearMonth, teams }: Props) {
+export default function SubmissionCheckView({ yearMonth, teams, orgIds }: Props) {
   const [days, setDays] = useState<DayStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [filterMode, setFilterMode] = useState<'all' | 'missing'>('missing')
   const [selectedTeamId, setSelectedTeamId] = useState<string | '__all__'>('__all__')
 
-  useEffect(() => { load() }, [yearMonth])
+  useEffect(() => { load() }, [yearMonth, orgIds?.join(',')])
 
   async function load() {
     setLoading(true)
@@ -47,14 +47,24 @@ export default function SubmissionCheckView({ yearMonth, teams }: Props) {
     const dateFrom = `${y}-${m}-01`
     const dateTo = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
 
-    const [{ data: reps }, { data: schedules }, { data: records }, { data: reports }] = await Promise.all([
-      supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
-      // ★ 稼働判定の正とする: work_schedules の '稼働' 日
-      supabase.from('work_schedules').select('sales_rep_id,schedule_date,work_status')
-        .gte('schedule_date', dateFrom).lte('schedule_date', dateTo).eq('work_status', '稼働'),
-      supabase.from('daily_records').select('*').gte('record_date', dateFrom).lte('record_date', dateTo),
-      supabase.from('daily_reports').select('sales_rep_id,report_date').gte('report_date', dateFrom).lte('report_date', dateTo),
-    ])
+    let reps: any[], schedules: any[], records: any[], reports: any[]
+    if (orgIds && orgIds.length > 1) {
+      const res = await fetch(`/api/combined/data?orgIds=${orgIds.join(',')}&yearMonth=${yearMonth}`)
+      const d = await res.json()
+      reps = d.reps
+      schedules = d.schedules.filter((s: any) => s.work_status === '稼働')
+      records = d.records
+      reports = d.reports
+    } else {
+      const [r1, r2, r3, r4] = await Promise.all([
+        supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
+        supabase.from('work_schedules').select('sales_rep_id,schedule_date,work_status')
+          .gte('schedule_date', dateFrom).lte('schedule_date', dateTo).eq('work_status', '稼働'),
+        supabase.from('daily_records').select('*').gte('record_date', dateFrom).lte('record_date', dateTo),
+        supabase.from('daily_reports').select('sales_rep_id,report_date').gte('report_date', dateFrom).lte('report_date', dateTo),
+      ])
+      reps = r1.data ?? []; schedules = r2.data ?? []; records = r3.data ?? []; reports = r4.data ?? []
+    }
 
     const repList: SalesRep[] = reps || []
 

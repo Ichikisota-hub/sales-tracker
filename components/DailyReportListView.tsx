@@ -12,9 +12,9 @@ function formatDate(dateStr: string): string {
 }
 
 type ReportWithRep = DailyReport & { rep: SalesRep | undefined }
-type Props = { teams: Team[] }
+type Props = { teams: Team[]; orgIds?: string[] }
 
-export default function DailyReportListView({ teams }: Props) {
+export default function DailyReportListView({ teams, orgIds }: Props) {
   const [yearMonth, setYearMonth] = useState(localYearMonth())
   const [reps, setReps] = useState<SalesRep[]>([])
   const [reports, setReports] = useState<ReportWithRep[]>([])
@@ -26,12 +26,13 @@ export default function DailyReportListView({ teams }: Props) {
   const months = getMonthList(12)
 
   useEffect(() => {
+    if (orgIds && orgIds.length > 1) return // load()でまとめて取得
     supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order').then(({ data }) => {
       setReps(data || [])
     })
-  }, [])
+  }, [orgIds?.join(',')])
 
-  useEffect(() => { load() }, [yearMonth])
+  useEffect(() => { load() }, [yearMonth, orgIds?.join(',')])
 
   async function load() {
     setLoading(true)
@@ -39,26 +40,39 @@ export default function DailyReportListView({ teams }: Props) {
     const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
     const from = `${y}-${m}-01`
     const to   = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
-    const { data } = await supabase
-      .from('daily_reports')
-      .select('*')
-      .gte('report_date', from)
-      .lte('report_date', to)
-      .order('report_date', { ascending: false })
+
+    let repList = reps
+    let reportData: any[]
+
+    if (orgIds && orgIds.length > 1) {
+      const res = await fetch(`/api/combined/data?orgIds=${orgIds.join(',')}&yearMonth=${yearMonth}`)
+      const d = await res.json()
+      repList = d.reps || []
+      reportData = (d.reports || []).sort((a: any, b: any) => b.report_date.localeCompare(a.report_date))
+      setReps(repList)
+    } else {
+      const { data } = await supabase
+        .from('daily_reports')
+        .select('*')
+        .gte('report_date', from)
+        .lte('report_date', to)
+        .order('report_date', { ascending: false })
+      reportData = data || []
+    }
 
     const repMap: Record<string, SalesRep> = {}
     reps.forEach(r => { repMap[r.id] = r })
 
     // repsがまだ空の場合は再取得
-    let repList = reps
-    if (repList.length === 0) {
+    if (repList.length === 0 && !(orgIds && orgIds.length > 1)) {
       const { data: rd } = await supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order')
       repList = rd || []
       setReps(repList)
       repList.forEach(r => { repMap[r.id] = r })
     }
 
-    setReports((data || []).map(r => ({ ...r, rep: repMap[r.sales_rep_id] })))
+    repList.forEach(r => { repMap[r.id] = r })
+    setReports((reportData || []).map((r: any) => ({ ...r, rep: repMap[r.sales_rep_id] })))
     setLoading(false)
   }
 

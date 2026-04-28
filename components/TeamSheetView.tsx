@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase, SalesRep, Team, DailyRecord } from '@/lib/supabase'
 import { round1 } from '@/lib/calcUtils'
 
-type Props = { yearMonth: string; teams: Team[] }
+type Props = { yearMonth: string; teams: Team[]; orgIds?: string[] }
 
 type RawRepData = {
   rep: SalesRep
@@ -137,7 +137,7 @@ function calcRepRow(
   }
 }
 
-export default function TeamSheetView({ yearMonth, teams }: Props) {
+export default function TeamSheetView({ yearMonth, teams, orgIds }: Props) {
   const [rawData, setRawData] = useState<RawRepData[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedTeamId, setSelectedTeamId] = useState<string | '__all__'>('__all__')
@@ -164,15 +164,23 @@ export default function TeamSheetView({ yearMonth, teams }: Props) {
     const dateFrom = `${yStr}-${mStr}-01`
     const dateTo = `${yStr}-${mStr}-${String(lastDay).padStart(2, '0')}`
 
-    const [{ data: reps }, { data: records }, { data: plans }, { data: schedules }] = await Promise.all([
-      supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
-      supabase.from('daily_records').select('*').gte('record_date', dateFrom).lte('record_date', dateTo),
-      supabase.from('monthly_plans').select('*').eq('year_month', yearMonth),
-      supabase.from('work_schedules').select('sales_rep_id,schedule_date,work_status')
-        .gte('schedule_date', dateFrom).lte('schedule_date', dateTo),
-    ])
+    let reps: any[], records: any[], plans: any[], schedules: any[]
+    if (orgIds && orgIds.length > 1) {
+      const res = await fetch(`/api/combined/data?orgIds=${orgIds.join(',')}&yearMonth=${yearMonth}`)
+      const d = await res.json()
+      reps = d.reps; records = d.records; plans = d.plans; schedules = d.schedules
+    } else {
+      const [r1, r2, r3, r4] = await Promise.all([
+        supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
+        supabase.from('daily_records').select('*').gte('record_date', dateFrom).lte('record_date', dateTo),
+        supabase.from('monthly_plans').select('*').eq('year_month', yearMonth),
+        supabase.from('work_schedules').select('sales_rep_id,schedule_date,work_status')
+          .gte('schedule_date', dateFrom).lte('schedule_date', dateTo),
+      ])
+      reps = r1.data ?? []; records = r2.data ?? []; plans = r3.data ?? []; schedules = r4.data ?? []
+    }
 
-    if (!reps) { setLoading(false); return }
+    if (!reps || reps.length === 0) { setLoading(false); return }
 
     // work_schedules を rep_id → { date: status } に変換
     const schedMap: Record<string, Record<string, string>> = {}

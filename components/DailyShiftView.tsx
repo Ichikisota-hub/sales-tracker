@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase, SalesRep, Team } from '@/lib/supabase'
 import { getDaysArray, localToday } from '@/lib/dateUtils'
 
-type Props = { yearMonth: string; teams: Team[] }
+type Props = { yearMonth: string; teams: Team[]; orgIds?: string[] }
 
 type ScheduleRow = {
   sales_rep_id: string
@@ -15,7 +15,7 @@ type ScheduleRow = {
 
 const DOW_JA = ['日', '月', '火', '水', '木', '金', '土']
 
-export default function DailyShiftView({ yearMonth, teams }: Props) {
+export default function DailyShiftView({ yearMonth, teams, orgIds }: Props) {
   const days = getDaysArray(yearMonth)
   const today = localToday()
   const defaultDate = days.find(d => d.dateStr === today) || days[0]
@@ -33,12 +33,18 @@ export default function DailyShiftView({ yearMonth, teams }: Props) {
     setSelectedDate(newDefault.dateStr)
   }, [yearMonth])
 
-  useEffect(() => { loadReps() }, [])
+  useEffect(() => { loadReps() }, [orgIds?.join(',')])
   useEffect(() => { loadSchedule() }, [selectedDate])
 
   async function loadReps() {
-    const { data } = await supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order')
-    setReps((data || []).filter(r => r.name && !r.name.startsWith('担当者')))
+    if (orgIds && orgIds.length > 1) {
+      const res = await fetch(`/api/combined/data?orgIds=${orgIds.join(',')}&yearMonth=${yearMonth}`)
+      const d = await res.json()
+      setReps((d.reps || []).filter((r: any) => r.name && !r.name.startsWith('担当者')))
+    } else {
+      const { data } = await supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order')
+      setReps((data || []).filter(r => r.name && !r.name.startsWith('担当者')))
+    }
   }
 
   async function loadSchedule() {

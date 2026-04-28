@@ -42,13 +42,23 @@ function getNextMonth(ym: string): string {
 type MainTab = 'form' | 'status' | 'analysis' | 'overall'
 type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings' | 'daily_report' | 'team_sheet' | 'stats_sheet' | 'submission_check' | 'contract_stats'
 
+const MULTI_ORGS = [
+  { id: '0524dcfa-685f-4635-971b-39c7899da7cd', label: 'ORIGIN' },
+  { id: '9267242c-c884-4e65-8c42-c92d50aa6d77', label: 'NEURA' },
+  { id: '20c315a5-98ef-4125-9e5f-a13b188c8323', label: 'TOP' },
+]
+const ALL_ORG_IDS = MULTI_ORGS.map(o => o.id)
+
 export default function Home() {
   const { signOut, user } = useAuth()
   const isSuperAdmin = user?.email === 'souta51203@gmail.com' || user?.email === 'origin.compamy001@gmail.com'
-  const { membership, isManager, role, loading: orgLoading } = useOrganization()
+  const { membership, isManager, role, loading: orgLoading, organizationId } = useOrganization()
   const [reps, setReps] = useState<SalesRep[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null)
+  // 全代理店合計モード
+  const [orgMode, setOrgMode] = useState<'current' | 'all' | string>('current')
+  const activeOrgIds = orgMode === 'all' ? ALL_ORG_IDS : orgMode === 'current' ? (organizationId ? [organizationId] : []) : [orgMode]
   const [selectedMonth, setSelectedMonth] = useState<string>(localYearMonth())
   const [scheduleMonth, setScheduleMonth] = useState<string>(getNextMonth(localYearMonth()))
   const [activeTab, setActiveTab] = useState<MainTab>('form')
@@ -87,6 +97,28 @@ export default function Home() {
     setTeams(teamData || [])
     setLoading(false)
   }
+
+  async function loadCombinedRepsTeams(orgIds: string[]) {
+    setLoading(true)
+    const res = await fetch(`/api/combined/data?orgIds=${orgIds.join(',')}&yearMonth=${selectedMonth}`)
+    if (res.ok) {
+      const d = await res.json()
+      setReps(d.reps)
+      setTeams(d.teams)
+    }
+    setLoading(false)
+  }
+
+  // orgMode 変更時にデータを再読み込み
+  useEffect(() => {
+    if (orgMode === 'current') {
+      loadReps()
+    } else if (orgMode === 'all') {
+      loadCombinedRepsTeams(ALL_ORG_IDS)
+    } else {
+      loadCombinedRepsTeams([orgMode])
+    }
+  }, [orgMode])
 
   // rep自動選択: membership と reps が揃ったタイミングで実行
   useEffect(() => {
@@ -186,6 +218,22 @@ export default function Home() {
         {/* Row 1: Logo + Selectors */}
         <div className="flex items-center gap-2 mb-2.5">
           <img src="/logo.png" alt="ORIGIN SALES REPORTING" className="h-11 w-auto flex-shrink-0" />
+
+          {/* 代理店セレクター (superadmin のみ) */}
+          {isSuperAdmin && (
+            <select
+              value={orgMode}
+              onChange={e => setOrgMode(e.target.value)}
+              className="text-slate-200 text-xs font-semibold rounded-xl px-2.5 py-1.5 outline-none cursor-pointer flex-shrink-0"
+              style={{ background: orgMode === 'all' ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,.09)', border: orgMode === 'all' ? '1px solid rgba(99,102,241,0.5)' : '1px solid rgba(255,255,255,.1)' }}
+            >
+              <option value="current" className="bg-slate-800">現在の代理店</option>
+              {MULTI_ORGS.map(o => (
+                <option key={o.id} value={o.id} className="bg-slate-800">{o.label}</option>
+              ))}
+              <option value="all" className="bg-slate-800">全代理店合計</option>
+            </select>
+          )}
 
           {isShiftSubmitTab ? (
             <div className="flex gap-1.5">
@@ -346,7 +394,7 @@ export default function Home() {
           <AnalysisView repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />
         )}
         {activeSubTab === null && activeTab === 'overall' && (
-          <OverallView yearMonth={selectedMonth} teams={teams} />
+          <OverallView yearMonth={selectedMonth} teams={teams} orgIds={activeOrgIds} />
         )}
         {activeSubTab === 'contracts' && (
           <>
@@ -361,22 +409,23 @@ export default function Home() {
             <ContractListView
               key={contractRefreshKey}
               reps={reps}
-              selectedRepId={selectedRep?.id || null}
+              selectedRepId={orgMode === 'all' ? null : (selectedRep?.id || null)}
               onAdd={() => setShowContractAdd(true)}
+              orgIds={activeOrgIds}
             />
           </>
         )}
         {activeSubTab === 'contract_stats' && (
-          <ContractStatsView />
+          <ContractStatsView orgIds={activeOrgIds} />
         )}
         {activeSubTab === 'shift_submit' && selectedRep && (
           <ScheduleSubmitForm repId={selectedRep.id} repName={selectedRep.name} yearMonth={scheduleMonth} />
         )}
         {activeSubTab === 'shift' && (
-          <ShiftCalendarView yearMonth={scheduleMonth} teams={teams} />
+          <ShiftCalendarView yearMonth={scheduleMonth} teams={teams} orgIds={activeOrgIds} />
         )}
         {activeSubTab === 'daily_shift' && (
-          <DailyShiftView yearMonth={scheduleMonth} teams={teams} />
+          <DailyShiftView yearMonth={scheduleMonth} teams={teams} orgIds={activeOrgIds} />
         )}
         {activeSubTab === 'area' && (
           <AreaStatsView yearMonth={selectedMonth} />
@@ -385,16 +434,16 @@ export default function Home() {
           <SheetView repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />
         )}
         {activeSubTab === 'team_sheet' && (
-          <TeamSheetView yearMonth={selectedMonth} teams={teams} />
+          <TeamSheetView yearMonth={selectedMonth} teams={teams} orgIds={activeOrgIds} />
         )}
         {activeSubTab === 'stats_sheet' && (
-          <TeamStatsView yearMonth={selectedMonth} teams={teams} />
+          <TeamStatsView yearMonth={selectedMonth} teams={teams} orgIds={activeOrgIds} />
         )}
         {activeSubTab === 'daily_report' && (
-          <DailyReportListView teams={teams} />
+          <DailyReportListView teams={teams} orgIds={activeOrgIds} />
         )}
         {activeSubTab === 'submission_check' && (
-          <SubmissionCheckView yearMonth={selectedMonth} teams={teams} />
+          <SubmissionCheckView yearMonth={selectedMonth} teams={teams} orgIds={activeOrgIds} />
         )}
         {activeSubTab === 'settings' && (
           settingsUnlocked ? (
