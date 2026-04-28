@@ -5,8 +5,11 @@ import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { Lock, Mail, User, Building2, Loader2, CheckCircle } from 'lucide-react'
 
+interface Org { id: string; name: string }
+
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState('')
+  const [orgs, setOrgs] = useState<Org[]>([])
   const [agency, setAgency] = useState('')
   const [fullName, setFullName] = useState('')
   const [password, setPassword] = useState('')
@@ -15,22 +18,31 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
   const router = useRouter()
+  // シングルトンクライアントを使うことでURLハッシュ処理と同じインスタンスになる
   const supabase = createClient()
 
-  // セッションからメールアドレスを取得
+  // メールアドレスをセッションから取得
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: unknown, session: { user?: { email?: string } } | null) => {
       if (session?.user?.email) setEmail(session.user.email)
     })
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(({ data }: { data: { session: { user?: { email?: string } } | null } }) => {
       if (data.session?.user?.email) setEmail(data.session.user.email)
     })
     return () => subscription.unsubscribe()
   }, [])
 
+  // 組織一覧を取得
+  useEffect(() => {
+    fetch('/api/public/orgs')
+      .then(r => r.json())
+      .then((data: Org[]) => setOrgs(data ?? []))
+      .catch(() => {})
+  }, [])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!agency.trim()) { setError('代理店名を入力してください'); return }
+    if (!agency) { setError('代理店を選択してください'); return }
     if (!fullName.trim()) { setError('名前を入力してください'); return }
     if (password.length < 6) { setError('パスワードは6文字以上で入力してください'); return }
     if (password !== confirm) { setError('パスワードが一致しません'); return }
@@ -38,13 +50,11 @@ export default function ResetPasswordPage() {
     setLoading(true)
 
     await supabase.auth.getSession()
-
-    // パスワード＋プロフィール情報を同時に更新
     const { error: err } = await supabase.auth.updateUser({
       password,
       data: {
         full_name: fullName.trim(),
-        agency: agency.trim(),
+        agency,
       },
     })
     setLoading(false)
@@ -90,22 +100,25 @@ export default function ResetPasswordPage() {
               type="email"
               value={email}
               readOnly
-              placeholder="メールアドレス（読み込み中...）"
-              className="w-full bg-slate-700/50 text-slate-300 rounded-xl pl-10 pr-4 py-3 text-sm border border-slate-600 cursor-default select-all"
+              placeholder={email ? email : '読み込み中...'}
+              className="w-full bg-slate-700/50 text-slate-300 rounded-xl pl-10 pr-4 py-3 text-sm border border-slate-600 cursor-default"
             />
           </div>
 
-          {/* 代理店 */}
+          {/* 代理店（組織から選択） */}
           <div className="relative">
-            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
+            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <select
               value={agency}
               onChange={e => setAgency(e.target.value)}
-              placeholder="代理店名"
               required
-              className="w-full bg-slate-800 text-white rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700 placeholder:text-slate-500"
-            />
+              className="w-full bg-slate-800 text-white rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700 appearance-none"
+            >
+              <option value="">代理店を選択</option>
+              {orgs.map(o => (
+                <option key={o.id} value={o.name}>{o.name}</option>
+              ))}
+            </select>
           </div>
 
           {/* 名前 */}
@@ -121,7 +134,6 @@ export default function ResetPasswordPage() {
             />
           </div>
 
-          {/* 区切り線 */}
           <div className="border-t border-slate-700/50 pt-1" />
 
           {/* パスワード */}
