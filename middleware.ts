@@ -27,6 +27,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/login') ||
     pathname.startsWith('/signup') ||
     pathname.startsWith('/invite') ||
+    pathname.startsWith('/reset-password') ||
     pathname.startsWith('/api/')
 
   if (!user && !isPublic) {
