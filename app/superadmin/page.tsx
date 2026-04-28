@@ -60,7 +60,8 @@ export default function SuperAdminPage() {
   const [membersLoading, setMembersLoading] = useState(false)
   const [deletingMemberId, setDeletingMemberId] = useState<string | null>(null)
   const [resetingMemberId, setResetingMemberId] = useState<string | null>(null)
-  const [resetMsg, setResetMsg] = useState<{ id: string; msg: string; ok: boolean } | null>(null)
+  const [resetMsg, setResetMsg] = useState<{ id: string; msg: string; ok: boolean; link?: string } | null>(null)
+  const [resetLinkCopied, setResetLinkCopied] = useState(false)
 
   // パスワード直接変更
   const [pwEditId, setPwEditId] = useState<string | null>(null)
@@ -313,11 +314,8 @@ export default function SuperAdminPage() {
       body: JSON.stringify({ userId: member.user_id }),
     })
     const d = await res.json()
-    // リセットリンクがあれば表示（メール未確認の場合などに使用可能）
-    const msg = d.resetLink
-      ? `${d.message}\n\nリセットURL（メールが届かない場合）:\n${d.resetLink}`
-      : (d.message || d.error)
-    setResetMsg({ id: member.id, msg, ok: res.ok })
+    setResetMsg({ id: member.id, msg: d.message || d.error, ok: res.ok, link: d.resetLink || undefined })
+    setResetLinkCopied(false)
     setResetingMemberId(null)
   }
 
@@ -803,11 +801,32 @@ export default function SuperAdminPage() {
                                 </div>
                               </div>
 
-                              {/* リセット結果 */}
+                              {/* パスワード設定リンク */}
                               {resetMsg?.id === m.id && (
-                                <p className={`mt-1.5 text-xs pl-11 ${resetMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>
-                                  {resetMsg.msg}
-                                </p>
+                                <div className="mt-2 pl-11">
+                                  <p className={`text-xs mb-1.5 ${resetMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    {resetMsg.msg}
+                                  </p>
+                                  {resetMsg.link && (
+                                    <div className="bg-slate-800 border border-blue-700/50 rounded-xl p-3">
+                                      <p className="text-xs text-blue-300 font-bold mb-2">🔑 パスワード設定リンク（LINEで送付）</p>
+                                      <div className="flex gap-2 items-start">
+                                        <p className="text-xs text-slate-300 break-all flex-1 leading-relaxed">{resetMsg.link}</p>
+                                        <button
+                                          onClick={() => {
+                                            navigator.clipboard.writeText(resetMsg.link!)
+                                            setResetLinkCopied(true)
+                                            setTimeout(() => setResetLinkCopied(false), 2000)
+                                          }}
+                                          className="shrink-0 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                                        >
+                                          {resetLinkCopied ? 'コピー済み ✓' : 'コピー'}
+                                        </button>
+                                      </div>
+                                      <p className="text-xs text-slate-500 mt-2">※ 有効期限は24時間です</p>
+                                    </div>
+                                  )}
+                                </div>
                               )}
 
                               {/* PW直接変更フォーム */}
