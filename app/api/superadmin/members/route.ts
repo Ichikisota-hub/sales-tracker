@@ -33,12 +33,14 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const { data: { users } } = await supabase.auth.admin.listUsers({ perPage: 1000 })
-  const userMap: Record<string, { email: string; email_confirmed_at: string | null; last_sign_in_at: string | null }> = {}
+  const userMap: Record<string, { email: string; email_confirmed_at: string | null; last_sign_in_at: string | null; full_name: string | null; agency: string | null }> = {}
   users.forEach(u => {
     userMap[u.id] = {
       email: u.email ?? u.id,
       email_confirmed_at: u.email_confirmed_at ?? null,
       last_sign_in_at: u.last_sign_in_at ?? null,
+      full_name: (u.user_metadata?.full_name as string) ?? null,
+      agency: (u.user_metadata?.agency as string) ?? null,
     }
   })
 
@@ -47,6 +49,8 @@ export async function GET(req: NextRequest) {
     email: userMap[m.user_id]?.email ?? m.user_id,
     email_confirmed: !!userMap[m.user_id]?.email_confirmed_at,
     last_sign_in_at: userMap[m.user_id]?.last_sign_in_at ?? null,
+    full_name: userMap[m.user_id]?.full_name ?? null,
+    agency: userMap[m.user_id]?.agency ?? null,
   }))
 
   return NextResponse.json(result)

@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
-import { Lock, Mail, Loader2, CheckCircle } from 'lucide-react'
+import { Lock, Mail, User, Building2, Loader2, CheckCircle } from 'lucide-react'
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState('')
+  const [agency, setAgency] = useState('')
+  const [fullName, setFullName] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
@@ -28,13 +30,23 @@ export default function ResetPasswordPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (password.length < 6) { setError('6文字以上で入力してください'); return }
+    if (!agency.trim()) { setError('代理店名を入力してください'); return }
+    if (!fullName.trim()) { setError('名前を入力してください'); return }
+    if (password.length < 6) { setError('パスワードは6文字以上で入力してください'); return }
     if (password !== confirm) { setError('パスワードが一致しません'); return }
     setError('')
     setLoading(true)
 
     await supabase.auth.getSession()
-    const { error: err } = await supabase.auth.updateUser({ password })
+
+    // パスワード＋プロフィール情報を同時に更新
+    const { error: err } = await supabase.auth.updateUser({
+      password,
+      data: {
+        full_name: fullName.trim(),
+        agency: agency.trim(),
+      },
+    })
     setLoading(false)
 
     if (err) {
@@ -54,7 +66,7 @@ export default function ResetPasswordPage() {
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(160deg,#0c1220,#0f172a)' }}>
         <div className="text-center space-y-4">
           <CheckCircle className="w-14 h-14 text-emerald-400 mx-auto" />
-          <p className="text-white font-bold text-lg">パスワードを設定しました</p>
+          <p className="text-white font-bold text-lg">アカウントを設定しました</p>
           <p className="text-slate-400 text-sm">アプリへ移動します...</p>
         </div>
       </div>
@@ -66,8 +78,8 @@ export default function ResetPasswordPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <img src="/logo.png" alt="logo" className="h-12 w-auto mx-auto mb-4 opacity-90" />
-          <h1 className="text-white font-bold text-xl">パスワードを設定</h1>
-          <p className="text-slate-400 text-sm mt-1">アカウント情報を確認してパスワードを設定してください</p>
+          <h1 className="text-white font-bold text-xl">アカウント設定</h1>
+          <p className="text-slate-400 text-sm mt-1">情報を入力してアカウントを有効化してください</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -83,16 +95,45 @@ export default function ResetPasswordPage() {
             />
           </div>
 
-          {/* 新しいパスワード */}
+          {/* 代理店 */}
+          <div className="relative">
+            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              value={agency}
+              onChange={e => setAgency(e.target.value)}
+              placeholder="代理店名"
+              required
+              className="w-full bg-slate-800 text-white rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700 placeholder:text-slate-500"
+            />
+          </div>
+
+          {/* 名前 */}
+          <div className="relative">
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              value={fullName}
+              onChange={e => setFullName(e.target.value)}
+              placeholder="名前"
+              required
+              className="w-full bg-slate-800 text-white rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700 placeholder:text-slate-500"
+            />
+          </div>
+
+          {/* 区切り線 */}
+          <div className="border-t border-slate-700/50 pt-1" />
+
+          {/* パスワード */}
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder="新しいパスワード（6文字以上）"
+              placeholder="パスワード（6文字以上）"
               required
-              className="w-full bg-slate-800 text-white rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
+              className="w-full bg-slate-800 text-white rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700 placeholder:text-slate-500"
             />
           </div>
 
@@ -105,7 +146,7 @@ export default function ResetPasswordPage() {
               onChange={e => setConfirm(e.target.value)}
               placeholder="パスワード（確認）"
               required
-              className="w-full bg-slate-800 text-white rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
+              className="w-full bg-slate-800 text-white rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700 placeholder:text-slate-500"
             />
           </div>
 
@@ -119,7 +160,7 @@ export default function ResetPasswordPage() {
             className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {loading ? '設定中...' : 'パスワードを設定する'}
+            {loading ? '設定中...' : 'アカウントを有効化する'}
           </button>
         </form>
       </div>

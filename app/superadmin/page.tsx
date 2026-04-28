@@ -33,6 +33,8 @@ interface Member {
   sales_rep_id: string | null
   email_confirmed: boolean
   last_sign_in_at: string | null
+  full_name: string | null
+  agency: string | null
 }
 
 interface EditState {
@@ -756,16 +758,22 @@ export default function SuperAdminPage() {
                               <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
                                   style={{ background: 'linear-gradient(135deg,#6366f1,#2563eb)', color: 'white' }}>
-                                  {m.email.slice(0, 1).toUpperCase()}
+                                  {(m.full_name ?? m.email).slice(0, 1).toUpperCase()}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <p className="text-sm text-white font-semibold truncate">{m.email}</p>
+                                    {m.full_name && (
+                                      <p className="text-sm text-white font-semibold truncate">{m.full_name}</p>
+                                    )}
+                                    {m.agency && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-300 font-medium">{m.agency}</span>
+                                    )}
                                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${m.email_confirmed ? 'bg-emerald-900/60 text-emerald-400' : 'bg-amber-900/60 text-amber-400'}`}>
                                       {m.email_confirmed ? '確認済み' : '未確認'}
                                     </span>
                                   </div>
-                                  <p className="text-xs text-slate-500 mt-0.5">
+                                  <p className="text-xs text-slate-500 mt-0.5 truncate">{m.email}</p>
+                                  <p className="text-xs text-slate-600 mt-0.5">
                                     参加: {new Date(m.joined_at).toLocaleDateString('ja-JP')}
                                     {m.last_sign_in_at && <> ・ 最終ログイン: {new Date(m.last_sign_in_at).toLocaleDateString('ja-JP')}</>}
                                   </p>
