@@ -22,12 +22,32 @@ export default function ResetPasswordPage() {
   const supabase = createClient()
 
   // メールアドレスをセッションから取得
+  // メールアドレスを取得（URLハッシュトークン → 既存セッションの順で試みる）
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: unknown, session: { user?: { email?: string } } | null) => {
+    async function init() {
+      // 招待リンクのハッシュ（#access_token=...&refresh_token=...）を明示的に処理
+      const hash = window.location.hash
+      if (hash) {
+        const params = new URLSearchParams(hash.substring(1))
+        const accessToken = params.get('access_token')
+        const refreshToken = params.get('refresh_token')
+        if (accessToken && refreshToken) {
+          const { data } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+          if (data.session?.user?.email) {
+            setEmail(data.session.user.email)
+            return
+          }
+        }
+      }
+      // ハッシュがない場合は既存セッションを確認
+      const { data: { session } } = await supabase.auth.getSession()
       if (session?.user?.email) setEmail(session.user.email)
-    })
-    supabase.auth.getSession().then(({ data }: { data: { session: { user?: { email?: string } } | null } }) => {
-      if (data.session?.user?.email) setEmail(data.session.user.email)
+    }
+
+    init()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.email) setEmail(session.user.email)
     })
     return () => subscription.unsubscribe()
   }, [])
