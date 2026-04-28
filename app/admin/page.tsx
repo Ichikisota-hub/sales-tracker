@@ -88,8 +88,8 @@ export default function AdminPage() {
       .eq('organization_id', organization.id)
       .not('note', 'is', null)
       .neq('note', '')
-    setShiftNotes((data || []).map(d => ({
-      rep_name: (d.sales_reps as unknown as { name: string } | null)?.name || '不明',
+    setShiftNotes((data || []).map((d: { sales_reps: unknown; note: string | null }) => ({
+      rep_name: (d.sales_reps as { name: string } | null)?.name || '不明',
       note: d.note || '',
     })))
     setNotesLoading(false)

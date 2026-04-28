@@ -27,7 +27,7 @@ export default function InviteForm({ onInvited }: Props) {
       .select('*')
       .eq('is_active', true)
       .order('display_order')
-      .then(({ data }) => setReps(data ?? []))
+      .then(({ data }: { data: import('@/lib/supabase').SalesRep[] | null }) => setReps(data ?? []))
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
