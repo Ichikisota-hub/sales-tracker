@@ -15,6 +15,9 @@ export default function AdminPage() {
   const [sheetId, setSheetId] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [sheetsConfigured, setSheetsConfigured] = useState<boolean | null>(null)
   const [noteMonth, setNoteMonth] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -26,7 +29,41 @@ export default function AdminPage() {
     if (!organization) return
     setSheetId(organization.settings?.google_sheet_id || '')
     loadMemberCount()
+    checkSheetsConfig()
   }, [organization?.id])
+
+  async function checkSheetsConfig() {
+    try {
+      const res = await fetch('/api/sheets/sync')
+      const d = await res.json()
+      setSheetsConfigured(d.configured)
+    } catch {
+      setSheetsConfigured(false)
+    }
+  }
+
+  async function syncToSheets() {
+    if (!organization || !sheetId) return
+    setSyncing(true)
+    setSyncResult(null)
+    try {
+      const res = await fetch('/api/sheets/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spreadsheetId: sheetId, orgIds: [organization.id] }),
+      })
+      const d = await res.json()
+      if (res.ok) {
+        const s = d.stats
+        setSyncResult({ ok: true, message: `同期完了 ✓ 担当者${s.reps}件・実績${s.records}件・シフト${s.schedules}件・契約${s.contracts}件・日報${s.reports}件` })
+      } else {
+        setSyncResult({ ok: false, message: d.error || 'エラーが発生しました' })
+      }
+    } catch (e: any) {
+      setSyncResult({ ok: false, message: e.message })
+    }
+    setSyncing(false)
+  }
 
   useEffect(() => {
     loadShiftNotes(noteMonth)
@@ -126,13 +163,28 @@ export default function AdminPage() {
         {/* Google Sheets 設定 */}
         <div className="bg-white rounded-xl shadow-sm p-5">
           <h2 className="font-bold text-slate-800 mb-1">Google スプレッドシート設定</h2>
-          <p className="text-slate-500 text-xs mb-4">シフト連携に使用するスプレッドシートの ID を設定します</p>
-          <div className="flex gap-2">
+          <p className="text-slate-500 text-xs mb-3">全データをリアルタイムでGoogleスプレッドシートへ同期します</p>
+
+          {/* Service Account 未設定の警告 */}
+          {sheetsConfigured === false && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-xs text-amber-800 space-y-1.5">
+              <div className="font-bold">⚠️ Service Accountが未設定です</div>
+              <div>データの書き込みにはGoogleサービスアカウントが必要です。</div>
+              <ol className="list-decimal list-inside space-y-1 text-amber-700">
+                <li>Google Cloud Console で Service Account を作成</li>
+                <li>JSONキーをダウンロード</li>
+                <li>Vercel環境変数 <code className="bg-amber-100 px-1 rounded">GOOGLE_SERVICE_ACCOUNT_KEY</code> にJSONを貼り付け</li>
+                <li>下記スプレッドシートIDを保存し、シートをService Accountのメールで共有（編集者権限）</li>
+              </ol>
+            </div>
+          )}
+
+          <div className="flex gap-2 mb-3">
             <input
               type="text"
               value={sheetId}
               onChange={e => setSheetId(e.target.value)}
-              placeholder="スプレッドシート ID"
+              placeholder="スプレッドシートID（URLの /d/XXXX/edit のXXXX部分）"
               className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
@@ -140,9 +192,28 @@ export default function AdminPage() {
               disabled={saving}
               className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors shrink-0"
             >
-              {saved ? '保存済み ✓' : saving ? '保存中...' : '保存'}
+              {saved ? '保存 ✓' : saving ? '保存中...' : '保存'}
             </button>
           </div>
+
+          {/* 同期ボタン */}
+          <button
+            onClick={syncToSheets}
+            disabled={syncing || !sheetId || sheetsConfigured === false}
+            className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white text-sm font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2"
+          >
+            {syncing ? (
+              <><span className="animate-spin inline-block">⟳</span> 同期中...</>
+            ) : (
+              <>📤 今すぐ全データを同期</>
+            )}
+          </button>
+
+          {syncResult && (
+            <div className={`mt-2 text-xs px-3 py-2 rounded-lg font-medium ${syncResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+              {syncResult.message}
+            </div>
+          )}
         </div>
 
         {/* メンバー管理リンク */}
