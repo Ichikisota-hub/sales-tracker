@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
       email,
       options: {
         data: { invited_to_org: orgId },
-        redirectTo: `${appUrl}/`,
+        redirectTo: `${appUrl}/reset-password`,
       },
     })
     if (linkError) return NextResponse.json({ error: `招待リンク生成失敗: ${linkError.message}` }, { status: 500 })

@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
-import { Lock, Loader2, CheckCircle } from 'lucide-react'
+import { Lock, Mail, Loader2, CheckCircle } from 'lucide-react'
 
 export default function ResetPasswordPage() {
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
@@ -14,9 +15,14 @@ export default function ResetPasswordPage() {
   const router = useRouter()
   const supabase = createClient()
 
-  // URLのハッシュ/クエリからセッションを復元する（バックグラウンド）
+  // セッションからメールアドレスを取得
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {})
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.email) setEmail(session.user.email)
+    })
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user?.email) setEmail(data.session.user.email)
+    })
     return () => subscription.unsubscribe()
   }, [])
 
@@ -27,7 +33,6 @@ export default function ResetPasswordPage() {
     setError('')
     setLoading(true)
 
-    // セッションを最新化してからパスワード更新
     await supabase.auth.getSession()
     const { error: err } = await supabase.auth.updateUser({ password })
     setLoading(false)
@@ -62,10 +67,23 @@ export default function ResetPasswordPage() {
         <div className="text-center mb-8">
           <img src="/logo.png" alt="logo" className="h-12 w-auto mx-auto mb-4 opacity-90" />
           <h1 className="text-white font-bold text-xl">パスワードを設定</h1>
-          <p className="text-slate-400 text-sm mt-1">新しいパスワードを入力してください</p>
+          <p className="text-slate-400 text-sm mt-1">アカウント情報を確認してパスワードを設定してください</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* メールアドレス（読み取り専用） */}
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="email"
+              value={email}
+              readOnly
+              placeholder="メールアドレス（読み込み中...）"
+              className="w-full bg-slate-700/50 text-slate-300 rounded-xl pl-10 pr-4 py-3 text-sm border border-slate-600 cursor-default select-all"
+            />
+          </div>
+
+          {/* 新しいパスワード */}
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
@@ -77,6 +95,8 @@ export default function ResetPasswordPage() {
               className="w-full bg-slate-800 text-white rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
             />
           </div>
+
+          {/* パスワード確認 */}
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
