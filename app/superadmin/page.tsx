@@ -81,6 +81,13 @@ export default function SuperAdminPage() {
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState('')
 
+  // superadmin管理
+  const [superadminEmails, setSuperadminEmails] = useState<string[]>([])
+  const [newSaEmail, setNewSaEmail] = useState('')
+  const [saAdding, setSaAdding] = useState(false)
+  const [saMsg, setSaMsg] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [showSaPanel, setShowSaPanel] = useState(false)
+
   useEffect(() => {
     if (localStorage.getItem(STORAGE_KEY) === 'true') {
       setUnlocked(true)
@@ -88,8 +95,42 @@ export default function SuperAdminPage() {
   }, [])
 
   useEffect(() => {
-    if (unlocked) loadOrgs()
+    if (unlocked) {
+      loadOrgs()
+      loadSuperadmins()
+    }
   }, [unlocked])
+
+  async function loadSuperadmins() {
+    const res = await fetch('/api/superadmin/admins', { headers: { 'x-superadmin-key': SUPERADMIN_KEY } })
+    if (res.ok) setSuperadminEmails((await res.json()).emails || [])
+  }
+
+  async function addSuperadmin() {
+    if (!newSaEmail.trim()) return
+    setSaAdding(true); setSaMsg(null)
+    const res = await fetch('/api/superadmin/admins', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-superadmin-key': SUPERADMIN_KEY },
+      body: JSON.stringify({ email: newSaEmail.trim() }),
+    })
+    const d = await res.json()
+    setSaMsg({ ok: res.ok, msg: res.ok ? `${newSaEmail} をsuperadminに追加しました` : d.error })
+    if (res.ok) { setNewSaEmail(''); setSuperadminEmails(d.emails || []) }
+    setSaAdding(false)
+  }
+
+  async function removeSuperadmin(email: string) {
+    if (!confirm(`「${email}」のsuperadmin権限を削除しますか？`)) return
+    const res = await fetch('/api/superadmin/admins', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', 'x-superadmin-key': SUPERADMIN_KEY },
+      body: JSON.stringify({ email }),
+    })
+    const d = await res.json()
+    if (res.ok) setSuperadminEmails(d.emails || [])
+    else alert(d.error)
+  }
 
   async function loadOrgs() {
     setLoading(true)
@@ -263,7 +304,11 @@ export default function SuperAdminPage() {
       body: JSON.stringify({ userId: member.user_id }),
     })
     const d = await res.json()
-    setResetMsg({ id: member.id, msg: d.message || d.error, ok: res.ok })
+    // リセットリンクがあれば表示（メール未確認の場合などに使用可能）
+    const msg = d.resetLink
+      ? `${d.message}\n\nリセットURL（メールが届かない場合）:\n${d.resetLink}`
+      : (d.message || d.error)
+    setResetMsg({ id: member.id, msg, ok: res.ok })
     setResetingMemberId(null)
   }
 
@@ -295,8 +340,16 @@ export default function SuperAdminPage() {
     setInviteMsg({ ok: res.ok, msg: res.ok ? `${d.email} を招待しました` : d.error })
     if (res.ok) {
       setInviteEmail('')
-      await toggleMembers(orgId) // リスト更新
-      await toggleMembers(orgId)
+      // メンバーリストを直接リロード（ダブルトグルバグ回避）
+      setMembersLoading(true)
+      const r2 = await fetch(`/api/superadmin/members?orgId=${orgId}`, {
+        headers: { 'x-superadmin-key': SUPERADMIN_KEY },
+      })
+      if (r2.ok) {
+        setMembers(await r2.json())
+        setOrgs(prev => prev.map(o => o.id === orgId ? { ...o, member_count: o.member_count + 1 } : o))
+      }
+      setMembersLoading(false)
     }
     setInviting(false)
   }
@@ -377,6 +430,68 @@ export default function SuperAdminPage() {
               {orgs.reduce((s, o) => s + o.member_count, 0)}
             </div>
           </div>
+        </div>
+
+        {/* superadmin管理 */}
+        <div className="bg-slate-800 rounded-xl overflow-hidden mb-6">
+          <div className="px-5 py-4 border-b border-slate-700 flex items-center justify-between">
+            <div>
+              <h2 className="font-bold text-sm">superadmin管理</h2>
+              <p className="text-slate-400 text-xs mt-0.5">システム全体へのアクセス権を持つアカウント</p>
+            </div>
+            <button
+              onClick={() => { setShowSaPanel(v => !v); setSaMsg(null) }}
+              className="text-sm px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600 text-white font-bold transition-colors"
+            >
+              {showSaPanel ? '閉じる' : '管理する'}
+            </button>
+          </div>
+
+          {/* superadmin一覧 */}
+          <div className="px-5 py-3 flex flex-wrap gap-2">
+            {superadminEmails.map(email => (
+              <div key={email} className="flex items-center gap-1.5 bg-purple-900/40 border border-purple-700/50 rounded-lg px-3 py-1.5">
+                <span className="text-purple-300 text-xs font-semibold">{email}</span>
+                {!['souta51203@gmail.com', 'origin.compamy001@gmail.com'].includes(email) && (
+                  <button
+                    onClick={() => removeSuperadmin(email)}
+                    className="text-purple-500 hover:text-red-400 text-xs ml-1 transition-colors"
+                  >✕</button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {showSaPanel && (
+            <div className="border-t border-slate-700 bg-slate-900 px-5 py-4">
+              <p className="text-xs text-slate-400 mb-3">
+                追加したメールアドレスはsuperadmin権限を持ちます。<br />
+                未登録の場合は招待メールが自動で送信されます。
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={newSaEmail}
+                  onChange={e => setNewSaEmail(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addSuperadmin()}
+                  placeholder="招待するメールアドレス"
+                  className="flex-1 bg-slate-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <button
+                  onClick={addSuperadmin}
+                  disabled={saAdding}
+                  className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-sm transition-colors"
+                >
+                  {saAdding ? '追加中...' : '追加'}
+                </button>
+              </div>
+              {saMsg && (
+                <p className={`mt-2 text-xs font-medium ${saMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {saMsg.msg}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 組織一覧 */}

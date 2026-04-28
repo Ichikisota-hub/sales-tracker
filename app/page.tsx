@@ -51,7 +51,15 @@ const ALL_ORG_IDS = MULTI_ORGS.map(o => o.id)
 
 export default function Home() {
   const { signOut, user } = useAuth()
-  const isSuperAdmin = user?.email === 'souta51203@gmail.com' || user?.email === 'origin.compamy001@gmail.com'
+  const [superadminEmails, setSuperadminEmails] = useState<string[]>(['souta51203@gmail.com', 'origin.compamy001@gmail.com'])
+  const isSuperAdmin = !!user?.email && superadminEmails.includes(user.email)
+
+  useEffect(() => {
+    fetch('/api/superadmin/admins', { headers: { 'x-superadmin-key': 'Origin0201' } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.emails) setSuperadminEmails(d.emails) })
+      .catch(() => {})
+  }, [])
   const { membership, isManager, role, loading: orgLoading, organizationId } = useOrganization()
   const [reps, setReps] = useState<SalesRep[]>([])
   const [teams, setTeams] = useState<Team[]>([])

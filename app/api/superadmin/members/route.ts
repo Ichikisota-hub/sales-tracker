@@ -114,15 +114,21 @@ export async function PATCH(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ success: true, message: 'パスワードを変更しました' })
   } else {
-    // パスワードリセットメールを送信
-    const { data: user, error: userError } = await supabase.auth.admin.getUserById(userId)
-    if (userError || !user.user?.email) return NextResponse.json({ error: 'ユーザーが見つかりません' }, { status: 404 })
+    // パスワードリセットリンクを生成してメール送信（サーバーサイド用）
+    const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId)
+    if (userError || !userData.user?.email) return NextResponse.json({ error: 'ユーザーが見つかりません' }, { status: 404 })
 
-    const { error } = await supabase.auth.resetPasswordForEmail(user.user.email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/reset-password`,
+    const { data: linkData, error } = await supabase.auth.admin.generateLink({
+      type: 'recovery',
+      email: userData.user.email,
+      options: { redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/reset-password` },
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ success: true, message: `パスワードリセットメールを ${user.user.email} に送信しました` })
+    return NextResponse.json({
+      success: true,
+      message: `パスワードリセットメールを ${userData.user.email} に送信しました`,
+      resetLink: linkData?.properties?.action_link, // 管理者確認用
+    })
   }
 }
 
