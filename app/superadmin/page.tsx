@@ -31,6 +31,8 @@ interface Member {
   role: string
   joined_at: string
   sales_rep_id: string | null
+  email_confirmed: boolean
+  last_sign_in_at: string | null
 }
 
 interface EditState {
@@ -57,6 +59,21 @@ export default function SuperAdminPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [membersLoading, setMembersLoading] = useState(false)
   const [deletingMemberId, setDeletingMemberId] = useState<string | null>(null)
+  const [resetingMemberId, setResetingMemberId] = useState<string | null>(null)
+  const [resetMsg, setResetMsg] = useState<{ id: string; msg: string; ok: boolean } | null>(null)
+
+  // パスワード直接変更
+  const [pwEditId, setPwEditId] = useState<string | null>(null)
+  const [newPw, setNewPw] = useState('')
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwMsg, setPwMsg] = useState('')
+
+  // メンバー招待
+  const [inviteOrgId, setInviteOrgId] = useState<string | null>(null)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('member')
+  const [inviting, setInviting] = useState(false)
+  const [inviteMsg, setInviteMsg] = useState<{ ok: boolean; msg: string } | null>(null)
 
   // 新規組織追加
   const [showAddForm, setShowAddForm] = useState(false)
@@ -222,15 +239,11 @@ export default function SuperAdminPage() {
     setDeletingMemberId(member.id)
     const res = await fetch('/api/superadmin/members', {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-superadmin-key': SUPERADMIN_KEY,
-      },
+      headers: { 'Content-Type': 'application/json', 'x-superadmin-key': SUPERADMIN_KEY },
       body: JSON.stringify({ memberId: member.id }),
     })
     if (res.ok) {
       setMembers(prev => prev.filter(m => m.id !== member.id))
-      // org の member_count を更新
       setOrgs(prev => prev.map(o =>
         o.id === membersOrgId ? { ...o, member_count: Math.max(0, o.member_count - 1) } : o
       ))
@@ -239,6 +252,53 @@ export default function SuperAdminPage() {
       alert(`削除失敗: ${data.error}`)
     }
     setDeletingMemberId(null)
+  }
+
+  async function sendPasswordReset(member: Member) {
+    setResetingMemberId(member.id)
+    setResetMsg(null)
+    const res = await fetch('/api/superadmin/members', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-superadmin-key': SUPERADMIN_KEY },
+      body: JSON.stringify({ userId: member.user_id }),
+    })
+    const d = await res.json()
+    setResetMsg({ id: member.id, msg: d.message || d.error, ok: res.ok })
+    setResetingMemberId(null)
+  }
+
+  async function changePassword(member: Member) {
+    if (!newPw || newPw.length < 6) { setPwMsg('6文字以上で入力してください'); return }
+    setPwSaving(true)
+    setPwMsg('')
+    const res = await fetch('/api/superadmin/members', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-superadmin-key': SUPERADMIN_KEY },
+      body: JSON.stringify({ userId: member.user_id, newPassword: newPw }),
+    })
+    const d = await res.json()
+    setPwMsg(d.message || d.error)
+    setPwSaving(false)
+    if (res.ok) { setNewPw(''); setTimeout(() => { setPwEditId(null); setPwMsg('') }, 2000) }
+  }
+
+  async function inviteMember(orgId: string) {
+    if (!inviteEmail.trim()) { setInviteMsg({ ok: false, msg: 'メールアドレスを入力してください' }); return }
+    setInviting(true)
+    setInviteMsg(null)
+    const res = await fetch('/api/superadmin/members', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-superadmin-key': SUPERADMIN_KEY },
+      body: JSON.stringify({ orgId, email: inviteEmail.trim(), role: inviteRole }),
+    })
+    const d = await res.json()
+    setInviteMsg({ ok: res.ok, msg: res.ok ? `${d.email} を招待しました` : d.error })
+    if (res.ok) {
+      setInviteEmail('')
+      await toggleMembers(orgId) // リスト更新
+      await toggleMembers(orgId)
+    }
+    setInviting(false)
   }
 
   if (!unlocked) {
@@ -475,9 +535,53 @@ export default function SuperAdminPage() {
                   {/* メンバー一覧パネル */}
                   {membersOrgId === org.id && (
                     <div className="border-t border-slate-700 bg-slate-950 px-5 py-4">
-                      <h3 className="text-sm font-bold text-slate-300 mb-3">
-                        メンバー管理 — {org.name}
-                      </h3>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-bold text-slate-300">メンバー管理 — {org.name}</h3>
+                        <button
+                          onClick={() => { setInviteOrgId(inviteOrgId === org.id ? null : org.id); setInviteMsg(null); setInviteEmail('') }}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-indigo-700 hover:bg-indigo-600 text-white font-bold transition-colors"
+                        >
+                          + メンバー招待
+                        </button>
+                      </div>
+
+                      {/* 招待フォーム */}
+                      {inviteOrgId === org.id && (
+                        <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 mb-4">
+                          <p className="text-xs text-slate-400 mb-3">メールアドレスで招待または既存アカウントを追加します</p>
+                          <div className="flex gap-2 flex-wrap">
+                            <input
+                              type="email"
+                              value={inviteEmail}
+                              onChange={e => setInviteEmail(e.target.value)}
+                              placeholder="メールアドレス"
+                              className="flex-1 min-w-40 bg-slate-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <select
+                              value={inviteRole}
+                              onChange={e => setInviteRole(e.target.value)}
+                              className="bg-slate-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                            >
+                              <option value="member">メンバー</option>
+                              <option value="manager">マネージャー</option>
+                              <option value="admin">管理者</option>
+                            </select>
+                            <button
+                              onClick={() => inviteMember(org.id)}
+                              disabled={inviting}
+                              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-sm transition-colors"
+                            >
+                              {inviting ? '送信中...' : '招待'}
+                            </button>
+                          </div>
+                          {inviteMsg && (
+                            <p className={`mt-2 text-xs font-medium ${inviteMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {inviteMsg.msg}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
                       {membersLoading ? (
                         <p className="text-slate-400 text-sm">読み込み中...</p>
                       ) : members.length === 0 ? (
@@ -485,31 +589,86 @@ export default function SuperAdminPage() {
                       ) : (
                         <div className="divide-y divide-slate-800">
                           {members.map(m => (
-                            <div key={m.id} className="flex items-center gap-3 py-2.5">
-                              <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                                style={{ background: 'linear-gradient(135deg,#6366f1,#2563eb)', color: 'white' }}>
-                                {m.email.slice(0, 1).toUpperCase()}
+                            <div key={m.id} className="py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                                  style={{ background: 'linear-gradient(135deg,#6366f1,#2563eb)', color: 'white' }}>
+                                  {m.email.slice(0, 1).toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-sm text-white font-semibold truncate">{m.email}</p>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${m.email_confirmed ? 'bg-emerald-900/60 text-emerald-400' : 'bg-amber-900/60 text-amber-400'}`}>
+                                      {m.email_confirmed ? '確認済み' : '未確認'}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-slate-500 mt-0.5">
+                                    参加: {new Date(m.joined_at).toLocaleDateString('ja-JP')}
+                                    {m.last_sign_in_at && <> ・ 最終ログイン: {new Date(m.last_sign_in_at).toLocaleDateString('ja-JP')}</>}
+                                  </p>
+                                </div>
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                                  m.role === 'admin' ? 'bg-red-900/60 text-red-300' :
+                                  m.role === 'manager' ? 'bg-blue-900/60 text-blue-300' :
+                                  'bg-slate-700 text-slate-400'
+                                }`}>
+                                  {ROLE_LABELS[m.role] ?? m.role}
+                                </span>
+                                <div className="flex gap-1.5 shrink-0">
+                                  <button
+                                    onClick={() => { setPwEditId(pwEditId === m.id ? null : m.id); setNewPw(''); setPwMsg('') }}
+                                    className="text-xs px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition-colors"
+                                  >
+                                    PW変更
+                                  </button>
+                                  <button
+                                    onClick={() => sendPasswordReset(m)}
+                                    disabled={resetingMemberId === m.id}
+                                    className="text-xs px-2.5 py-1 rounded-lg bg-blue-900/50 hover:bg-blue-800 text-blue-300 hover:text-white transition-colors disabled:opacity-50"
+                                  >
+                                    {resetingMemberId === m.id ? '送信中...' : 'PW reset'}
+                                  </button>
+                                  <button
+                                    onClick={() => deleteMember(m)}
+                                    disabled={deletingMemberId === m.id}
+                                    className="text-xs px-2.5 py-1 rounded-lg bg-red-900/50 hover:bg-red-800 text-red-300 hover:text-white transition-colors disabled:opacity-50"
+                                  >
+                                    {deletingMemberId === m.id ? '削除中...' : '削除'}
+                                  </button>
+                                </div>
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm text-white font-semibold truncate">{m.email}</p>
-                                <p className="text-xs text-slate-500">
-                                  参加: {new Date(m.joined_at).toLocaleDateString('ja-JP')}
+
+                              {/* リセット結果 */}
+                              {resetMsg?.id === m.id && (
+                                <p className={`mt-1.5 text-xs pl-11 ${resetMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                                  {resetMsg.msg}
                                 </p>
-                              </div>
-                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                                m.role === 'admin' ? 'bg-red-900/60 text-red-300' :
-                                m.role === 'manager' ? 'bg-blue-900/60 text-blue-300' :
-                                'bg-slate-700 text-slate-400'
-                              }`}>
-                                {ROLE_LABELS[m.role] ?? m.role}
-                              </span>
-                              <button
-                                onClick={() => deleteMember(m)}
-                                disabled={deletingMemberId === m.id}
-                                className="text-xs px-2.5 py-1 rounded-lg bg-red-900/50 hover:bg-red-800 text-red-300 hover:text-white transition-colors disabled:opacity-50 shrink-0"
-                              >
-                                {deletingMemberId === m.id ? '削除中...' : '削除'}
-                              </button>
+                              )}
+
+                              {/* PW直接変更フォーム */}
+                              {pwEditId === m.id && (
+                                <div className="mt-2 pl-11 flex gap-2 items-center flex-wrap">
+                                  <input
+                                    type="password"
+                                    value={newPw}
+                                    onChange={e => setNewPw(e.target.value)}
+                                    placeholder="新しいパスワード（6文字以上）"
+                                    className="flex-1 min-w-40 bg-slate-700 text-white rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                                  />
+                                  <button
+                                    onClick={() => changePassword(m)}
+                                    disabled={pwSaving}
+                                    className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors"
+                                  >
+                                    {pwSaving ? '変更中...' : '変更する'}
+                                  </button>
+                                  {pwMsg && (
+                                    <span className={`text-xs ${pwMsg.includes('変更') ? 'text-emerald-400' : 'text-red-400'}`}>
+                                      {pwMsg}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
