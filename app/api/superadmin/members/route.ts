@@ -73,7 +73,10 @@ export async function POST(req: NextRequest) {
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: 'invite',
       email,
-      options: { data: { invited_to_org: orgId } },
+      options: {
+        data: { invited_to_org: orgId },
+        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/`,
+      },
     })
     if (linkError) return NextResponse.json({ error: linkError.message }, { status: 500 })
     targetUser = linkData.user

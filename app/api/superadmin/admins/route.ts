@@ -63,7 +63,10 @@ export async function POST(req: NextRequest) {
     const { data: linkData } = await supabase.auth.admin.generateLink({
       type: 'invite',
       email: newEmail,
-      options: { data: { superadmin: true } },
+      options: {
+        data: { superadmin: true },
+        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/`,
+      },
     })
     inviteLink = linkData?.properties?.action_link ?? null
   }
