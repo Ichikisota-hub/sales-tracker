@@ -5,20 +5,10 @@ import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { Lock, Mail, User, Building2, Loader2, CheckCircle } from 'lucide-react'
 
-interface Org { id: string; name: string }
-
-// Supabaseがハッシュを消去する前にモジュール評価時点で即時キャプチャ
+// 招待リンクのURLハッシュをモジュール評価時に即時キャプチャ
 const INITIAL_HASH = typeof window !== 'undefined' ? window.location.hash : ''
 
-function decodeEmailFromHash(hash: string): string | null {
-  try {
-    const params = new URLSearchParams(hash.substring(1))
-    const token = params.get('access_token')
-    if (!token) return null
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
-    return payload.email || null
-  } catch { return null }
-}
+interface Org { id: string; name: string }
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState('')
@@ -31,21 +21,7 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
   const router = useRouter()
-  // シングルトンクライアントを使うことでURLハッシュ処理と同じインスタンスになる
   const supabase = createClient()
-
-  // メールアドレス取得：モジュール評価時にキャプチャしたハッシュから即時デコード
-  useEffect(() => {
-    const emailFromHash = decodeEmailFromHash(INITIAL_HASH)
-    if (emailFromHash) {
-      setEmail(emailFromHash)
-    } else {
-      // ハッシュがない場合は既存セッションから取得
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.user?.email) setEmail(session.user.email)
-      })
-    }
-  }, [])
 
   // 組織一覧を取得
   useEffect(() => {
@@ -57,6 +33,7 @@ export default function ResetPasswordPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!email.trim()) { setError('メールアドレスを入力してください'); return }
     if (!agency) { setError('代理店を選択してください'); return }
     if (!fullName.trim()) { setError('名前を入力してください'); return }
     if (password.length < 6) { setError('パスワードは6文字以上で入力してください'); return }
@@ -64,7 +41,7 @@ export default function ResetPasswordPage() {
     setError('')
     setLoading(true)
 
-    // キャプチャ済みハッシュからトークンを取得してセッションを確立
+    // キャプチャ済みハッシュからセッションを確立
     if (INITIAL_HASH) {
       const params = new URLSearchParams(INITIAL_HASH.substring(1))
       const accessToken = params.get('access_token')
@@ -75,6 +52,7 @@ export default function ResetPasswordPage() {
     } else {
       await supabase.auth.getSession()
     }
+
     const { error: err, data: updateData } = await supabase.auth.updateUser({
       password,
       data: {
@@ -132,15 +110,16 @@ export default function ResetPasswordPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* メールアドレス（読み取り専用） */}
+          {/* メールアドレス（手入力） */}
           <div className="relative">
             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="email"
               value={email}
-              readOnly
-              placeholder={email ? email : '読み込み中...'}
-              className="w-full bg-slate-700/50 text-slate-300 rounded-xl pl-10 pr-4 py-3 text-sm border border-slate-600 cursor-default"
+              onChange={e => setEmail(e.target.value)}
+              placeholder="招待されたメールアドレス"
+              required
+              className="w-full bg-slate-800 text-white rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700 placeholder:text-slate-500"
             />
           </div>
 
