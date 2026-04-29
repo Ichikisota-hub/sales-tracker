@@ -64,15 +64,27 @@ export default function ResetPasswordPage() {
     setError('')
     setLoading(true)
 
-    // 既存セッションを確認し、なければハッシュから確立（二重setSession防止）
-    const { data: { session: existingSession } } = await supabase.auth.getSession()
-    if (!existingSession && INITIAL_HASH) {
+    // 招待トークンがある場合は必ず優先してセッションを確立（管理者セッションを上書き）
+    if (INITIAL_HASH) {
       const params = new URLSearchParams(INITIAL_HASH.substring(1))
       const accessToken = params.get('access_token')
       const refreshToken = params.get('refresh_token')
       if (accessToken && refreshToken) {
-        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+        const { error: sessionErr } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+        if (sessionErr) {
+          setLoading(false)
+          setError('リンクの有効期限が切れています。管理者に新しいリンクを発行してもらってください。')
+          return
+        }
       }
+    }
+
+    // セッションが確立されているか確認
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      setLoading(false)
+      setError('セッションが確立できませんでした。管理者に新しいリンクを発行してもらってください。')
+      return
     }
 
     const { error: err, data: updateData } = await supabase.auth.updateUser({
