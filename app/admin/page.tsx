@@ -17,6 +17,8 @@ export default function AdminPage() {
   const [saved, setSaved] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [backing, setBacking] = useState(false)
+  const [backupResult, setBackupResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [sheetsConfigured, setSheetsConfigured] = useState<boolean | null>(null)
   const [noteMonth, setNoteMonth] = useState(() => {
     const now = new Date()
@@ -63,6 +65,29 @@ export default function AdminPage() {
       setSyncResult({ ok: false, message: e.message })
     }
     setSyncing(false)
+  }
+
+  async function backupToSheets() {
+    if (!organization || !sheetId) return
+    setBacking(true)
+    setBackupResult(null)
+    try {
+      const res = await fetch('/api/sheets/backup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spreadsheetId: sheetId, orgIds: [organization.id] }),
+      })
+      const d = await res.json()
+      if (res.ok) {
+        const s = d.stats
+        setBackupResult({ ok: true, message: `バックアップ完了 ✓ ${s.date} / 担当者${s.reps}件・実績${s.records}件・契約${s.contracts}件` })
+      } else {
+        setBackupResult({ ok: false, message: d.error || 'エラーが発生しました' })
+      }
+    } catch (e: any) {
+      setBackupResult({ ok: false, message: e.message })
+    }
+    setBacking(false)
   }
 
   useEffect(() => {
@@ -212,6 +237,26 @@ export default function AdminPage() {
           {syncResult && (
             <div className={`mt-2 text-xs px-3 py-2 rounded-lg font-medium ${syncResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
               {syncResult.message}
+            </div>
+          )}
+
+          {/* バックアップボタン */}
+          <button
+            onClick={backupToSheets}
+            disabled={backing || !sheetId || sheetsConfigured === false}
+            className="w-full bg-slate-600 hover:bg-slate-500 disabled:opacity-40 text-white text-sm font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 mt-2"
+          >
+            {backing ? (
+              <><span className="animate-spin inline-block">⟳</span> バックアップ中...</>
+            ) : (
+              <>🗂️ 日付付きバックアップを作成</>
+            )}
+          </button>
+          <p className="text-xs text-slate-400 mt-1">本日の日付（例: 日別実績_2026-04-29）でシートを作成します。上書きされません。</p>
+
+          {backupResult && (
+            <div className={`mt-2 text-xs px-3 py-2 rounded-lg font-medium ${backupResult.ok ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'}`}>
+              {backupResult.message}
             </div>
           )}
         </div>
