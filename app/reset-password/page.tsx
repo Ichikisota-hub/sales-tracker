@@ -64,16 +64,15 @@ export default function ResetPasswordPage() {
     setError('')
     setLoading(true)
 
-    // キャプチャ済みハッシュからセッションを確立
-    if (INITIAL_HASH) {
+    // 既存セッションを確認し、なければハッシュから確立（二重setSession防止）
+    const { data: { session: existingSession } } = await supabase.auth.getSession()
+    if (!existingSession && INITIAL_HASH) {
       const params = new URLSearchParams(INITIAL_HASH.substring(1))
       const accessToken = params.get('access_token')
       const refreshToken = params.get('refresh_token')
       if (accessToken && refreshToken) {
         await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
       }
-    } else {
-      await supabase.auth.getSession()
     }
 
     const { error: err, data: updateData } = await supabase.auth.updateUser({
