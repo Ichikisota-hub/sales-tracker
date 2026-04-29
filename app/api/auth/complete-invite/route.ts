@@ -101,7 +101,12 @@ export async function POST(req: NextRequest) {
   }
 
   // 6. rep_id がない場合 → fullName で sales_reps を名前マッチ
+  //    ORIGIN組織: 名前マッチのみ（既存データと紐付け）
+  //    それ以外の組織: 名前マッチで見つからない場合は自動作成
   if (!repIdFromInvite) {
+    const orgName = (invitation as any).organizations?.name as string || ''
+    const isOrigin = orgName.toUpperCase().includes('ORIGIN')
+
     const { data: membership } = await supabase
       .from('organization_members')
       .select('id')
@@ -132,6 +137,35 @@ export async function POST(req: NextRequest) {
           await supabase
             .from('organization_members')
             .update({ sales_rep_id: rep.id })
+            .eq('id', membership.id)
+        }
+      } else if (!isOrigin) {
+        // ORIGIN以外: 担当者が存在しない場合は自動作成して紐付け
+        const { data: maxRep } = await supabase
+          .from('sales_reps')
+          .select('display_order')
+          .eq('organization_id', orgId)
+          .order('display_order', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        const nextOrder = (maxRep?.display_order ?? 0) + 1
+
+        const { data: newRep } = await supabase
+          .from('sales_reps')
+          .insert({
+            organization_id: orgId,
+            name: fullName.trim(),
+            is_active: true,
+            display_order: nextOrder,
+          })
+          .select('id')
+          .single()
+
+        if (newRep) {
+          await supabase
+            .from('organization_members')
+            .update({ sales_rep_id: newRep.id })
             .eq('id', membership.id)
         }
       }
