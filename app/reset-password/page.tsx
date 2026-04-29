@@ -5,11 +5,12 @@ import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
 import { Lock, Mail, User, Building2, Loader2, CheckCircle } from 'lucide-react'
 
-// 招待リンクのURLハッシュをモジュール評価時に即時キャプチャ
+// モジュール評価時にURLのハッシュとクエリを即キャプチャ（Supabaseがクリアする前に）
 const INITIAL_HASH = typeof window !== 'undefined' ? window.location.hash : ''
+const INITIAL_SEARCH = typeof window !== 'undefined' ? window.location.search : ''
 
-// JWTから招待先組織IDを取得
-function getInvitedOrgId(hash: string): string | null {
+// JWTからinvited_to_orgを取得（implicit flowのハッシュトークン用）
+function getInvitedOrgIdFromHash(hash: string): string | null {
   try {
     const params = new URLSearchParams(hash.substring(1))
     const token = params.get('access_token')
@@ -19,7 +20,8 @@ function getInvitedOrgId(hash: string): string | null {
   } catch { return null }
 }
 
-const INVITED_ORG_ID = getInvitedOrgId(INITIAL_HASH)
+// ハッシュからinvited_to_orgを先読み（implicit flow用）
+const INVITED_ORG_ID_FROM_HASH = getInvitedOrgIdFromHash(INITIAL_HASH)
 
 interface Org { id: string; name: string }
 
@@ -33,26 +35,45 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
+  // セッション確立に成功した後に判明したorg ID（PKCE flow用）
+  const [invitedOrgId, setInvitedOrgId] = useState<string | null>(INVITED_ORG_ID_FROM_HASH)
   const router = useRouter()
   const supabase = createClient()
 
-  // 組織一覧を取得し、招待先組織に絞り込む
+  // 組織一覧を取得
   useEffect(() => {
     fetch('/api/public/orgs')
       .then(r => r.json())
       .then((data: Org[]) => {
-        const all = data ?? []
-        if (INVITED_ORG_ID) {
-          // 招待先組織のみ表示し、自動選択
-          const matched = all.filter(o => o.id === INVITED_ORG_ID)
-          setOrgs(matched)
-          if (matched.length === 1) setAgency(matched[0].name)
-        } else {
-          setOrgs(all)
-        }
+        setOrgs(data ?? [])
       })
       .catch(() => {})
   }, [])
+
+  // invitedOrgIdが確定したら代理店を自動選択
+  useEffect(() => {
+    if (!invitedOrgId || orgs.length === 0) return
+    const matched = orgs.find(o => o.id === invitedOrgId)
+    if (matched) setAgency(matched.name)
+  }, [invitedOrgId, orgs])
+
+  // PKCE flow: ページロード時に既にセッションがあればorg情報を取得
+  useEffect(() => {
+    async function tryGetSession() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user?.user_metadata?.invited_to_org) {
+        setInvitedOrgId(session.user.user_metadata.invited_to_org as string)
+      }
+    }
+    // PKCEのcodeがURLにある場合のみ試みる（無駄なAPI呼び出しを避ける）
+    const code = new URLSearchParams(INITIAL_SEARCH).get('code')
+    if (code || INITIAL_HASH) tryGetSession()
+  }, [])
+
+  // invitedOrgIdに基づいてorg一覧を絞り込む（表示用）
+  const displayOrgs = invitedOrgId
+    ? orgs.filter(o => o.id === invitedOrgId)
+    : orgs
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -64,8 +85,19 @@ export default function ResetPasswordPage() {
     setError('')
     setLoading(true)
 
-    // 招待トークンがある場合は必ず優先してセッションを確立（管理者セッションを上書き）
-    if (INITIAL_HASH) {
+    // ── セッション確立（PKCE / implicit 両対応）──
+    const code = new URLSearchParams(INITIAL_SEARCH).get('code')
+
+    if (code) {
+      // PKCE flow: ?code= を交換してセッションを確立
+      const { error: codeErr } = await supabase.auth.exchangeCodeForSession(code)
+      if (codeErr) {
+        setLoading(false)
+        setError('リンクの有効期限が切れています。管理者に新しいリンクを発行してもらってください。')
+        return
+      }
+    } else if (INITIAL_HASH) {
+      // Implicit flow: #access_token= でセッションを確立
       const params = new URLSearchParams(INITIAL_HASH.substring(1))
       const accessToken = params.get('access_token')
       const refreshToken = params.get('refresh_token')
@@ -160,10 +192,10 @@ export default function ResetPasswordPage() {
           {/* 代理店（招待先が確定している場合は固定表示） */}
           <div className="relative">
             <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            {orgs.length === 1 ? (
+            {displayOrgs.length === 1 ? (
               <input
                 type="text"
-                value={orgs[0].name}
+                value={displayOrgs[0].name}
                 readOnly
                 className="w-full bg-slate-700/50 text-slate-300 rounded-xl pl-10 pr-4 py-3 text-sm border border-slate-600 cursor-default"
               />
@@ -175,7 +207,7 @@ export default function ResetPasswordPage() {
                 className="w-full bg-slate-800 text-white rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700 appearance-none"
               >
                 <option value="">代理店を選択</option>
-                {orgs.map(o => (
+                {displayOrgs.map(o => (
                   <option key={o.id} value={o.name}>{o.name}</option>
                 ))}
               </select>
