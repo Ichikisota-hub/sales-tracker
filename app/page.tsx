@@ -64,9 +64,8 @@ export default function Home() {
   const [reps, setReps] = useState<SalesRep[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null)
-  // 全代理店合計モード
-  const [orgMode, setOrgMode] = useState<'current' | 'all' | string>('current')
-  const activeOrgIds = orgMode === 'all' ? ALL_ORG_IDS : orgMode === 'current' ? (organizationId ? [organizationId] : []) : [orgMode]
+  // 常に自分の組織のみ表示（他組織データ閲覧不可）
+  const activeOrgIds = organizationId ? [organizationId] : []
   const [selectedMonth, setSelectedMonth] = useState<string>(localYearMonth())
   const [scheduleMonth, setScheduleMonth] = useState<string>(getNextMonth(localYearMonth()))
   const [activeTab, setActiveTab] = useState<MainTab>('form')
@@ -117,16 +116,6 @@ export default function Home() {
     setLoading(false)
   }
 
-  // orgMode 変更時にデータを再読み込み
-  useEffect(() => {
-    if (orgMode === 'current') {
-      loadReps()
-    } else if (orgMode === 'all') {
-      loadCombinedRepsTeams(ALL_ORG_IDS)
-    } else {
-      loadCombinedRepsTeams([orgMode])
-    }
-  }, [orgMode])
 
   // rep自動選択: membership と reps が揃ったタイミングで実行
   useEffect(() => {
@@ -226,22 +215,6 @@ export default function Home() {
         {/* Row 1: Logo + Selectors */}
         <div className="flex items-center gap-2 mb-2.5">
           <img src="/logo.png" alt="ORIGIN SALES REPORTING" className="h-11 w-auto flex-shrink-0" />
-
-          {/* 代理店セレクター (superadmin のみ) */}
-          {isSuperAdmin && (
-            <select
-              value={orgMode}
-              onChange={e => setOrgMode(e.target.value)}
-              className="text-slate-200 text-xs font-semibold rounded-xl px-2.5 py-1.5 outline-none cursor-pointer flex-shrink-0"
-              style={{ background: orgMode === 'all' ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,.09)', border: orgMode === 'all' ? '1px solid rgba(99,102,241,0.5)' : '1px solid rgba(255,255,255,.1)' }}
-            >
-              <option value="current" className="bg-slate-800">現在の代理店</option>
-              {MULTI_ORGS.map(o => (
-                <option key={o.id} value={o.id} className="bg-slate-800">{o.label}</option>
-              ))}
-              <option value="all" className="bg-slate-800">全代理店合計</option>
-            </select>
-          )}
 
           {isShiftSubmitTab ? (
             <div className="flex gap-1.5">
@@ -417,7 +390,7 @@ export default function Home() {
             <ContractListView
               key={contractRefreshKey}
               reps={reps}
-              selectedRepId={orgMode === 'all' ? null : (selectedRep?.id || null)}
+              selectedRepId={selectedRep?.id || null}
               onAdd={() => setShowContractAdd(true)}
               orgIds={activeOrgIds}
             />
