@@ -8,6 +8,19 @@ import { Lock, Mail, User, Building2, Loader2, CheckCircle } from 'lucide-react'
 // 招待リンクのURLハッシュをモジュール評価時に即時キャプチャ
 const INITIAL_HASH = typeof window !== 'undefined' ? window.location.hash : ''
 
+// JWTから招待先組織IDを取得
+function getInvitedOrgId(hash: string): string | null {
+  try {
+    const params = new URLSearchParams(hash.substring(1))
+    const token = params.get('access_token')
+    if (!token) return null
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return payload.user_metadata?.invited_to_org || null
+  } catch { return null }
+}
+
+const INVITED_ORG_ID = getInvitedOrgId(INITIAL_HASH)
+
 interface Org { id: string; name: string }
 
 export default function ResetPasswordPage() {
@@ -23,11 +36,21 @@ export default function ResetPasswordPage() {
   const router = useRouter()
   const supabase = createClient()
 
-  // 組織一覧を取得
+  // 組織一覧を取得し、招待先組織に絞り込む
   useEffect(() => {
     fetch('/api/public/orgs')
       .then(r => r.json())
-      .then((data: Org[]) => setOrgs(data ?? []))
+      .then((data: Org[]) => {
+        const all = data ?? []
+        if (INVITED_ORG_ID) {
+          // 招待先組織のみ表示し、自動選択
+          const matched = all.filter(o => o.id === INVITED_ORG_ID)
+          setOrgs(matched)
+          if (matched.length === 1) setAgency(matched[0].name)
+        } else {
+          setOrgs(all)
+        }
+      })
       .catch(() => {})
   }, [])
 
@@ -123,20 +146,29 @@ export default function ResetPasswordPage() {
             />
           </div>
 
-          {/* 代理店（組織から選択） */}
+          {/* 代理店（招待先が確定している場合は固定表示） */}
           <div className="relative">
             <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            <select
-              value={agency}
-              onChange={e => setAgency(e.target.value)}
-              required
-              className="w-full bg-slate-800 text-white rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700 appearance-none"
-            >
-              <option value="">代理店を選択</option>
-              {orgs.map(o => (
-                <option key={o.id} value={o.name}>{o.name}</option>
-              ))}
-            </select>
+            {orgs.length === 1 ? (
+              <input
+                type="text"
+                value={orgs[0].name}
+                readOnly
+                className="w-full bg-slate-700/50 text-slate-300 rounded-xl pl-10 pr-4 py-3 text-sm border border-slate-600 cursor-default"
+              />
+            ) : (
+              <select
+                value={agency}
+                onChange={e => setAgency(e.target.value)}
+                required
+                className="w-full bg-slate-800 text-white rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700 appearance-none"
+              >
+                <option value="">代理店を選択</option>
+                {orgs.map(o => (
+                  <option key={o.id} value={o.name}>{o.name}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* 名前 */}
