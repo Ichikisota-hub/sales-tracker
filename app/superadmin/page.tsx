@@ -62,6 +62,7 @@ export default function SuperAdminPage() {
   const [membersLoading, setMembersLoading] = useState(false)
   const [deletingMemberId, setDeletingMemberId] = useState<string | null>(null)
   const [resetingMemberId, setResetingMemberId] = useState<string | null>(null)
+  const [savingRepMemberId, setSavingRepMemberId] = useState<string | null>(null)
   const [resetMsg, setResetMsg] = useState<{ id: string; msg: string; ok: boolean; link?: string } | null>(null)
   const [resetLinkCopied, setResetLinkCopied] = useState(false)
 
@@ -292,6 +293,17 @@ export default function SuperAdminPage() {
     if (membersRes.ok) setMembers(await membersRes.json())
     if (repsRes.ok) setOrgReps(await repsRes.json())
     setMembersLoading(false)
+  }
+
+  async function changeSalesRep(memberId: string, orgId: string, salesRepId: string | null) {
+    setSavingRepMemberId(memberId)
+    await fetch('/api/admin/members', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberId, salesRepId }),
+    })
+    setMembers(prev => prev.map(x => x.id === memberId ? { ...x, sales_rep_id: salesRepId } : x))
+    setSavingRepMemberId(null)
   }
 
   async function deleteMember(member: Member) {
@@ -793,9 +805,14 @@ export default function SuperAdminPage() {
                                     </span>
                                   </div>
                                   <p className="text-xs text-slate-500 mt-0.5 truncate">{m.email}</p>
-                                  <p className="text-xs text-slate-600 mt-0.5">
+                                  <p className="text-xs text-slate-600 mt-0.5 flex items-center gap-1 flex-wrap">
                                     参加: {new Date(m.joined_at).toLocaleDateString('ja-JP')}
                                     {m.last_sign_in_at && <> ・ 最終ログイン: {new Date(m.last_sign_in_at).toLocaleDateString('ja-JP')}</>}
+                                    {m.sales_rep_id && orgReps.find(r => r.id === m.sales_rep_id) && (
+                                      <span className="ml-1 text-indigo-400 font-semibold flex items-center gap-0.5">
+                                        🔗 {orgReps.find(r => r.id === m.sales_rep_id)?.name}
+                                      </span>
+                                    )}
                                   </p>
                                 </div>
                                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full shrink-0 ${
@@ -806,20 +823,16 @@ export default function SuperAdminPage() {
                                   {ROLE_LABELS[m.role] ?? m.role}
                                 </span>
                                 <div className="flex gap-1.5 shrink-0 flex-wrap justify-end">
-                                  {/* 担当者紐付け変更 */}
-                                  {orgReps.length > 0 && (
+                                  {/* 担当者紐付け変更（MemberListと同じロジック） */}
+                                  <div className="flex items-center gap-1">
+                                    {savingRepMemberId === m.id && (
+                                      <span className="text-[10px] text-indigo-400 animate-pulse">保存中...</span>
+                                    )}
                                     <select
                                       value={m.sales_rep_id ?? ''}
-                                      onChange={async e => {
-                                        const newRepId = e.target.value || null
-                                        await fetch('/api/admin/members', {
-                                          method: 'PATCH',
-                                          headers: { 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({ memberId: m.id, salesRepId: newRepId }),
-                                        })
-                                        setMembers(prev => prev.map(x => x.id === m.id ? { ...x, sales_rep_id: newRepId } : x))
-                                      }}
-                                      className={`text-xs rounded-lg px-2 py-1 outline-none ${
+                                      onChange={e => changeSalesRep(m.id, membersOrgId!, e.target.value || null)}
+                                      disabled={savingRepMemberId === m.id}
+                                      className={`text-xs rounded-lg px-2 py-1 outline-none disabled:opacity-50 ${
                                         m.sales_rep_id
                                           ? 'bg-indigo-900/50 border border-indigo-600 text-indigo-300'
                                           : 'bg-slate-700 border border-slate-600 text-slate-400'
@@ -830,7 +843,7 @@ export default function SuperAdminPage() {
                                         <option key={r.id} value={r.id}>{r.name}</option>
                                       ))}
                                     </select>
-                                  )}
+                                  </div>
                                   <button
                                     onClick={() => { setPwEditId(pwEditId === m.id ? null : m.id); setNewPw(''); setPwMsg('') }}
                                     className="text-xs px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition-colors"
