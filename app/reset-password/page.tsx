@@ -75,25 +75,39 @@ export default function ResetPasswordPage() {
     } else {
       await supabase.auth.getSession()
     }
-    const { error: err } = await supabase.auth.updateUser({
+    const { error: err, data: updateData } = await supabase.auth.updateUser({
       password,
       data: {
         full_name: fullName.trim(),
         agency,
       },
     })
-    setLoading(false)
 
     if (err) {
+      setLoading(false)
       if (err.message.includes('session') || err.message.includes('token') || err.message.includes('expired')) {
         setError('リンクの有効期限が切れています。管理者に新しいリンクを発行してもらってください。')
       } else {
         setError(err.message)
       }
-    } else {
-      setDone(true)
-      setTimeout(() => router.push('/'), 2500)
+      return
     }
+
+    // 名前と一致するsales_repを自動紐付け
+    const accessToken = updateData.user
+      ? (await supabase.auth.getSession()).data.session?.access_token
+      : null
+    if (accessToken) {
+      await fetch('/api/auth/link-rep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ fullName: fullName.trim() }),
+      }).catch(() => {})
+    }
+
+    setLoading(false)
+    setDone(true)
+    setTimeout(() => router.push('/'), 2500)
   }
 
   if (done) {
