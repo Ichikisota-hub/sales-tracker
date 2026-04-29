@@ -7,6 +7,19 @@ import { Lock, Mail, User, Building2, Loader2, CheckCircle } from 'lucide-react'
 
 interface Org { id: string; name: string }
 
+// Supabaseがハッシュを消去する前にモジュール評価時点で即時キャプチャ
+const INITIAL_HASH = typeof window !== 'undefined' ? window.location.hash : ''
+
+function decodeEmailFromHash(hash: string): string | null {
+  try {
+    const params = new URLSearchParams(hash.substring(1))
+    const token = params.get('access_token')
+    if (!token) return null
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return payload.email || null
+  } catch { return null }
+}
+
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState('')
   const [orgs, setOrgs] = useState<Org[]>([])
@@ -21,25 +34,13 @@ export default function ResetPasswordPage() {
   // シングルトンクライアントを使うことでURLハッシュ処理と同じインスタンスになる
   const supabase = createClient()
 
-  // メールアドレスをセッションから取得
-  // メールアドレスをURLハッシュのJWTから直接デコード（APIコール不要・即時表示）
+  // メールアドレス取得：モジュール評価時にキャプチャしたハッシュから即時デコード
   useEffect(() => {
-    function decodeEmailFromHash(): string | null {
-      try {
-        const params = new URLSearchParams(window.location.hash.substring(1))
-        const token = params.get('access_token')
-        if (!token) return null
-        // JWTのペイロード部分をデコード（base64url → JSON）
-        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
-        return payload.email || null
-      } catch { return null }
-    }
-
-    const emailFromHash = decodeEmailFromHash()
+    const emailFromHash = decodeEmailFromHash(INITIAL_HASH)
     if (emailFromHash) {
       setEmail(emailFromHash)
     } else {
-      // ハッシュがない場合（既ログイン状態など）は既存セッションから取得
+      // ハッシュがない場合は既存セッションから取得
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user?.email) setEmail(session.user.email)
       })
@@ -63,10 +64,9 @@ export default function ResetPasswordPage() {
     setError('')
     setLoading(true)
 
-    // ハッシュにトークンがあればセッションを確立してから更新
-    const hash = window.location.hash
-    if (hash) {
-      const params = new URLSearchParams(hash.substring(1))
+    // キャプチャ済みハッシュからトークンを取得してセッションを確立
+    if (INITIAL_HASH) {
+      const params = new URLSearchParams(INITIAL_HASH.substring(1))
       const accessToken = params.get('access_token')
       const refreshToken = params.get('refresh_token')
       if (accessToken && refreshToken) {
