@@ -104,9 +104,6 @@ export async function POST(req: NextRequest) {
   //    ORIGIN組織: 名前マッチのみ（既存データと紐付け）
   //    それ以外の組織: 名前マッチで見つからない場合は自動作成
   if (!repIdFromInvite) {
-    const orgName = (invitation as any).organizations?.name as string || ''
-    const isOrigin = orgName.toUpperCase().includes('ORIGIN')
-
     const { data: membership } = await supabase
       .from('organization_members')
       .select('id')
@@ -139,8 +136,8 @@ export async function POST(req: NextRequest) {
             .update({ sales_rep_id: rep.id })
             .eq('id', membership.id)
         }
-      } else if (!isOrigin) {
-        // ORIGIN以外: 担当者が存在しない場合は自動作成して紐付け
+      } else {
+        // 担当者が存在しない場合は自動作成して紐付け
         const { data: maxRep } = await supabase
           .from('sales_reps')
           .select('display_order')
