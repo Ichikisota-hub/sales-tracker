@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!checkAuth(req)) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
 
-  const { orgId, email, role } = await req.json()
+  const { orgId, email, role, repId } = await req.json()
   if (!orgId || !email) return NextResponse.json({ error: 'orgId と email が必要です' }, { status: 400 })
 
   const supabase = getServiceClient()
@@ -75,12 +75,15 @@ export async function POST(req: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sales-tracker-pied.vercel.app'
 
   if (!existingUser) {
-    // 新規: 招待リンクを生成
+    // 新規: 招待リンクを生成（repIdがあればメタデータに埋め込む）
+    const inviteMeta: Record<string, string> = { invited_to_org: orgId }
+    if (repId) inviteMeta.sales_rep_id = repId
+
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: 'invite',
       email,
       options: {
-        data: { invited_to_org: orgId },
+        data: inviteMeta,
         redirectTo: `${appUrl}/reset-password`,
       },
     })
@@ -117,6 +120,7 @@ export async function POST(req: NextRequest) {
     user_id: targetUser.id,
     role: role || 'member',
     joined_at: new Date().toISOString(),
+    ...(repId ? { sales_rep_id: repId } : {}),
   })
 
   if (memberError) return NextResponse.json({ error: memberError.message }, { status: 500 })

@@ -22,13 +22,15 @@ export default function InviteForm({ onInvited }: Props) {
   const [inviteUrl, setInviteUrl] = useState('')
 
   useEffect(() => {
+    if (!organizationId) return
     supabase
       .from('sales_reps')
       .select('*')
       .eq('is_active', true)
+      .eq('organization_id', organizationId)
       .order('display_order')
       .then(({ data }: { data: import('@/lib/supabase').SalesRep[] | null }) => setReps(data ?? []))
-  }, [])
+  }, [organizationId])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -36,7 +38,7 @@ export default function InviteForm({ onInvited }: Props) {
     setInviteUrl('')
     setLoading(true)
 
-    const res = await fetch('/api/invite', {
+    const res = await fetch('/api/admin/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -55,7 +57,7 @@ export default function InviteForm({ onInvited }: Props) {
       return
     }
 
-    setInviteUrl(data.inviteUrl)
+    setInviteUrl(data.inviteLink || '')
     setEmail('')
     setRepId('')
     onInvited()

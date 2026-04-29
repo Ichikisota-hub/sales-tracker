@@ -75,6 +75,8 @@ export default function SuperAdminPage() {
   const [inviteOrgId, setInviteOrgId] = useState<string | null>(null)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('member')
+  const [inviteRepId, setInviteRepId] = useState('')
+  const [orgReps, setOrgReps] = useState<{ id: string; name: string }[]>([])
   const [inviting, setInviting] = useState(false)
   const [inviteMsg, setInviteMsg] = useState<{ ok: boolean; msg: string } | null>(null)
   const [inviteLink, setInviteLink] = useState<string | null>(null)
@@ -274,16 +276,21 @@ export default function SuperAdminPage() {
     if (membersOrgId === orgId) {
       setMembersOrgId(null)
       setMembers([])
+      setOrgReps([])
       return
     }
     setMembersOrgId(orgId)
     setEditingId(null)
     setEditState(null)
     setMembersLoading(true)
-    const res = await fetch(`/api/superadmin/members?orgId=${orgId}`, {
-      headers: { 'x-superadmin-key': SUPERADMIN_KEY },
-    })
-    if (res.ok) setMembers(await res.json())
+    setInviteRepId('')
+    setOrgReps([])
+    const [membersRes, repsRes] = await Promise.all([
+      fetch(`/api/superadmin/members?orgId=${orgId}`, { headers: { 'x-superadmin-key': SUPERADMIN_KEY } }),
+      fetch(`/api/superadmin/reps?orgId=${orgId}`, { headers: { 'x-superadmin-key': SUPERADMIN_KEY } }),
+    ])
+    if (membersRes.ok) setMembers(await membersRes.json())
+    if (repsRes.ok) setOrgReps(await repsRes.json())
     setMembersLoading(false)
   }
 
@@ -343,7 +350,7 @@ export default function SuperAdminPage() {
     const res = await fetch('/api/superadmin/members', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-superadmin-key': SUPERADMIN_KEY },
-      body: JSON.stringify({ orgId, email: inviteEmail.trim(), role: inviteRole }),
+      body: JSON.stringify({ orgId, email: inviteEmail.trim(), role: inviteRole, ...(inviteRepId ? { repId: inviteRepId } : {}) }),
     })
     const d = await res.json()
     setInviteMsg({ ok: res.ok, msg: res.ok ? (d.isExisting ? `${d.email} を組織に追加しました（既存ユーザー）` : `${d.email} の招待リンクを発行しました`) : d.error })
@@ -351,6 +358,7 @@ export default function SuperAdminPage() {
       setInviteLink(d.inviteLink || null)
       setCopied(false)
       setInviteEmail('')
+      setInviteRepId('')
       // メンバーリストを直接リロード（ダブルトグルバグ回避）
       setMembersLoading(true)
       const r2 = await fetch(`/api/superadmin/members?orgId=${orgId}`, {
@@ -711,6 +719,18 @@ export default function SuperAdminPage() {
                               <option value="manager">マネージャー</option>
                               <option value="admin">管理者</option>
                             </select>
+                            {orgReps.length > 0 && (
+                              <select
+                                value={inviteRepId}
+                                onChange={e => setInviteRepId(e.target.value)}
+                                className="bg-slate-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                              >
+                                <option value="">担当者なし</option>
+                                {orgReps.map(r => (
+                                  <option key={r.id} value={r.id}>{r.name}</option>
+                                ))}
+                              </select>
+                            )}
                             <button
                               onClick={() => inviteMember(org.id)}
                               disabled={inviting}
@@ -785,7 +805,32 @@ export default function SuperAdminPage() {
                                 }`}>
                                   {ROLE_LABELS[m.role] ?? m.role}
                                 </span>
-                                <div className="flex gap-1.5 shrink-0">
+                                <div className="flex gap-1.5 shrink-0 flex-wrap justify-end">
+                                  {/* 担当者紐付け変更 */}
+                                  {orgReps.length > 0 && (
+                                    <select
+                                      value={m.sales_rep_id ?? ''}
+                                      onChange={async e => {
+                                        const newRepId = e.target.value || null
+                                        await fetch('/api/admin/members', {
+                                          method: 'PATCH',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ memberId: m.id, salesRepId: newRepId }),
+                                        })
+                                        setMembers(prev => prev.map(x => x.id === m.id ? { ...x, sales_rep_id: newRepId } : x))
+                                      }}
+                                      className={`text-xs rounded-lg px-2 py-1 outline-none ${
+                                        m.sales_rep_id
+                                          ? 'bg-indigo-900/50 border border-indigo-600 text-indigo-300'
+                                          : 'bg-slate-700 border border-slate-600 text-slate-400'
+                                      }`}
+                                    >
+                                      <option value="">担当者なし</option>
+                                      {orgReps.map(r => (
+                                        <option key={r.id} value={r.id}>{r.name}</option>
+                                      ))}
+                                    </select>
+                                  )}
                                   <button
                                     onClick={() => { setPwEditId(pwEditId === m.id ? null : m.id); setNewPw(''); setPwMsg('') }}
                                     className="text-xs px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white transition-colors"

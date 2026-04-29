@@ -56,7 +56,31 @@ export async function POST(req: NextRequest) {
 
   if (!membership) return NextResponse.json({ error: 'メンバーシップが見つかりません' }, { status: 404 })
 
-  // 同じ組織内で名前が一致するsales_repを検索
+  // ── 方式1: user_metadataにsales_rep_idがあればIDで直接紐付け ──
+  const { data: { user: authUser } } = await supabase.auth.admin.getUserById(userId)
+  const metadataRepId = authUser?.user_metadata?.sales_rep_id as string | undefined
+
+  if (metadataRepId) {
+    // メタデータで指定されたrepが同組織のものか確認
+    const { data: metaRep } = await supabase
+      .from('sales_reps')
+      .select('id, name')
+      .eq('id', metadataRepId)
+      .eq('organization_id', membership.organization_id)
+      .eq('is_active', true)
+      .single()
+
+    if (metaRep) {
+      const { error } = await supabase
+        .from('organization_members')
+        .update({ sales_rep_id: metaRep.id })
+        .eq('id', membership.id)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ success: true, linked: true, repName: metaRep.name, method: 'metadata' })
+    }
+  }
+
+  // ── 方式2: 名前マッチ（フォールバック）──
   const { data: rep } = await supabase
     .from('sales_reps')
     .select('id, name')
@@ -70,6 +94,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, linked: false, message: '一致する担当者が見つかりませんでした' })
   }
 
+  // 同じ担当者が既に別のメンバーに紐付いていないかチェック（重複防止）
+  const { data: alreadyLinked } = await supabase
+    .from('organization_members')
+    .select('id')
+    .eq('organization_id', membership.organization_id)
+    .eq('sales_rep_id', rep.id)
+    .neq('user_id', userId)
+    .maybeSingle()
+
+  if (alreadyLinked) {
+    return NextResponse.json({
+      success: true,
+      linked: false,
+      message: 'この担当者は既に別のメンバーに紐付いています。管理者が担当者を設定します。',
+    })
+  }
+
   // sales_rep_idを更新
   const { error } = await supabase
     .from('organization_members')
@@ -78,5 +119,5 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ success: true, linked: true, repName: rep.name })
+  return NextResponse.json({ success: true, linked: true, repName: rep.name, method: 'name' })
 }
