@@ -122,10 +122,14 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
     lines.push(`🕒 稼働時間：${workTime}`)
     lines.push('')
     lines.push(`訪問数：${(record.visits as number) || 0}`)
-    lines.push(`ネット対面：${(record.net_meetings as number) || 0}`)
-    lines.push(`主権対面：${(record.owner_meetings as number) || 0}`)
+    lines.push(`インターホンのみ：${(record.interphone_only as number) || 0}`)
+    lines.push(`対面数：${(record.net_meetings as number) || 0}`)
+    lines.push(`紙プレ：${(record.paper_presentation as number) || 0}`)
+    lines.push(`フルトーク：${(record.full_talk as number) || 0}`)
+    lines.push(`宅内IN：${(record.indoor_entry as number) || 0}`)
     lines.push(`商談：${(record.negotiations as number) || 0}`)
-    lines.push(`獲得：${(record.acquisitions as number) || 0}`)
+    lines.push(`見込み：${(record.prospects as number) || 0}`)
+    lines.push(`受注：${(record.acquisitions as number) || 0}`)
     lines.push('')
     lines.push(`獲得エリア：${buildAreaString(record)}`)
     lines.push(`獲得案件：${acquisitionCase || 'なし'}`)
@@ -166,11 +170,16 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
         improvements,
         learnings,
         gratitude,
-        visits:         (record.visits         as number) || 0,
-        net_meetings:   (record.net_meetings    as number) || 0,
-        owner_meetings: (record.owner_meetings  as number) || 0,
-        negotiations:   (record.negotiations    as number) || 0,
-        acquisitions:   (record.acquisitions    as number) || 0,
+        visits:              (record.visits              as number) || 0,
+        interphone_only:     (record.interphone_only     as number) || 0,
+        net_meetings:        (record.net_meetings        as number) || 0,
+        paper_presentation:  (record.paper_presentation  as number) || 0,
+        full_talk:           (record.full_talk           as number) || 0,
+        indoor_entry:        (record.indoor_entry        as number) || 0,
+        owner_meetings:      (record.owner_meetings      as number) || 0,
+        negotiations:        (record.negotiations        as number) || 0,
+        prospects:           (record.prospects           as number) || 0,
+        acquisitions:        (record.acquisitions        as number) || 0,
         updated_at: new Date().toISOString(),
       }
       await supabase

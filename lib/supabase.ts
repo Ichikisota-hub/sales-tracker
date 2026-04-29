@@ -85,9 +85,14 @@ export type DailyRecord = {
   work_time_start: string
   work_time_end: string
   visits: number
+  interphone_only: number
   net_meetings: number
+  paper_presentation: number
+  full_talk: number
+  indoor_entry: number
   owner_meetings: number
   negotiations: number
+  prospects: number
   acquisitions: number
   area_pref: string
   area_city: string
@@ -123,9 +128,14 @@ export type DailyReport = {
   learnings: string
   gratitude: string
   visits: number
+  interphone_only: number
   net_meetings: number
+  paper_presentation: number
+  full_talk: number
+  indoor_entry: number
   owner_meetings: number
   negotiations: number
+  prospects: number
   acquisitions: number
   organization_id: string | null
   created_at: string

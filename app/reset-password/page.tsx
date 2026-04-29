@@ -22,34 +22,28 @@ export default function ResetPasswordPage() {
   const supabase = createClient()
 
   // メールアドレスをセッションから取得
-  // メールアドレスを取得（URLハッシュトークン → 既存セッションの順で試みる）
+  // メールアドレスをURLハッシュのJWTから直接デコード（APIコール不要・即時表示）
   useEffect(() => {
-    async function init() {
-      // 招待リンクのハッシュ（#access_token=...&refresh_token=...）を明示的に処理
-      const hash = window.location.hash
-      if (hash) {
-        const params = new URLSearchParams(hash.substring(1))
-        const accessToken = params.get('access_token')
-        const refreshToken = params.get('refresh_token')
-        if (accessToken && refreshToken) {
-          const { data } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
-          if (data.session?.user?.email) {
-            setEmail(data.session.user.email)
-            return
-          }
-        }
-      }
-      // ハッシュがない場合は既存セッションを確認
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user?.email) setEmail(session.user.email)
+    function decodeEmailFromHash(): string | null {
+      try {
+        const params = new URLSearchParams(window.location.hash.substring(1))
+        const token = params.get('access_token')
+        if (!token) return null
+        // JWTのペイロード部分をデコード（base64url → JSON）
+        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+        return payload.email || null
+      } catch { return null }
     }
 
-    init()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user?.email) setEmail(session.user.email)
-    })
-    return () => subscription.unsubscribe()
+    const emailFromHash = decodeEmailFromHash()
+    if (emailFromHash) {
+      setEmail(emailFromHash)
+    } else {
+      // ハッシュがない場合（既ログイン状態など）は既存セッションから取得
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user?.email) setEmail(session.user.email)
+      })
+    }
   }, [])
 
   // 組織一覧を取得
@@ -69,7 +63,18 @@ export default function ResetPasswordPage() {
     setError('')
     setLoading(true)
 
-    await supabase.auth.getSession()
+    // ハッシュにトークンがあればセッションを確立してから更新
+    const hash = window.location.hash
+    if (hash) {
+      const params = new URLSearchParams(hash.substring(1))
+      const accessToken = params.get('access_token')
+      const refreshToken = params.get('refresh_token')
+      if (accessToken && refreshToken) {
+        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+      }
+    } else {
+      await supabase.auth.getSession()
+    }
     const { error: err } = await supabase.auth.updateUser({
       password,
       data: {

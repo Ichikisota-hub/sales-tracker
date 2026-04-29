@@ -101,11 +101,16 @@ export default function SubmissionCheckView({ yearMonth, teams, orgIds }: Props)
         .map(rep => {
           const rec = (recIdx[dateStr] || {})[rep.id]
           const hasNumbers = rec != null && (
-            Number(rec.visits)         > 0 ||
-            Number(rec.net_meetings)   > 0 ||
-            Number(rec.owner_meetings) > 0 ||
-            Number(rec.negotiations)   > 0 ||
-            Number(rec.acquisitions)   > 0
+            Number(rec.visits)              > 0 ||
+            Number(rec.interphone_only)     > 0 ||
+            Number(rec.net_meetings)        > 0 ||
+            Number(rec.paper_presentation)  > 0 ||
+            Number(rec.full_talk)           > 0 ||
+            Number(rec.indoor_entry)        > 0 ||
+            Number(rec.owner_meetings)      > 0 ||
+            Number(rec.negotiations)        > 0 ||
+            Number(rec.prospects)           > 0 ||
+            Number(rec.acquisitions)        > 0
           )
           const hasReport = reportSet.has(`${dateStr}__${rep.id}`)
           return { rep, hasNumbers, hasReport }

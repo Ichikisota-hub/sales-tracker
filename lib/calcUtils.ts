@@ -3,9 +3,14 @@ import { getDaysArray } from './dateUtils'
 
 export type MonthlyStats = {
   totalVisits: number
+  totalInterphoneOnly: number
   totalNetMeetings: number
+  totalPaperPresentation: number
+  totalFullTalk: number
+  totalIndoorEntry: number
   totalOwnerMeetings: number
   totalNegotiations: number
+  totalProspects: number
   totalAcquisitions: number
   avgVisits: number
   avgNetMeetings: number
@@ -56,13 +61,18 @@ export function calcMonthlyStats(
 
   // 実稼働: attendance_status === '稼働' のみ
   const workingRecords = records.filter(r => r.attendance_status === '稼働')
-  const totalVisits        = records.reduce((s, r) => s + (r.visits || 0), 0)
-  const totalNetMeetings   = records.reduce((s, r) => s + (r.net_meetings || 0), 0)
-  const totalOwnerMeetings = records.reduce((s, r) => s + (r.owner_meetings || 0), 0)
-  const totalNegotiations  = records.reduce((s, r) => s + (r.negotiations || 0), 0)
-  const totalAcquisitions  = records.reduce((s, r) => s + (r.acquisitions || 0), 0)
-  const actualWorkingDays  = workingRecords.length
-  const totalWorkingHours  = records.reduce((s, r) => s + (r.working_hours || 0), 0)
+  const totalVisits            = records.reduce((s, r) => s + (r.visits || 0), 0)
+  const totalInterphoneOnly    = records.reduce((s, r) => s + (r.interphone_only || 0), 0)
+  const totalNetMeetings       = records.reduce((s, r) => s + (r.net_meetings || 0), 0)
+  const totalPaperPresentation = records.reduce((s, r) => s + (r.paper_presentation || 0), 0)
+  const totalFullTalk          = records.reduce((s, r) => s + (r.full_talk || 0), 0)
+  const totalIndoorEntry       = records.reduce((s, r) => s + (r.indoor_entry || 0), 0)
+  const totalOwnerMeetings     = records.reduce((s, r) => s + (r.owner_meetings || 0), 0)
+  const totalNegotiations      = records.reduce((s, r) => s + (r.negotiations || 0), 0)
+  const totalProspects         = records.reduce((s, r) => s + (r.prospects || 0), 0)
+  const totalAcquisitions      = records.reduce((s, r) => s + (r.acquisitions || 0), 0)
+  const actualWorkingDays      = workingRecords.length
+  const totalWorkingHours      = records.reduce((s, r) => s + (r.working_hours || 0), 0)
 
   const productivity = actualWorkingDays > 0 ? totalAcquisitions / actualWorkingDays : 0
 
@@ -141,7 +151,9 @@ export function calcMonthlyStats(
   })
 
   return {
-    totalVisits, totalNetMeetings, totalOwnerMeetings, totalNegotiations, totalAcquisitions,
+    totalVisits, totalInterphoneOnly, totalNetMeetings, totalPaperPresentation,
+    totalFullTalk, totalIndoorEntry, totalOwnerMeetings, totalNegotiations,
+    totalProspects, totalAcquisitions,
     avgVisits, avgNetMeetings, avgOwnerMeetings, avgNegotiations,
     perCaseVisits, perCaseMeetings, perCaseOwnerMeetings, perCaseNegotiations,
     actualWorkingDays, remainingWorkingDays, totalWorkingHours,

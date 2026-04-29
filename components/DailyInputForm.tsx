@@ -28,11 +28,15 @@ function calcHours(start: string, end: string): number {
 type Props = { repId: string; repName: string; yearMonth: string }
 
 const COUNTERS = [
-  { label: '訪問',       field: 'visits'         as keyof DailyRecord, plus: 'counter-btn-plus-blue' },
-  { label: 'ネット対面', field: 'net_meetings'    as keyof DailyRecord, plus: 'counter-btn-plus-indigo' },
-  { label: '主権対面',   field: 'owner_meetings'  as keyof DailyRecord, plus: 'counter-btn-plus-purple' },
-  { label: '商談',       field: 'negotiations'    as keyof DailyRecord, plus: 'counter-btn-plus-orange' },
-  { label: '獲得',       field: 'acquisitions'    as keyof DailyRecord, plus: 'counter-btn-plus-green' },
+  { label: '訪問数',         field: 'visits'            as keyof DailyRecord, plus: 'counter-btn-plus-blue' },
+  { label: 'インターホンのみ', field: 'interphone_only'   as keyof DailyRecord, plus: 'counter-btn-plus-slate' },
+  { label: '対面数',         field: 'net_meetings'       as keyof DailyRecord, plus: 'counter-btn-plus-indigo' },
+  { label: '紙プレ',         field: 'paper_presentation' as keyof DailyRecord, plus: 'counter-btn-plus-purple' },
+  { label: 'フルトーク',     field: 'full_talk'          as keyof DailyRecord, plus: 'counter-btn-plus-violet' },
+  { label: '宅内IN',         field: 'indoor_entry'       as keyof DailyRecord, plus: 'counter-btn-plus-pink' },
+  { label: '商談',           field: 'negotiations'       as keyof DailyRecord, plus: 'counter-btn-plus-orange' },
+  { label: '見込み',         field: 'prospects'          as keyof DailyRecord, plus: 'counter-btn-plus-yellow' },
+  { label: '受注',           field: 'acquisitions'       as keyof DailyRecord, plus: 'counter-btn-plus-green' },
 ]
 
 function draftKey(repId: string, dateStr: string) { return `draft__${repId}__${dateStr}` }
@@ -75,7 +79,9 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
     const dbRecord: Partial<DailyRecord> = data || {
       work_status: '', attendance_status: '', working_hours: 0,
       work_time_start: '', work_time_end: '',
-      visits: 0, net_meetings: 0, owner_meetings: 0, negotiations: 0, acquisitions: 0,
+      visits: 0, interphone_only: 0, net_meetings: 0, paper_presentation: 0,
+      full_talk: 0, indoor_entry: 0, owner_meetings: 0, negotiations: 0,
+      prospects: 0, acquisitions: 0,
       area_pref: '', area_city: '',
     }
     const draft = loadDraft(repId, selectedDate)

@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
@@ -140,10 +139,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-slate-600 text-sm mt-5">
-          アカウントをお持ちでない方は{' '}
-          <Link href="/signup" className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
-            新規登録
-          </Link>
+          アカウントは管理者からの招待リンクで作成できます
         </p>
       </div>
     </div>

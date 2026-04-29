@@ -88,7 +88,8 @@ export default function DailyReportListView({ teams, orgIds }: Props) {
 
   const hasContent = (r: DailyReport) =>
     r.acquisition_case || r.lost_case || r.good_points || r.issues || r.improvements || r.learnings ||
-    r.visits > 0 || r.acquisitions > 0
+    r.visits > 0 || r.interphone_only > 0 || r.net_meetings > 0 || r.paper_presentation > 0 ||
+    r.full_talk > 0 || r.indoor_entry > 0 || r.negotiations > 0 || r.prospects > 0 || r.acquisitions > 0
 
   return (
     <div className="space-y-3">
@@ -173,13 +174,17 @@ export default function DailyReportListView({ teams, orgIds }: Props) {
               {/* 展開内容 */}
               {isExpanded && (
                 <div className="mt-3 space-y-3 border-t border-slate-100 pt-3">
-                  {(report.visits > 0 || report.acquisitions > 0) && (
+                  {(report.visits > 0 || report.interphone_only > 0 || report.net_meetings > 0 || report.paper_presentation > 0 || report.full_talk > 0 || report.indoor_entry > 0 || report.negotiations > 0 || report.prospects > 0 || report.acquisitions > 0) && (
                     <div className="flex flex-wrap gap-2 text-xs font-bold">
                       <Stat label="訪問" value={report.visits} />
-                      <Stat label="ネット対面" value={report.net_meetings} />
-                      <Stat label="主権対面" value={report.owner_meetings} />
+                      <Stat label="インターホンのみ" value={report.interphone_only} />
+                      <Stat label="対面数" value={report.net_meetings} />
+                      <Stat label="紙プレ" value={report.paper_presentation} />
+                      <Stat label="フルトーク" value={report.full_talk} />
+                      <Stat label="宅内IN" value={report.indoor_entry} />
                       <Stat label="商談" value={report.negotiations} />
-                      <Stat label="獲得" value={report.acquisitions} color="emerald" />
+                      <Stat label="見込み" value={report.prospects} />
+                      <Stat label="受注" value={report.acquisitions} color="emerald" />
                     </div>
                   )}
                   {report.acquisition_case && (

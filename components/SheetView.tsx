@@ -78,13 +78,14 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
     return localRef.current[dateStr] || {
       id: '', sales_rep_id: repId, record_date: dateStr,
       acquired_cases: 0, work_status: '', attendance_status: '',
-      working_hours: 0, visits: 0, net_meetings: 0,
-      owner_meetings: 0, negotiations: 0, acquisitions: 0, updated_at: ''
+      working_hours: 0, visits: 0, interphone_only: 0, net_meetings: 0,
+      paper_presentation: 0, full_talk: 0, indoor_entry: 0,
+      owner_meetings: 0, negotiations: 0, prospects: 0, acquisitions: 0, updated_at: ''
     }
   }
 
   function handleChange(dateStr: string, field: keyof DailyRecord, raw: string) {
-    const isNum = ['working_hours','visits','net_meetings','owner_meetings','negotiations','acquisitions','acquired_cases'].includes(field)
+    const isNum = ['working_hours','visits','interphone_only','net_meetings','paper_presentation','full_talk','indoor_entry','owner_meetings','negotiations','prospects','acquisitions','acquired_cases'].includes(field)
     const value = isNum ? (parseFloat(raw) || 0) : raw
 
     const updated = { ...getRow(dateStr), [field]: value }
@@ -109,9 +110,14 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
       attendance_status: row.attendance_status || '',
       working_hours: Number(row.working_hours) || 0,
       visits: Number(row.visits) || 0,
+      interphone_only: Number(row.interphone_only) || 0,
       net_meetings: Number(row.net_meetings) || 0,
+      paper_presentation: Number(row.paper_presentation) || 0,
+      full_talk: Number(row.full_talk) || 0,
+      indoor_entry: Number(row.indoor_entry) || 0,
       owner_meetings: Number(row.owner_meetings) || 0,
       negotiations: Number(row.negotiations) || 0,
+      prospects: Number(row.prospects) || 0,
       acquisitions: Number(row.acquisitions) || 0,
       acquired_cases: Number(row.acquired_cases) || 0,
       updated_at: new Date().toISOString(),
@@ -150,13 +156,18 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
   const allRecs = days.map(d => records[d.dateStr] || getRow(d.dateStr))
   const workingRecs = allRecs.filter(r => r.attendance_status === '稼働' || r.work_status === '稼働')
   const totals = {
-    workingDays:   workingRecs.length,
-    workingHours:  allRecs.reduce((s,r) => s+(Number(r.working_hours)||0), 0),
-    visits:        allRecs.reduce((s,r) => s+(Number(r.visits)||0), 0),
-    netMeetings:   allRecs.reduce((s,r) => s+(Number(r.net_meetings)||0), 0),
-    ownerMeetings: allRecs.reduce((s,r) => s+(Number(r.owner_meetings)||0), 0),
-    negotiations:  allRecs.reduce((s,r) => s+(Number(r.negotiations)||0), 0),
-    acquisitions:  allRecs.reduce((s,r) => s+(Number(r.acquisitions)||0), 0),
+    workingDays:        workingRecs.length,
+    workingHours:       allRecs.reduce((s,r) => s+(Number(r.working_hours)||0), 0),
+    visits:             allRecs.reduce((s,r) => s+(Number(r.visits)||0), 0),
+    interphoneOnly:     allRecs.reduce((s,r) => s+(Number(r.interphone_only)||0), 0),
+    netMeetings:        allRecs.reduce((s,r) => s+(Number(r.net_meetings)||0), 0),
+    paperPresentation:  allRecs.reduce((s,r) => s+(Number(r.paper_presentation)||0), 0),
+    fullTalk:           allRecs.reduce((s,r) => s+(Number(r.full_talk)||0), 0),
+    indoorEntry:        allRecs.reduce((s,r) => s+(Number(r.indoor_entry)||0), 0),
+    ownerMeetings:      allRecs.reduce((s,r) => s+(Number(r.owner_meetings)||0), 0),
+    negotiations:       allRecs.reduce((s,r) => s+(Number(r.negotiations)||0), 0),
+    prospects:          allRecs.reduce((s,r) => s+(Number(r.prospects)||0), 0),
+    acquisitions:       allRecs.reduce((s,r) => s+(Number(r.acquisitions)||0), 0),
   }
 
   let cumAcq = 0
@@ -187,7 +198,7 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
               <th className="header-pink">②<br/><small>月初入力</small></th>
               <th className="header-red">③</th>
               <th className="header-red">④</th>
-              <th colSpan={5} className="header-red" style={{borderLeft:'2px solid #333'}}><div className="text-xs">1日</div></th>
+              <th colSpan={9} className="header-red" style={{borderLeft:'2px solid #333'}}><div className="text-xs">1日</div></th>
               <th className="bg-gray-100">使用</th>
             </tr>
             <tr className="sticky-header">
@@ -200,10 +211,14 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
               <th className="header-red" style={{minWidth:60}}>出勤<br/>状態</th>
               <th className="header-red" style={{minWidth:50}}>稼働<br/>時間</th>
               <th className="header-red" style={{minWidth:50,borderLeft:'2px solid #333'}}>訪問</th>
-              <th className="header-red" style={{minWidth:50}}>ネット<br/>対面</th>
-              <th className="header-red" style={{minWidth:50}}>主権<br/>対面</th>
+              <th className="header-red" style={{minWidth:60}}>インター<br/>ホンのみ</th>
+              <th className="header-red" style={{minWidth:50}}>対面数</th>
+              <th className="header-red" style={{minWidth:50}}>紙プレ</th>
+              <th className="header-red" style={{minWidth:60}}>フル<br/>トーク</th>
+              <th className="header-red" style={{minWidth:50}}>宅内IN</th>
               <th className="header-red" style={{minWidth:40}}>商談</th>
-              <th className="header-red" style={{minWidth:40}}>獲得</th>
+              <th className="header-red" style={{minWidth:40}}>見込み</th>
+              <th className="header-red" style={{minWidth:40}}>受注</th>
               <th className="bg-teal-100 text-teal-700" style={{minWidth:80}}>エリア</th>
               <th className="bg-gray-100" style={{minWidth:30}}></th>
             </tr>
@@ -252,16 +267,32 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
                       onChange={e => handleChange(d.dateStr,'visits',e.target.value)} />
                   </td>
                   <td>
+                    <input type="number" min={0} value={rec.interphone_only||''} placeholder="0"
+                      onChange={e => handleChange(d.dateStr,'interphone_only',e.target.value)} />
+                  </td>
+                  <td>
                     <input type="number" min={0} value={rec.net_meetings||''} placeholder="0"
                       onChange={e => handleChange(d.dateStr,'net_meetings',e.target.value)} />
                   </td>
                   <td>
-                    <input type="number" min={0} value={rec.owner_meetings||''} placeholder="0"
-                      onChange={e => handleChange(d.dateStr,'owner_meetings',e.target.value)} />
+                    <input type="number" min={0} value={rec.paper_presentation||''} placeholder="0"
+                      onChange={e => handleChange(d.dateStr,'paper_presentation',e.target.value)} />
+                  </td>
+                  <td>
+                    <input type="number" min={0} value={rec.full_talk||''} placeholder="0"
+                      onChange={e => handleChange(d.dateStr,'full_talk',e.target.value)} />
+                  </td>
+                  <td>
+                    <input type="number" min={0} value={rec.indoor_entry||''} placeholder="0"
+                      onChange={e => handleChange(d.dateStr,'indoor_entry',e.target.value)} />
                   </td>
                   <td>
                     <input type="number" min={0} value={rec.negotiations||''} placeholder="0"
                       onChange={e => handleChange(d.dateStr,'negotiations',e.target.value)} />
+                  </td>
+                  <td>
+                    <input type="number" min={0} value={rec.prospects||''} placeholder="0"
+                      onChange={e => handleChange(d.dateStr,'prospects',e.target.value)} />
                   </td>
                   <td>
                     <input type="number" min={0} value={rec.acquisitions||''} placeholder="0"
@@ -287,9 +318,13 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
               <td>{totals.workingDays}</td>
               <td>{totals.workingHours}</td>
               <td style={{borderLeft:'2px solid #333'}}>{totals.visits}</td>
+              <td>{totals.interphoneOnly}</td>
               <td>{totals.netMeetings}</td>
-              <td>{totals.ownerMeetings}</td>
+              <td>{totals.paperPresentation}</td>
+              <td>{totals.fullTalk}</td>
+              <td>{totals.indoorEntry}</td>
               <td>{totals.negotiations}</td>
+              <td>{totals.prospects}</td>
               <td>{totals.acquisitions}</td>
               <td></td>
               <td></td>

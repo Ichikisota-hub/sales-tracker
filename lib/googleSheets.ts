@@ -140,12 +140,13 @@ export async function syncAllToSheets(spreadsheetId: string, orgIds?: string[]) 
   await writeSheet(sheets, spreadsheetId, '月間計画', plansRows)
 
   // ── 日別実績 ──
-  const recordsRows: any[][] = [['担当者', '日付', '稼働状況', '出勤状況', '稼働時間', '開始時刻', '終了時刻', '訪問', 'ネット対面', '主権対面', '商談', '獲得', '都道府県', '市区町村', '更新日']]
+  const recordsRows: any[][] = [['担当者', '日付', '稼働状況', '出勤状況', '稼働時間', '開始時刻', '終了時刻', '訪問', 'インターホンのみ', '対面数', '紙プレ', 'フルトーク', '宅内IN', '主権対面', '商談', '見込み', '受注', '都道府県', '市区町村', '更新日']]
   for (const r of dailyRecords || []) {
     recordsRows.push([
       repMap[r.sales_rep_id] || r.sales_rep_id, r.record_date, r.work_status, r.attendance_status,
       r.working_hours, r.work_time_start, r.work_time_end,
-      r.visits, r.net_meetings, r.owner_meetings, r.negotiations, r.acquisitions,
+      r.visits, r.interphone_only, r.net_meetings, r.paper_presentation, r.full_talk, r.indoor_entry,
+      r.owner_meetings, r.negotiations, r.prospects, r.acquisitions,
       r.area_pref, r.area_city, r.updated_at?.slice(0, 10),
     ])
   }
@@ -171,11 +172,12 @@ export async function syncAllToSheets(spreadsheetId: string, orgIds?: string[]) 
   await writeSheet(sheets, spreadsheetId, '契約宅', contractsRows)
 
   // ── 日報 ──
-  const reportsRows: any[][] = [['担当者', '日付', '訪問', 'ネット対面', '主権対面', '商談', '獲得', '獲得案件', '失注案件', '残稼働', '良かった点', '課題', '改善策', '学び', '感謝', '作成日']]
+  const reportsRows: any[][] = [['担当者', '日付', '訪問', 'インターホンのみ', '対面数', '紙プレ', 'フルトーク', '宅内IN', '主権対面', '商談', '見込み', '受注', '獲得案件', '失注案件', '残稼働', '良かった点', '課題', '改善策', '学び', '感謝', '作成日']]
   for (const r of dailyReports || []) {
     reportsRows.push([
       repMap[r.sales_rep_id] || r.sales_rep_id, r.report_date,
-      r.visits, r.net_meetings, r.owner_meetings, r.negotiations, r.acquisitions,
+      r.visits, r.interphone_only, r.net_meetings, r.paper_presentation, r.full_talk, r.indoor_entry,
+      r.owner_meetings, r.negotiations, r.prospects, r.acquisitions,
       r.acquisition_case || '', r.lost_case || '', r.remaining_work || '',
       r.good_points || '', r.issues || '', r.improvements || '', r.learnings || '', r.gratitude || '',
       r.created_at?.slice(0, 10),
