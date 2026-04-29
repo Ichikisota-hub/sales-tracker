@@ -38,7 +38,7 @@ export default function InviteForm({ onInvited }: Props) {
     setInviteUrl('')
     setLoading(true)
 
-    const res = await fetch('/api/admin/invite', {
+    const res = await fetch('/api/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -57,7 +57,7 @@ export default function InviteForm({ onInvited }: Props) {
       return
     }
 
-    setInviteUrl(data.inviteLink || '')
+    setInviteUrl(data.inviteUrl || '')
     setEmail('')
     setRepId('')
     onInvited()

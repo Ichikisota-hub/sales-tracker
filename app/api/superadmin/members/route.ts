@@ -65,72 +65,38 @@ export async function POST(req: NextRequest) {
 
   const supabase = getServiceClient()
 
-  // 既存ユーザーを検索
-  const { data: { users } } = await supabase.auth.admin.listUsers({ perPage: 1000 })
-  const existingUser = users.find(u => u.email?.toLowerCase() === email.toLowerCase())
-
-  let targetUser = existingUser ?? null
-  let inviteLink: string | null = null
-
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sales-tracker-pied.vercel.app'
 
-  if (!existingUser) {
-    // 新規: 招待リンクを生成（repIdがあればメタデータに埋め込む）
-    const inviteMeta: Record<string, string> = { invited_to_org: orgId }
-    if (repId) inviteMeta.sales_rep_id = repId
-
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-      type: 'invite',
-      email,
-      options: {
-        data: inviteMeta,
-        redirectTo: `${appUrl}/reset-password`,
-      },
-    })
-    if (linkError) return NextResponse.json({ error: `招待リンク生成失敗: ${linkError.message}` }, { status: 500 })
-    targetUser = linkData.user
-    inviteLink = linkData.properties?.action_link ?? null
-  } else {
-    // 既存ユーザー: マジックリンク（ワンクリックログイン）を生成
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-      type: 'magiclink',
-      email,
-      options: { redirectTo: `${appUrl}/reset-password` },
-    })
-    if (!linkError) {
-      inviteLink = linkData.properties?.action_link ?? null
-    }
-  }
-
-  if (!targetUser) return NextResponse.json({ error: 'ユーザー作成に失敗しました' }, { status: 500 })
-
-  // 既にメンバーかチェック
-  const { data: existing } = await supabase
-    .from('organization_members')
-    .select('id')
+  // 既存の有効な招待があれば削除
+  await supabase
+    .from('invitations')
+    .delete()
     .eq('organization_id', orgId)
-    .eq('user_id', targetUser.id)
+    .eq('email', email)
+    .is('accepted_at', null)
+
+  // invitations テーブルにトークンを挿入
+  const { data: invitation, error: invError } = await supabase
+    .from('invitations')
+    .insert({
+      organization_id: orgId,
+      email,
+      role: role || 'member',
+      ...(repId ? { rep_id: repId } : {}),
+    })
+    .select()
     .single()
 
-  if (existing) return NextResponse.json({ error: '既にこの組織のメンバーです' }, { status: 400 })
+  if (invError || !invitation) {
+    return NextResponse.json({ error: invError?.message || '招待の作成に失敗しました' }, { status: 500 })
+  }
 
-  // organization_members に追加
-  const { error: memberError } = await supabase.from('organization_members').insert({
-    organization_id: orgId,
-    user_id: targetUser.id,
-    role: role || 'member',
-    joined_at: new Date().toISOString(),
-    ...(repId ? { sales_rep_id: repId } : {}),
-  })
-
-  if (memberError) return NextResponse.json({ error: memberError.message }, { status: 500 })
+  const inviteUrl = `${appUrl}/invite/${invitation.token}`
 
   return NextResponse.json({
     success: true,
     email,
-    userId: targetUser.id,
-    inviteLink,
-    isExisting: !!existingUser,
+    inviteUrl,
   })
 }
 

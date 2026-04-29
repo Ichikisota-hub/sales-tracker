@@ -365,9 +365,9 @@ export default function SuperAdminPage() {
       body: JSON.stringify({ orgId, email: inviteEmail.trim(), role: inviteRole, ...(inviteRepId ? { repId: inviteRepId } : {}) }),
     })
     const d = await res.json()
-    setInviteMsg({ ok: res.ok, msg: res.ok ? (d.isExisting ? `${d.email} を組織に追加しました（既存ユーザー）` : `${d.email} の招待リンクを発行しました`) : d.error })
+    setInviteMsg({ ok: res.ok, msg: res.ok ? `${d.email} の招待リンクを発行しました` : d.error })
     if (res.ok) {
-      setInviteLink(d.inviteLink || null)
+      setInviteLink(d.inviteUrl || null)
       setCopied(false)
       setInviteEmail('')
       setInviteRepId('')
