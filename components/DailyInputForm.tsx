@@ -5,6 +5,7 @@ import { supabase, DailyRecord, MonthlyPlan } from '@/lib/supabase'
 import { getDaysArray, localToday } from '@/lib/dateUtils'
 import { KANSAI_AREAS, PREF_LIST } from '@/lib/areas'
 import DailyReportForm from '@/components/DailyReportForm'
+import { TimerDisplay } from '@/components/TimerDisplay'
 import { syncSheets } from '@/lib/syncSheets'
 
 // 稼働・休日のみ（同行・有休・研修・出張は削除）
@@ -71,10 +72,9 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
   const [startedAt, setStartedAt] = useState<Date | null>(null)
   const [pausedAt, setPausedAt] = useState<Date | null>(null)
   const [breakMs, setBreakMs] = useState(0)
-  const [elapsed, setElapsed] = useState(0)
   const [undoSecs, setUndoSecs] = useState(0)
 
-  // タイマー: localStorage から復元
+  // タイマー: localStorage から復元（日付・担当者切り替え時）
   useEffect(() => {
     try {
       const saved = localStorage.getItem(timerKey)
@@ -92,15 +92,6 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, repId])
 
-  // タイマー: 稼働中に経過時間を更新
-  useEffect(() => {
-    if (timerStatus !== 'working' || !startedAt) return
-    const id = setInterval(() => {
-      setElapsed(Date.now() - startedAt.getTime() - breakMs)
-    }, 1000)
-    return () => clearInterval(id)
-  }, [timerStatus, startedAt, breakMs])
-
   // record が変わったときにタイマー状態を再評価（日付切り替え時）
   useEffect(() => {
     try {
@@ -108,7 +99,7 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
       if (!saved) {
         const hasTime = !!(record as any).work_time_start && !!(record as any).work_time_end
         setTimerStatus(hasTime ? 'ended' : 'idle')
-        setStartedAt(null); setPausedAt(null); setBreakMs(0); setElapsed(0)
+        setStartedAt(null); setPausedAt(null); setBreakMs(0)
       }
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,17 +109,9 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
     return `${String(d.getHours()).padStart(2, '0')}:${d.getMinutes() < 30 ? '00' : '30'}`
   }
 
-  function formatMs(ms: number): string {
-    const total = Math.max(0, Math.floor(ms / 1000))
-    const h = Math.floor(total / 3600)
-    const m = Math.floor((total % 3600) / 60)
-    const s = total % 60
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-  }
-
   function handleTimerStart() {
     const now = new Date()
-    setStartedAt(now); setBreakMs(0); setPausedAt(null); setElapsed(0)
+    setStartedAt(now); setBreakMs(0); setPausedAt(null)
     setTimerStatus('working')
     set('work_time_start' as any, toHHMM(now))
     set('work_status', '稼働'); set('attendance_status', '稼働')
@@ -150,10 +133,12 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
 
   function handleTimerEnd() {
     const now = new Date()
-    const currentElapsed = timerStatus === 'paused'
-      ? elapsed
-      : Date.now() - startedAt!.getTime() - breakMs
-    const netHours = Math.round(Math.max(0, currentElapsed) / 360000) / 10
+    // 停止中の場合は現在の休憩時間も加算
+    const totalBreak = timerStatus === 'paused' && pausedAt
+      ? breakMs + (now.getTime() - pausedAt.getTime())
+      : breakMs
+    const netMs = Math.max(0, now.getTime() - startedAt!.getTime() - totalBreak)
+    const netHours = Math.round(netMs / 360000) / 10
     set('work_time_end' as any, toHHMM(now))
     set('working_hours' as any, netHours)
     setTimerStatus('ended')
@@ -463,12 +448,13 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
         {/* 稼働中 / 停止中 */}
         {(timerStatus === 'working' || timerStatus === 'paused') && (
           <>
-            <div className="text-center text-4xl font-black tabular-nums mb-4 text-slate-800 tracking-tight">
-              {formatMs(elapsed)}
-              {timerStatus === 'paused' && (
-                <span className="block text-sm text-amber-500 font-bold mt-1">⏸ 停止中（休憩）</span>
-              )}
-            </div>
+            {startedAt && (
+              <TimerDisplay
+                startedAt={startedAt}
+                breakMs={breakMs}
+                paused={timerStatus === 'paused'}
+              />
+            )}
             <div className="flex gap-2">
               {timerStatus === 'working' ? (
                 <button

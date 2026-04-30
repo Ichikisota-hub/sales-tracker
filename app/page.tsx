@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import {
   PenLine, LayoutDashboard, TrendingUp, Users,
@@ -14,24 +15,26 @@ import { getMonthList, formatYearMonth, localYearMonth } from '@/lib/dateUtils'
 import { useOrganization } from '@/contexts/OrganizationContext'
 import { useAuth } from '@/contexts/AuthContext'
 import TrialBanner from '@/components/billing/TrialBanner'
-import SheetView from '@/components/SheetView'
-import AnalysisView from '@/components/AnalysisView'
-import RepSettings from '@/components/RepSettings'
-import DailyInputForm from '@/components/DailyInputForm'
-import OverallView from '@/components/OverallView'
-import ScheduleSubmitForm from '@/components/ScheduleSubmitForm'
-import ShiftCalendarView from '@/components/ShiftCalendarView'
-import AreaStatsView from '@/components/AreaStatsView'
-import StatusView from '@/components/StatusView'
-import ContractListView from '@/components/ContractListView'
-import ContractAddForm from '@/components/ContractAddForm'
-import ContractImportModal from '@/components/ContractImportModal'
-import DailyShiftView from '@/components/DailyShiftView'
-import DailyReportListView from '@/components/DailyReportListView'
-import TeamSheetView from '@/components/TeamSheetView'
-import TeamStatsView from '@/components/TeamStatsView'
-import SubmissionCheckView from '@/components/SubmissionCheckView'
-import ContractStatsView from '@/components/ContractStatsView'
+
+// タブが開かれた時だけ読み込む（コード分割でバンドルサイズ削減）
+const DailyInputForm    = dynamic(() => import('@/components/DailyInputForm'))
+const StatusView        = dynamic(() => import('@/components/StatusView'))
+const AnalysisView      = dynamic(() => import('@/components/AnalysisView'))
+const OverallView       = dynamic(() => import('@/components/OverallView'))
+const SheetView         = dynamic(() => import('@/components/SheetView'))
+const ScheduleSubmitForm  = dynamic(() => import('@/components/ScheduleSubmitForm'))
+const ShiftCalendarView   = dynamic(() => import('@/components/ShiftCalendarView'))
+const DailyShiftView      = dynamic(() => import('@/components/DailyShiftView'))
+const AreaStatsView       = dynamic(() => import('@/components/AreaStatsView'))
+const TeamSheetView       = dynamic(() => import('@/components/TeamSheetView'))
+const TeamStatsView       = dynamic(() => import('@/components/TeamStatsView'))
+const DailyReportListView = dynamic(() => import('@/components/DailyReportListView'))
+const SubmissionCheckView = dynamic(() => import('@/components/SubmissionCheckView'))
+const RepSettings         = dynamic(() => import('@/components/RepSettings'))
+const ContractListView    = dynamic(() => import('@/components/ContractListView'))
+const ContractStatsView   = dynamic(() => import('@/components/ContractStatsView'))
+const ContractAddForm     = dynamic(() => import('@/components/ContractAddForm'))
+const ContractImportModal = dynamic(() => import('@/components/ContractImportModal'))
 
 function getNextMonth(ym: string): string {
   const [y, m] = ym.split('-').map(Number)
