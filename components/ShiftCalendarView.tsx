@@ -49,83 +49,80 @@ function RepCalendarModal({
   const dowLabels = ['日', '月', '火', '水', '木', '金', '土']
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
-        {/* ヘッダー */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 flex items-center justify-between">
-          <div>
-            <div className="text-white font-black text-base">{rep.name}</div>
-            <div className="text-blue-200 text-xs mt-0.5">{yearMonth.replace('-', '年')}月 — 稼働 {workingDays}日</div>
-          </div>
-          <button onClick={onClose} className="text-white/80 hover:text-white text-xl font-bold leading-none">✕</button>
+    <div className="fixed inset-0 z-50 bg-white flex flex-col">
+      {/* ヘッダー */}
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-4 flex items-center justify-between flex-shrink-0">
+        <div>
+          <div className="text-white font-black text-lg">{rep.name}</div>
+          <div className="text-blue-200 text-sm mt-0.5">{yearMonth.replace('-', '年')}月 — 稼働 {workingDays}日</div>
         </div>
+        <button onClick={onClose} className="text-white/80 hover:text-white text-2xl font-bold leading-none w-10 h-10 flex items-center justify-center">✕</button>
+      </div>
 
-        {/* カレンダー */}
-        <div className="p-3">
-          {/* 曜日ヘッダー */}
-          <div className="grid grid-cols-7 mb-1">
-            {dowLabels.map((d, i) => (
-              <div key={d} className={`text-center text-[11px] font-bold py-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-slate-400'}`}>
-                {d}
-              </div>
-            ))}
-          </div>
-          {/* 日付グリッド */}
-          <div className="grid grid-cols-7 gap-0.5">
-            {cells.map((day, idx) => {
-              if (day === null) return <div key={`e-${idx}`} />
-              const row = getRow(day)
-              const status = row?.work_status || ''
-              const dow = (firstDow + day - 1) % 7
-              const isWeekend = dow === 0 || dow === 6
-              const isWorking = status === '稼働'
-              const isOff = status === '休日'
-              return (
-                <div key={day} className={`rounded-lg p-1 text-center ${
-                  isWorking ? 'bg-emerald-50 border border-emerald-200' :
-                  isOff ? 'bg-slate-50 border border-slate-100' :
-                  'border border-transparent'
-                }`}>
-                  <div className={`text-[11px] font-bold mb-0.5 ${
-                    dow === 0 ? 'text-red-500' :
-                    dow === 6 ? 'text-blue-500' :
-                    'text-slate-600'
-                  }`}>{day}</div>
-                  {isWorking ? (
-                    <>
-                      <div className="w-5 h-5 rounded-md bg-emerald-500 flex items-center justify-center mx-auto">
-                        <span className="text-white font-black text-[8px]">稼</span>
-                      </div>
-                      {row?.work_time_start && row?.work_time_end && (
-                        <div className="text-[7px] text-emerald-600 font-bold leading-tight mt-0.5">
-                          {row.work_time_start.slice(0, 5)}<br />〜{row.work_time_end.slice(0, 5)}
-                        </div>
-                      )}
-                    </>
-                  ) : isOff ? (
-                    <div className="w-5 h-5 rounded-md bg-slate-200 flex items-center justify-center mx-auto">
-                      <span className="text-slate-400 text-[8px]">休</span>
+      {/* カレンダー本体 */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {/* 曜日ヘッダー */}
+        <div className="grid grid-cols-7 mb-2">
+          {dowLabels.map((d, i) => (
+            <div key={d} className={`text-center text-sm font-bold py-2 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-slate-400'}`}>
+              {d}
+            </div>
+          ))}
+        </div>
+        {/* 日付グリッド */}
+        <div className="grid grid-cols-7 gap-1">
+          {cells.map((day, idx) => {
+            if (day === null) return <div key={`e-${idx}`} />
+            const row = getRow(day)
+            const status = row?.work_status || ''
+            const dow = (firstDow + day - 1) % 7
+            const isWorking = status === '稼働'
+            const isOff = status === '休日'
+            return (
+              <div key={day} className={`rounded-xl p-2 text-center min-h-[72px] flex flex-col items-center ${
+                isWorking ? 'bg-emerald-50 border border-emerald-200' :
+                isOff ? 'bg-slate-50 border border-slate-100' :
+                'border border-transparent'
+              }`}>
+                <div className={`text-sm font-bold mb-1 ${
+                  dow === 0 ? 'text-red-500' :
+                  dow === 6 ? 'text-blue-500' :
+                  'text-slate-700'
+                }`}>{day}</div>
+                {isWorking ? (
+                  <>
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center">
+                      <span className="text-white font-black text-xs">稼</span>
                     </div>
-                  ) : (
-                    <div className="text-slate-200 text-[10px]">—</div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+                    {row?.work_time_start && row?.work_time_end && (
+                      <div className="text-[10px] text-emerald-600 font-bold leading-tight mt-1">
+                        {row.work_time_start.slice(0, 5)}<br />〜{row.work_time_end.slice(0, 5)}
+                      </div>
+                    )}
+                  </>
+                ) : isOff ? (
+                  <div className="w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center">
+                    <span className="text-slate-400 text-xs">休</span>
+                  </div>
+                ) : (
+                  <div className="text-slate-200 text-sm mt-1">—</div>
+                )}
+              </div>
+            )
+          })}
         </div>
+      </div>
 
-        {/* 凡例 */}
-        <div className="flex gap-3 px-3 pb-3 text-xs text-slate-500">
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded bg-emerald-500" />稼働
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded bg-slate-200" />休日
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="text-slate-300">—</span>未提出
-          </div>
+      {/* 凡例 */}
+      <div className="flex gap-4 px-4 py-3 border-t border-slate-100 text-sm text-slate-500 flex-shrink-0">
+        <div className="flex items-center gap-1.5">
+          <div className="w-5 h-5 rounded bg-emerald-500" />稼働
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-5 h-5 rounded bg-slate-200" />休日
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-slate-300 text-base">—</span>未提出
         </div>
       </div>
     </div>
