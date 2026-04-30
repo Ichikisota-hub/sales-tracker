@@ -1,6 +1,6 @@
 {
-  "name": "origin-dx 数値管理",
-  "short_name": "origin-dx",
+  "name": "数値報告管理アプリ",
+  "short_name": "数値報告",
   "description": "営業活動数値管理アプリ",
   "start_url": "/",
   "display": "standalone",

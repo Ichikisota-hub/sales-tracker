@@ -64,6 +64,118 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
 
+  // ── タイマー状態 ──
+  type TimerStatus = 'idle' | 'working' | 'paused' | 'ended'
+  const timerKey = `timer_${repId}_${selectedDate}`
+  const [timerStatus, setTimerStatus] = useState<TimerStatus>('idle')
+  const [startedAt, setStartedAt] = useState<Date | null>(null)
+  const [pausedAt, setPausedAt] = useState<Date | null>(null)
+  const [breakMs, setBreakMs] = useState(0)
+  const [elapsed, setElapsed] = useState(0)
+  const [undoSecs, setUndoSecs] = useState(0)
+
+  // タイマー: localStorage から復元
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(timerKey)
+      if (saved) {
+        const t = JSON.parse(saved)
+        setStartedAt(new Date(t.startedAt))
+        setBreakMs(t.breakMs || 0)
+        if (t.pausedAt) { setPausedAt(new Date(t.pausedAt)); setTimerStatus('paused') }
+        else { setTimerStatus('working') }
+      } else {
+        const hasTime = !!(record as any).work_time_start && !!(record as any).work_time_end
+        setTimerStatus(hasTime ? 'ended' : 'idle')
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate, repId])
+
+  // タイマー: 稼働中に経過時間を更新
+  useEffect(() => {
+    if (timerStatus !== 'working' || !startedAt) return
+    const id = setInterval(() => {
+      setElapsed(Date.now() - startedAt.getTime() - breakMs)
+    }, 1000)
+    return () => clearInterval(id)
+  }, [timerStatus, startedAt, breakMs])
+
+  // record が変わったときにタイマー状態を再評価（日付切り替え時）
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(timerKey)
+      if (!saved) {
+        const hasTime = !!(record as any).work_time_start && !!(record as any).work_time_end
+        setTimerStatus(hasTime ? 'ended' : 'idle')
+        setStartedAt(null); setPausedAt(null); setBreakMs(0); setElapsed(0)
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [record.id])
+
+  function toHHMM(d: Date): string {
+    return `${String(d.getHours()).padStart(2, '0')}:${d.getMinutes() < 30 ? '00' : '30'}`
+  }
+
+  function formatMs(ms: number): string {
+    const total = Math.max(0, Math.floor(ms / 1000))
+    const h = Math.floor(total / 3600)
+    const m = Math.floor((total % 3600) / 60)
+    const s = total % 60
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  }
+
+  function handleTimerStart() {
+    const now = new Date()
+    setStartedAt(now); setBreakMs(0); setPausedAt(null); setElapsed(0)
+    setTimerStatus('working')
+    set('work_time_start' as any, toHHMM(now))
+    set('work_status', '稼働'); set('attendance_status', '稼働')
+    try { localStorage.setItem(timerKey, JSON.stringify({ startedAt: now.toISOString(), breakMs: 0, pausedAt: null })) } catch {}
+  }
+
+  function handleTimerPause() {
+    const now = new Date()
+    setPausedAt(now); setTimerStatus('paused')
+    try { localStorage.setItem(timerKey, JSON.stringify({ startedAt: startedAt!.toISOString(), breakMs, pausedAt: now.toISOString() })) } catch {}
+  }
+
+  function handleTimerResume() {
+    const added = Date.now() - pausedAt!.getTime()
+    const nb = breakMs + added
+    setBreakMs(nb); setPausedAt(null); setTimerStatus('working')
+    try { localStorage.setItem(timerKey, JSON.stringify({ startedAt: startedAt!.toISOString(), breakMs: nb, pausedAt: null })) } catch {}
+  }
+
+  function handleTimerEnd() {
+    const now = new Date()
+    const currentElapsed = timerStatus === 'paused'
+      ? elapsed
+      : Date.now() - startedAt!.getTime() - breakMs
+    const netHours = Math.round(Math.max(0, currentElapsed) / 360000) / 10
+    set('work_time_end' as any, toHHMM(now))
+    set('working_hours' as any, netHours)
+    setTimerStatus('ended')
+    try { localStorage.removeItem(timerKey) } catch {}
+    // 取り消しカウントダウン（10秒）
+    setUndoSecs(10)
+    const id = setInterval(() => {
+      setUndoSecs(s => {
+        if (s <= 1) { clearInterval(id); return 0 }
+        return s - 1
+      })
+    }, 1000)
+  }
+
+  function handleTimerUndo() {
+    set('work_time_end' as any, '')
+    set('working_hours' as any, 0)
+    setTimerStatus('working')
+    setUndoSecs(0)
+    try { localStorage.setItem(timerKey, JSON.stringify({ startedAt: startedAt!.toISOString(), breakMs, pausedAt: null })) } catch {}
+  }
+
   useEffect(() => { loadPlan() }, [repId, yearMonth])
   useEffect(() => { setSaved(false); loadRecord() }, [repId, selectedDate])
 
@@ -104,27 +216,16 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
       updated_at: new Date().toISOString(),
     }
 
-    let { error } = await supabase
-      .from('daily_records')
-      .upsert(payload, { onConflict: 'sales_rep_id,record_date' })
+    // サーバーサイドAPIルート経由でupsert（スキーマキャッシュ問題を回避）
+    const res = await fetch('/api/records/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
 
-    // カラム未作成の場合、該当フィールドを除いて再試行
-    if (error?.code === '42703' || error?.message?.includes('schema cache')) {
-      const { work_time_start, work_time_end, area_list, ...fallback } = payload
-      const { error: e2 } = await supabase
-        .from('daily_records')
-        .upsert(fallback, { onConflict: 'sales_rep_id,record_date' })
-      if (e2) {
-        setSaveError(`保存失敗: ${e2.message}`)
-        setSaving(false)
-        return
-      }
-      setSaveError('⚠️ 一部未保存。Supabaseで以下を実行: ALTER TABLE daily_records ADD COLUMN IF NOT EXISTS work_time_start text DEFAULT \'\', ADD COLUMN IF NOT EXISTS work_time_end text DEFAULT \'\', ADD COLUMN IF NOT EXISTS area_list jsonb DEFAULT \'[]\';')
-      error = null
-    }
-
-    if (error) {
-      setSaveError(`保存失敗: ${error.message}`)
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      setSaveError(`保存失敗: ${d.error || res.statusText}`)
       setSaving(false)
       return
     }
@@ -342,37 +443,112 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
       <div className="mobile-card">
         <div className="mobile-card-label text-lg">
           稼働時間
-          {(record as any).work_time_start && (record as any).work_time_end ? (
+          {(record as any).work_time_start && (record as any).work_time_end && timerStatus === 'ended' ? (
             <span className="ml-2 text-blue-600 normal-case font-black text-xl">
-              {calcHours((record as any).work_time_start, (record as any).work_time_end)}h
+              {(record as any).working_hours || calcHours((record as any).work_time_start, (record as any).work_time_end)}h
             </span>
           ) : null}
         </div>
 
-        <div className="flex items-center gap-2">
-          <select
-            value={(record as any).work_time_start || ''}
-            onChange={e => set('work_time_start' as any, e.target.value)}
-            className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-3 text-base bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+        {/* 未開始 */}
+        {timerStatus === 'idle' && (
+          <button
+            onClick={handleTimerStart}
+            className="w-full py-4 rounded-2xl bg-emerald-500 text-white text-lg font-black shadow-lg active:scale-95 transition-all"
           >
-            <option value="">開始時刻</option>
-            {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <span className="text-base text-slate-400 font-bold flex-shrink-0">〜</span>
-          <select
-            value={(record as any).work_time_end || ''}
-            onChange={e => set('work_time_end' as any, e.target.value)}
-            className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-3 text-base bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
-          >
-            <option value="">終了時刻</option>
-            {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
-        {(record as any).work_time_start && (record as any).work_time_end && (
-          <div className="mt-2 text-sm font-bold text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
-            ⏰ {(record as any).work_time_start}〜{(record as any).work_time_end}（{calcHours((record as any).work_time_start, (record as any).work_time_end)}時間）
+            ▶ 稼働スタート
+          </button>
+        )}
+
+        {/* 稼働中 / 停止中 */}
+        {(timerStatus === 'working' || timerStatus === 'paused') && (
+          <>
+            <div className="text-center text-4xl font-black tabular-nums mb-4 text-slate-800 tracking-tight">
+              {formatMs(elapsed)}
+              {timerStatus === 'paused' && (
+                <span className="block text-sm text-amber-500 font-bold mt-1">⏸ 停止中（休憩）</span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {timerStatus === 'working' ? (
+                <button
+                  onClick={handleTimerPause}
+                  className="flex-1 py-3.5 rounded-2xl bg-amber-400 text-white font-black text-base active:scale-95 transition-all shadow"
+                >
+                  ⏸ 停止
+                </button>
+              ) : (
+                <button
+                  onClick={handleTimerResume}
+                  className="flex-1 py-3.5 rounded-2xl bg-blue-500 text-white font-black text-base active:scale-95 transition-all shadow"
+                >
+                  ▶ 再開
+                </button>
+              )}
+              <button
+                onClick={handleTimerEnd}
+                className="flex-1 py-3.5 rounded-2xl bg-red-500 text-white font-black text-base active:scale-95 transition-all shadow"
+              >
+                ⏹ 終了
+              </button>
+            </div>
+            {(record as any).work_time_start && (
+              <div className="mt-2 text-xs text-slate-400 text-center">
+                開始: {(record as any).work_time_start}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* 終了済み */}
+        {timerStatus === 'ended' && (
+          <div className="bg-blue-50 rounded-xl px-4 py-3">
+            <div className="text-blue-700 font-black text-lg">
+              ⏰ {(record as any).work_time_start}〜{(record as any).work_time_end}
+              <span className="ml-2 text-blue-500 text-base">
+                ({(record as any).working_hours || calcHours((record as any).work_time_start, (record as any).work_time_end)}h)
+              </span>
+            </div>
+            {undoSecs > 0 && (
+              <button
+                onClick={handleTimerUndo}
+                className="mt-2 w-full py-2.5 rounded-xl bg-red-100 text-red-600 font-black text-sm active:scale-95 transition-all"
+              >
+                ↩ 取り消す（{undoSecs}秒以内）
+              </button>
+            )}
+            <button
+              onClick={() => { setTimerStatus('idle'); try { localStorage.removeItem(timerKey) } catch {} }}
+              className="mt-2 text-xs text-slate-400 underline block"
+            >
+              再入力する
+            </button>
           </div>
         )}
+
+        {/* 手動修正（折りたたみ） */}
+        <details className="mt-3">
+          <summary className="text-xs text-slate-400 cursor-pointer select-none">▼ 時刻を手動修正</summary>
+          <div className="flex items-center gap-2 mt-2">
+            <select
+              value={(record as any).work_time_start || ''}
+              onChange={e => set('work_time_start' as any, e.target.value)}
+              className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-3 text-base bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              <option value="">開始時刻</option>
+              {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <span className="text-base text-slate-400 font-bold flex-shrink-0">〜</span>
+            <select
+              value={(record as any).work_time_end || ''}
+              onChange={e => set('work_time_end' as any, e.target.value)}
+              className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-3 text-base bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              <option value="">終了時刻</option>
+              {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        </details>
       </div>
 
       {/* ── 行動量 ── */}

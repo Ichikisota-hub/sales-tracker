@@ -65,8 +65,8 @@ export default function Home() {
   const [reps, setReps] = useState<SalesRep[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null)
-  // ORIGINのsuperadmin/管理者のみ他組織データ閲覧可能
-  const canViewAllOrgs = (isSuperAdmin || isManager) && organizationId === ORIGIN_ORG_ID
+  // ORIGINのsuperadmin/admin のみ他組織データ閲覧可能（managerは非表示）
+  const canViewAllOrgs = (isSuperAdmin || role === 'admin') && organizationId === ORIGIN_ORG_ID
   const [orgMode, setOrgMode] = useState<'current' | 'all' | string>('current')
   const activeOrgIds = !canViewAllOrgs
     ? (organizationId ? [organizationId] : [])
@@ -205,7 +205,7 @@ export default function Home() {
   const subTabs = [
     { id: 'contracts'        as SubTab, label: '契約宅',    Icon: HomeIcon },
     { id: 'contract_stats'   as SubTab, label: '契約統計',  Icon: BarChart2 },
-    { id: 'shift_submit'     as SubTab, label: 'シフト提出', Icon: CalendarCheck },
+    ...(organizationId === ORIGIN_ORG_ID ? [{ id: 'shift_submit' as SubTab, label: 'シフト提出', Icon: CalendarCheck }] : []),
     { id: 'shift'            as SubTab, label: 'シフト確認', Icon: Calendar },
     { id: 'daily_shift'      as SubTab, label: '日別稼働',   Icon: CalendarDays },
     { id: 'area'             as SubTab, label: 'エリア',     Icon: MapPin },
