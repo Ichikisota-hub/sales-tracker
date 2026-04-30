@@ -365,7 +365,7 @@ export default function SuperAdminPage() {
       body: JSON.stringify({ orgId, email: inviteEmail.trim(), role: inviteRole, ...(inviteRepId ? { repId: inviteRepId } : {}) }),
     })
     const d = await res.json()
-    setInviteMsg({ ok: res.ok, msg: res.ok ? `${d.email} の招待リンクを発行しました` : d.error })
+    setInviteMsg({ ok: res.ok, msg: res.ok ? `${d.email} に招待メールを送信しました` + (d.emailSent ? '' : '（メール送信失敗 - リンクをコピーして送付してください）') : d.error })
     if (res.ok) {
       setInviteLink(d.inviteUrl || null)
       setCopied(false)
@@ -523,7 +523,7 @@ export default function SuperAdminPage() {
               )}
               {saInviteLink && (
                 <div className="mt-3 bg-slate-800 border border-purple-700/50 rounded-xl p-3">
-                  <p className="text-xs text-purple-300 font-bold mb-2">📎 招待リンク（LINEで送付してください）</p>
+                  <p className="text-xs text-purple-300 font-bold mb-2">招待リンク（メール送信失敗時のバックアップ）</p>
                   <div className="flex gap-2 items-start">
                     <p className="text-xs text-slate-300 break-all flex-1 leading-relaxed">{saInviteLink}</p>
                     <button
@@ -748,7 +748,7 @@ export default function SuperAdminPage() {
                               disabled={inviting}
                               className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-sm transition-colors"
                             >
-                              {inviting ? '発行中...' : 'リンク発行'}
+                              {inviting ? '送信中...' : '招待メール送信'}
                             </button>
                           </div>
                           {inviteMsg && (
@@ -759,7 +759,7 @@ export default function SuperAdminPage() {
                           {/* 招待リンク表示 */}
                           {inviteLink && (
                             <div className="mt-3 bg-slate-800 border border-indigo-700/50 rounded-xl p-3">
-                              <p className="text-xs text-indigo-300 font-bold mb-2">📎 招待リンク（LINEで送付してください）</p>
+                              <p className="text-xs text-indigo-300 font-bold mb-2">招待リンク（メール送信失敗時のバックアップ）</p>
                               <div className="flex gap-2 items-start">
                                 <p className="text-xs text-slate-300 break-all flex-1 leading-relaxed">{inviteLink}</p>
                                 <button

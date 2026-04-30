@@ -16,6 +16,122 @@ type ScheduleRow = {
 
 type BulkResult = { name: string; matched: string | null; days: number; status: string }
 
+// 人別月カレンダーモーダル
+function RepCalendarModal({
+  rep,
+  yearMonth,
+  schedMap,
+  onClose,
+}: {
+  rep: SalesRep
+  yearMonth: string
+  schedMap: Record<string, ScheduleRow>
+  onClose: () => void
+}) {
+  const [y, m] = yearMonth.split('-').map(Number)
+  const firstDow = new Date(y, m - 1, 1).getDay() // 0=日
+  const lastDay = new Date(y, m, 0).getDate()
+  const cells: (number | null)[] = [
+    ...Array(firstDow).fill(null),
+    ...Array.from({ length: lastDay }, (_, i) => i + 1),
+  ]
+  // 7の倍数に揃える
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const getRow = (day: number) => {
+    const dateStr = `${yearMonth}-${String(day).padStart(2, '0')}`
+    return schedMap[`${rep.id}__${dateStr}`] || null
+  }
+
+  const workingDays = Array.from({ length: lastDay }, (_, i) => i + 1)
+    .filter(d => getRow(d)?.work_status === '稼働').length
+
+  const dowLabels = ['日', '月', '火', '水', '木', '金', '土']
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+        {/* ヘッダー */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 flex items-center justify-between">
+          <div>
+            <div className="text-white font-black text-base">{rep.name}</div>
+            <div className="text-blue-200 text-xs mt-0.5">{yearMonth.replace('-', '年')}月 — 稼働 {workingDays}日</div>
+          </div>
+          <button onClick={onClose} className="text-white/80 hover:text-white text-xl font-bold leading-none">✕</button>
+        </div>
+
+        {/* カレンダー */}
+        <div className="p-3">
+          {/* 曜日ヘッダー */}
+          <div className="grid grid-cols-7 mb-1">
+            {dowLabels.map((d, i) => (
+              <div key={d} className={`text-center text-[11px] font-bold py-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-slate-400'}`}>
+                {d}
+              </div>
+            ))}
+          </div>
+          {/* 日付グリッド */}
+          <div className="grid grid-cols-7 gap-0.5">
+            {cells.map((day, idx) => {
+              if (day === null) return <div key={`e-${idx}`} />
+              const row = getRow(day)
+              const status = row?.work_status || ''
+              const dow = (firstDow + day - 1) % 7
+              const isWeekend = dow === 0 || dow === 6
+              const isWorking = status === '稼働'
+              const isOff = status === '休日'
+              return (
+                <div key={day} className={`rounded-lg p-1 text-center ${
+                  isWorking ? 'bg-emerald-50 border border-emerald-200' :
+                  isOff ? 'bg-slate-50 border border-slate-100' :
+                  'border border-transparent'
+                }`}>
+                  <div className={`text-[11px] font-bold mb-0.5 ${
+                    dow === 0 ? 'text-red-500' :
+                    dow === 6 ? 'text-blue-500' :
+                    'text-slate-600'
+                  }`}>{day}</div>
+                  {isWorking ? (
+                    <>
+                      <div className="w-5 h-5 rounded-md bg-emerald-500 flex items-center justify-center mx-auto">
+                        <span className="text-white font-black text-[8px]">稼</span>
+                      </div>
+                      {row?.work_time_start && row?.work_time_end && (
+                        <div className="text-[7px] text-emerald-600 font-bold leading-tight mt-0.5">
+                          {row.work_time_start.slice(0, 5)}<br />〜{row.work_time_end.slice(0, 5)}
+                        </div>
+                      )}
+                    </>
+                  ) : isOff ? (
+                    <div className="w-5 h-5 rounded-md bg-slate-200 flex items-center justify-center mx-auto">
+                      <span className="text-slate-400 text-[8px]">休</span>
+                    </div>
+                  ) : (
+                    <div className="text-slate-200 text-[10px]">—</div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* 凡例 */}
+        <div className="flex gap-3 px-3 pb-3 text-xs text-slate-500">
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-4 rounded bg-emerald-500" />稼働
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-4 rounded bg-slate-200" />休日
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-slate-300">—</span>未提出
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
   const [reps, setReps] = useState<SalesRep[]>([])
   const [schedules, setSchedules] = useState<ScheduleRow[]>([])
@@ -23,6 +139,8 @@ export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
   const [bulkLoading, setBulkLoading] = useState(false)
   const [bulkResults, setBulkResults] = useState<BulkResult[] | null>(null)
   const [filterTeamId, setFilterTeamId] = useState<string | null>(null)
+  const [filterName, setFilterName] = useState('')
+  const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null)
 
   const days = getDaysArray(yearMonth)
 
@@ -77,9 +195,9 @@ export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
   const getRow = (repId: string, dateStr: string) => schedMap[`${repId}__${dateStr}`] || null
 
   const baseReps = reps.filter(r => r.name && !r.name.startsWith('担当者'))
-  const activeReps = filterTeamId
-    ? baseReps.filter(r => r.team_id === filterTeamId)
-    : baseReps
+  const activeReps = baseReps
+    .filter(r => !filterTeamId || r.team_id === filterTeamId)
+    .filter(r => !filterName.trim() || r.name.includes(filterName.trim()))
 
   // 日付ごとの稼働人数
   const countByDate: Record<string, number> = {}
@@ -96,11 +214,31 @@ export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
 
   return (
     <div>
+      {/* 人別カレンダーモーダル */}
+      {selectedRep && (
+        <RepCalendarModal
+          rep={selectedRep}
+          yearMonth={yearMonth}
+          schedMap={schedMap}
+          onClose={() => setSelectedRep(null)}
+        />
+      )}
+
       {/* ヘッダー */}
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div>
           <div className="font-black text-slate-800 text-lg">{yearMonth.replace('-', '年')}月 シフト確認</div>
           <div className="text-xs text-slate-400 mt-0.5">提出済み: {activeReps.filter(r => workingDaysByRep[r.id] > 0).length} / {activeReps.length}人</div>
+          {/* 名前検索 */}
+          <div className="mt-2">
+            <input
+              type="text"
+              value={filterName}
+              onChange={e => setFilterName(e.target.value)}
+              placeholder="名前で絞り込み..."
+              className="w-full max-w-[200px] border border-slate-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
           {teams.length > 0 && (
             <div className="flex gap-1.5 mt-2 flex-wrap">
               <button
@@ -195,14 +333,17 @@ export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
               return (
                 <tr key={rep.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
                   <td className={`sticky left-0 z-10 px-2 py-1.5 border-b border-slate-100 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
-                    <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setSelectedRep(rep)}
+                      className="flex items-center gap-1.5 w-full text-left active:opacity-60 transition-opacity"
+                    >
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-black flex-shrink-0 ${submitted ? 'bg-emerald-500' : 'bg-slate-300'}`}>
                         {rep.name.charAt(0)}
                       </div>
-                      <span className={`text-xs font-bold truncate max-w-[72px] ${submitted ? 'text-slate-700' : 'text-slate-400'}`}>
+                      <span className={`text-xs font-bold truncate max-w-[72px] underline-offset-2 ${submitted ? 'text-slate-700' : 'text-slate-400'}`}>
                         {rep.name}
                       </span>
-                    </div>
+                    </button>
                   </td>
                   {days.map(d => {
                     const row = getRow(rep.id, d.dateStr)

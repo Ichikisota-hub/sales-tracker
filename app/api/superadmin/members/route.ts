@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sendInviteEmail } from '@/lib/email'
 
 const SUPERADMIN_KEY = 'Origin0201'
 
@@ -93,10 +94,27 @@ export async function POST(req: NextRequest) {
 
   const inviteUrl = `${appUrl}/invite/${invitation.token}`
 
+  // 組織名を取得してメール送信
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('name')
+    .eq('id', orgId)
+    .single()
+
+  const emailResult = await sendInviteEmail({
+    to: email,
+    orgName: org?.name ?? '組織',
+    inviteUrl,
+  })
+  if (!emailResult.sent) {
+    console.error('メール送信エラー:', emailResult.error)
+  }
+
   return NextResponse.json({
     success: true,
     email,
     inviteUrl,
+    emailSent: emailResult.sent,
   })
 }
 
