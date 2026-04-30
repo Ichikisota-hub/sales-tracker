@@ -572,3 +572,25 @@ body {
 .badge-green  { background: #f0fdf4; color: #16a34a; }
 .badge-red    { background: #fff1f2; color: #ef4444; }
 .badge-purple { background: #faf5ff; color: #7c3aed; }
+
+/* ===== 人別カレンダー スライドアニメーション ===== */
+@keyframes slideInFromRight {
+  from { transform: translateX(40px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes slideInFromLeft {
+  from { transform: translateX(-40px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+@keyframes slideOutToLeft {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(-40px); opacity: 0; }
+}
+@keyframes slideOutToRight {
+  from { transform: translateX(0);   opacity: 1; }
+  to   { transform: translateX(40px); opacity: 0; }
+}
+
+.animate-slide-in          { animation: slideInFromRight  0.18s ease both; }
+.animate-slide-out-left    { animation: slideOutToLeft    0.18s ease both; }
+.animate-slide-out-right   { animation: slideOutToRight   0.18s ease both; }

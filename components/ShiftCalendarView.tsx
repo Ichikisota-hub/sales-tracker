@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase, SalesRep, Team } from '@/lib/supabase'
 import { getDaysArray } from '@/lib/dateUtils'
 
@@ -16,26 +16,32 @@ type ScheduleRow = {
 
 type BulkResult = { name: string; matched: string | null; days: number; status: string }
 
-// 人別月カレンダーモーダル
+// 人別月カレンダー（全画面・スワイプで切り替え）
 function RepCalendarModal({
-  rep,
+  reps,
+  initialIndex,
   yearMonth,
   schedMap,
   onClose,
 }: {
-  rep: SalesRep
+  reps: SalesRep[]
+  initialIndex: number
   yearMonth: string
   schedMap: Record<string, ScheduleRow>
   onClose: () => void
 }) {
+  const [index, setIndex] = useState(initialIndex)
+  const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null)
+  const touchStartX = useRef<number | null>(null)
+
+  const rep = reps[index]
   const [y, m] = yearMonth.split('-').map(Number)
-  const firstDow = new Date(y, m - 1, 1).getDay() // 0=日
+  const firstDow = new Date(y, m - 1, 1).getDay()
   const lastDay = new Date(y, m, 0).getDate()
   const cells: (number | null)[] = [
     ...Array(firstDow).fill(null),
     ...Array.from({ length: lastDay }, (_, i) => i + 1),
   ]
-  // 7の倍数に揃える
   while (cells.length % 7 !== 0) cells.push(null)
 
   const getRow = (day: number) => {
@@ -46,21 +52,82 @@ function RepCalendarModal({
   const workingDays = Array.from({ length: lastDay }, (_, i) => i + 1)
     .filter(d => getRow(d)?.work_status === '稼働').length
 
+  function goTo(nextIndex: number, dir: 'left' | 'right') {
+    if (nextIndex < 0 || nextIndex >= reps.length) return
+    setSlideDir(dir)
+    setTimeout(() => {
+      setIndex(nextIndex)
+      setSlideDir(null)
+    }, 180)
+  }
+
+  function onTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX
+  }
+
+  function onTouchEnd(e: React.TouchEvent) {
+    if (touchStartX.current === null) return
+    const dx = e.changedTouches[0].clientX - touchStartX.current
+    touchStartX.current = null
+    if (Math.abs(dx) < 50) return
+    if (dx < 0) goTo(index + 1, 'left')   // 左スワイプ → 次の人
+    else         goTo(index - 1, 'right')  // 右スワイプ → 前の人
+  }
+
   const dowLabels = ['日', '月', '火', '水', '木', '金', '土']
 
+  const slideClass = slideDir === 'left'
+    ? 'animate-slide-out-left'
+    : slideDir === 'right'
+    ? 'animate-slide-out-right'
+    : 'animate-slide-in'
+
   return (
-    <div className="fixed inset-0 z-50 bg-white flex flex-col">
+    <div
+      className="fixed inset-0 z-50 bg-white flex flex-col"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       {/* ヘッダー */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-4 flex items-center justify-between flex-shrink-0">
-        <div>
-          <div className="text-white font-black text-lg">{rep.name}</div>
-          <div className="text-blue-200 text-sm mt-0.5">{yearMonth.replace('-', '年')}月 — 稼働 {workingDays}日</div>
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-4 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => goTo(index - 1, 'right')}
+            disabled={index === 0}
+            className="text-white/70 disabled:opacity-20 text-2xl w-10 h-10 flex items-center justify-center"
+          >‹</button>
+          <div className="text-center flex-1">
+            <div className="text-white font-black text-lg">{rep.name}</div>
+            <div className="text-blue-200 text-xs mt-0.5">
+              {index + 1} / {reps.length}人 — {yearMonth.replace('-', '年')}月 稼働 {workingDays}日
+            </div>
+          </div>
+          <button
+            onClick={() => goTo(index + 1, 'left')}
+            disabled={index === reps.length - 1}
+            className="text-white/70 disabled:opacity-20 text-2xl w-10 h-10 flex items-center justify-center"
+          >›</button>
         </div>
-        <button onClick={onClose} className="text-white/80 hover:text-white text-2xl font-bold leading-none w-10 h-10 flex items-center justify-center">✕</button>
+        {/* ドットインジケーター（最大15人まで表示） */}
+        {reps.length <= 15 && (
+          <div className="flex justify-center gap-1 mt-2">
+            {reps.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => goTo(i, i > index ? 'left' : 'right')}
+                className={`rounded-full transition-all ${i === index ? 'w-4 h-2 bg-white' : 'w-2 h-2 bg-white/40'}`}
+              />
+            ))}
+          </div>
+        )}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-white/60 hover:text-white text-sm font-bold"
+        >✕ 閉じる</button>
       </div>
 
       {/* カレンダー本体 */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div key={rep.id} className={`flex-1 overflow-y-auto p-4 ${slideClass}`}>
         {/* 曜日ヘッダー */}
         <div className="grid grid-cols-7 mb-2">
           {dowLabels.map((d, i) => (
@@ -85,9 +152,7 @@ function RepCalendarModal({
                 'border border-transparent'
               }`}>
                 <div className={`text-sm font-bold mb-1 ${
-                  dow === 0 ? 'text-red-500' :
-                  dow === 6 ? 'text-blue-500' :
-                  'text-slate-700'
+                  dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-slate-700'
                 }`}>{day}</div>
                 {isWorking ? (
                   <>
@@ -115,15 +180,9 @@ function RepCalendarModal({
 
       {/* 凡例 */}
       <div className="flex gap-4 px-4 py-3 border-t border-slate-100 text-sm text-slate-500 flex-shrink-0">
-        <div className="flex items-center gap-1.5">
-          <div className="w-5 h-5 rounded bg-emerald-500" />稼働
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-5 h-5 rounded bg-slate-200" />休日
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-slate-300 text-base">—</span>未提出
-        </div>
+        <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded bg-emerald-500" />稼働</div>
+        <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded bg-slate-200" />休日</div>
+        <div className="flex items-center gap-1.5"><span className="text-slate-300 text-base">—</span>未提出</div>
       </div>
     </div>
   )
@@ -137,7 +196,7 @@ export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
   const [bulkResults, setBulkResults] = useState<BulkResult[] | null>(null)
   const [filterTeamId, setFilterTeamId] = useState<string | null>(null)
   const [filterName, setFilterName] = useState('')
-  const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null)
+  const [selectedRepIndex, setSelectedRepIndex] = useState<number | null>(null)
 
   const days = getDaysArray(yearMonth)
 
@@ -211,13 +270,14 @@ export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
 
   return (
     <div>
-      {/* 人別カレンダーモーダル */}
-      {selectedRep && (
+      {/* 人別カレンダー（全画面） */}
+      {selectedRepIndex !== null && (
         <RepCalendarModal
-          rep={selectedRep}
+          reps={activeReps}
+          initialIndex={selectedRepIndex}
           yearMonth={yearMonth}
           schedMap={schedMap}
-          onClose={() => setSelectedRep(null)}
+          onClose={() => setSelectedRepIndex(null)}
         />
       )}
 
@@ -331,7 +391,7 @@ export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
                 <tr key={rep.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
                   <td className={`sticky left-0 z-10 px-2 py-1.5 border-b border-slate-100 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
                     <button
-                      onClick={() => setSelectedRep(rep)}
+                      onClick={() => setSelectedRepIndex(i)}
                       className="flex items-center gap-1.5 w-full text-left active:opacity-60 transition-opacity"
                     >
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-black flex-shrink-0 ${submitted ? 'bg-emerald-500' : 'bg-slate-300'}`}>
