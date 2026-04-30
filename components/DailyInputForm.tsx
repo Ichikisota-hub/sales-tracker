@@ -195,7 +195,7 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
 
     const payload: any = {
       ...record,
-      working_hours: computedHours || record.working_hours || 0,
+      working_hours: record.working_hours || computedHours || 0,
       sales_rep_id: repId,
       record_date: selectedDate,
       updated_at: new Date().toISOString(),
