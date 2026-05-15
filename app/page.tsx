@@ -16,6 +16,67 @@ import { useOrganization } from '@/contexts/OrganizationContext'
 import { useAuth } from '@/contexts/AuthContext'
 import TrialBanner from '@/components/billing/TrialBanner'
 
+// 担当者未リンク時の自己紐付け画面
+function RepLinkScreen({ reps, signOut }: { reps: SalesRep[]; signOut: () => void }) {
+  const [selected, setSelected] = useState('')
+  const [linking, setLinking] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleLink() {
+    if (!selected) return
+    setLinking(true)
+    setError('')
+    try {
+      const res = await fetch('/api/auth/link-rep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullName: selected }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setError(d.error || '紐付けに失敗しました'); setLinking(false); return }
+      // 成功: ページリロードで membership を再取得
+      window.location.href = '/'
+    } catch {
+      setError('エラーが発生しました')
+      setLinking(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center h-screen gap-5 px-6"
+      style={{ background: 'linear-gradient(160deg, #0c1220 0%, #0f172a 100%)' }}>
+      <img src="/logo.png" alt="logo" className="h-12 w-auto opacity-80" />
+      <div className="w-full max-w-xs rounded-2xl p-6 space-y-4"
+        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+        <p className="text-white font-bold text-sm text-center">あなたの名前を選択してください</p>
+        <select
+          value={selected}
+          onChange={e => setSelected(e.target.value)}
+          className="w-full rounded-xl px-3 py-2.5 text-sm font-semibold outline-none"
+          style={{ background: 'rgba(255,255,255,0.09)', color: 'white', border: '1px solid rgba(255,255,255,0.15)' }}
+        >
+          <option value="" style={{ background: '#1e293b' }}>— 選択してください —</option>
+          {reps.map(r => (
+            <option key={r.id} value={r.name} style={{ background: '#1e293b' }}>{r.name}</option>
+          ))}
+        </select>
+        {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+        <button
+          onClick={handleLink}
+          disabled={!selected || linking}
+          className="w-full py-3 rounded-xl font-bold text-sm transition-all disabled:opacity-40"
+          style={{ background: 'linear-gradient(135deg,#6366f1,#2563eb)', color: 'white' }}
+        >
+          {linking ? '設定中...' : '確定する'}
+        </button>
+      </div>
+      <button onClick={signOut} className="text-slate-500 text-xs hover:text-slate-300 transition-colors underline">
+        ログアウト
+      </button>
+    </div>
+  )
+}
+
 // タブが開かれた時だけ読み込む（コード分割でバンドルサイズ削減）
 const DailyInputForm    = dynamic(() => import('@/components/DailyInputForm'))
 const StatusView        = dynamic(() => import('@/components/StatusView'))
@@ -155,20 +216,9 @@ export default function Home() {
     )
   }
 
-  // member で担当者が紐付いていない場合 — loading中はスピナーで待つ（auto-provision が完了次第 membership 更新）
+  // member で担当者が紐付いていない場合 — 名前選択で自己リンク
   if (!isManager && role !== null && !selectedRep && reps.length > 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen gap-4"
-        style={{ background: 'linear-gradient(160deg, #0c1220 0%, #0f172a 100%)' }}>
-        <img src="/logo.png" alt="logo" className="h-12 w-auto opacity-80 mb-2" />
-        <div className="w-7 h-7 border-2 border-indigo-800 border-t-indigo-400 rounded-full animate-spin" />
-        <p className="text-slate-500 text-xs font-semibold tracking-widest uppercase">担当者を設定中...</p>
-        <button onClick={signOut}
-          className="text-slate-500 text-xs mt-8 hover:text-slate-300 transition-colors underline">
-          ログアウト
-        </button>
-      </div>
-    )
+    return <RepLinkScreen reps={reps} signOut={signOut} />
   }
 
   // 設定タブのみ admin/manager 限定。それ以外は全ロール共通
