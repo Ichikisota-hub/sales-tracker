@@ -102,6 +102,39 @@ export default function SuperAdminPage() {
   const [fixLoading, setFixLoading] = useState(false)
   const [fixResult, setFixResult] = useState<{ success: boolean; stats: Record<string, number> } | null>(null)
 
+  // アカウント移管
+  const [mergeFrom, setMergeFrom] = useState('t.yuki1106@icloud.com')
+  const [mergeTo, setMergeTo] = useState('teramoto.yuki.origin@gmail.com')
+  const [mergePw, setMergePw] = useState('')
+  const [mergeLoading, setMergeLoading] = useState(false)
+  const [mergeResult, setMergeResult] = useState<{ success?: boolean; log?: string[]; error?: string } | null>(null)
+  const [mergePreview, setMergePreview] = useState<any>(null)
+  const [mergePreviewLoading, setMergePreviewLoading] = useState(false)
+
+  async function loadMergePreview() {
+    if (!mergeFrom || !mergeTo) return
+    setMergePreviewLoading(true)
+    const res = await fetch(
+      `/api/superadmin/merge-accounts?from=${encodeURIComponent(mergeFrom)}&to=${encodeURIComponent(mergeTo)}`,
+      { headers: { 'x-superadmin-key': SUPERADMIN_KEY } }
+    )
+    setMergePreview(await res.json())
+    setMergePreviewLoading(false)
+  }
+
+  async function runMerge() {
+    if (!confirm(`${mergeFrom} → ${mergeTo} にデータを移管します。よろしいですか？`)) return
+    setMergeLoading(true)
+    setMergeResult(null)
+    const res = await fetch('/api/superadmin/merge-accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-superadmin-key': SUPERADMIN_KEY },
+      body: JSON.stringify({ fromEmail: mergeFrom, toEmail: mergeTo, newPassword: mergePw || undefined }),
+    })
+    setMergeResult(await res.json())
+    setMergeLoading(false)
+  }
+
   async function runFixAll() {
     if (!confirm('全データ修復を実行しますか？\n・organization_id=NULLのレコードをORIGINに紐付け\n・未リンクメンバーにsales_repを自動作成')) return
     setFixLoading(true)
@@ -589,6 +622,63 @@ export default function SuperAdminPage() {
               {Object.entries(fixResult.stats ?? {}).map(([k, v]) => (
                 <div key={k}>{k}: {v}</div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* アカウント移管 */}
+        <div className="bg-indigo-950 border border-indigo-800 rounded-xl px-5 py-4 space-y-3">
+          <h2 className="font-bold text-indigo-300">🔄 アカウント移管</h2>
+          <p className="text-xs text-indigo-400">移管元のメンバーシップ・担当者紐付けを移管先に引き継ぎます</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div>
+              <label className="text-xs text-indigo-300 font-bold mb-1 block">移管元（データがある方）</label>
+              <input value={mergeFrom} onChange={e => setMergeFrom(e.target.value)}
+                className="w-full bg-indigo-900 border border-indigo-700 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+            </div>
+            <div>
+              <label className="text-xs text-indigo-300 font-bold mb-1 block">移管先（今後使うメール）</label>
+              <input value={mergeTo} onChange={e => setMergeTo(e.target.value)}
+                className="w-full bg-indigo-900 border border-indigo-700 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-indigo-300 font-bold mb-1 block">新しいパスワード（任意・空欄なら変更なし）</label>
+            <input type="password" value={mergePw} onChange={e => setMergePw(e.target.value)}
+              placeholder="6文字以上"
+              className="w-full bg-indigo-900 border border-indigo-700 rounded-lg px-3 py-2 text-sm text-white outline-none" />
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={loadMergePreview} disabled={mergePreviewLoading}
+              className="text-sm px-4 py-2 rounded-lg bg-indigo-700 hover:bg-indigo-600 text-white font-bold transition-colors disabled:opacity-50">
+              {mergePreviewLoading ? '確認中...' : '内容を確認'}
+            </button>
+            <button onClick={runMerge} disabled={mergeLoading || !mergeFrom || !mergeTo}
+              className="text-sm px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white font-bold transition-colors disabled:opacity-50">
+              {mergeLoading ? '移管中...' : '移管を実行'}
+            </button>
+          </div>
+          {mergePreview && (
+            <div className="text-xs bg-indigo-900 rounded-lg p-3 space-y-1">
+              <div className="text-indigo-200 font-bold mb-2">確認内容</div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                <span className="text-indigo-400">移管元</span>
+                <span className="text-white">{mergePreview.from?.email} {mergePreview.from?.found ? '✅' : '❌ 未検出'}</span>
+                <span className="text-indigo-400">　担当者</span>
+                <span className="text-indigo-200">{mergePreview.from?.salesRepName ?? '未設定'}</span>
+                <span className="text-indigo-400">　ロール</span>
+                <span className="text-indigo-200">{mergePreview.from?.membershipRole ?? '—'}</span>
+                <span className="text-indigo-400 mt-2">移管先</span>
+                <span className="text-white mt-2">{mergePreview.to?.email} {mergePreview.to?.found ? '✅' : '❌ 未検出'}</span>
+                <span className="text-indigo-400">　現担当者</span>
+                <span className="text-indigo-200">{mergePreview.to?.salesRepId ?? '未設定'}</span>
+              </div>
+            </div>
+          )}
+          {mergeResult && (
+            <div className={`text-xs rounded-lg p-3 ${mergeResult.success ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}`}>
+              {mergeResult.success ? '✅ 移管完了' : `❌ ${mergeResult.error}`}
+              {mergeResult.log?.map((l, i) => <div key={i}>・{l}</div>)}
             </div>
           )}
         </div>
