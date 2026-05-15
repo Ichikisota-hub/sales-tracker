@@ -23,11 +23,13 @@ const AnalysisView      = dynamic(() => import('@/components/AnalysisView'))
 const OverallView       = dynamic(() => import('@/components/OverallView'))
 const SheetView         = dynamic(() => import('@/components/SheetView'))
 const ScheduleSubmitForm  = dynamic(() => import('@/components/ScheduleSubmitForm'))
+const ShiftMyCalendar     = dynamic(() => import('@/components/ShiftMyCalendar'))
 const ShiftCalendarView   = dynamic(() => import('@/components/ShiftCalendarView'))
 const DailyShiftView      = dynamic(() => import('@/components/DailyShiftView'))
 const AreaStatsView       = dynamic(() => import('@/components/AreaStatsView'))
 const TeamSheetView       = dynamic(() => import('@/components/TeamSheetView'))
 const TeamStatsView       = dynamic(() => import('@/components/TeamStatsView'))
+const WeeklyKPIView       = dynamic(() => import('@/components/WeeklyKPIView'))
 const DailyReportListView = dynamic(() => import('@/components/DailyReportListView'))
 const SubmissionCheckView = dynamic(() => import('@/components/SubmissionCheckView'))
 const RepSettings         = dynamic(() => import('@/components/RepSettings'))
@@ -43,15 +45,9 @@ function getNextMonth(ym: string): string {
 }
 
 type MainTab = 'form' | 'status' | 'analysis' | 'overall'
-type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings' | 'daily_report' | 'team_sheet' | 'stats_sheet' | 'submission_check' | 'contract_stats'
+type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings' | 'daily_report' | 'team_sheet' | 'stats_sheet' | 'submission_check' | 'contract_stats' | 'weekly_kpi'
 
 const ORIGIN_ORG_ID = '0524dcfa-685f-4635-971b-39c7899da7cd'
-const MULTI_ORGS = [
-  { id: ORIGIN_ORG_ID, label: 'ORIGIN' },
-  { id: '9267242c-c884-4e65-8c42-c92d50aa6d77', label: 'NEURA' },
-  { id: '20c315a5-98ef-4125-9e5f-a13b188c8323', label: 'TOP' },
-]
-const ALL_ORG_IDS = MULTI_ORGS.map(o => o.id)
 
 export default function Home() {
   const { signOut, user } = useAuth()
@@ -68,14 +64,7 @@ export default function Home() {
   const [reps, setReps] = useState<SalesRep[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null)
-  // ORIGINのsuperadmin/admin のみ他組織データ閲覧可能（managerは非表示）
-  const canViewAllOrgs = (isSuperAdmin || role === 'admin') && organizationId === ORIGIN_ORG_ID
-  const [orgMode, setOrgMode] = useState<'current' | 'all' | string>('current')
-  const activeOrgIds = !canViewAllOrgs
-    ? (organizationId ? [organizationId] : [])
-    : orgMode === 'all' ? ALL_ORG_IDS
-    : orgMode === 'current' ? (organizationId ? [organizationId] : [])
-    : [orgMode]
+  const activeOrgIds = [ORIGIN_ORG_ID]
   const [selectedMonth, setSelectedMonth] = useState<string>(localYearMonth())
   const [scheduleMonth, setScheduleMonth] = useState<string>(getNextMonth(localYearMonth()))
   const [activeTab, setActiveTab] = useState<MainTab>('form')
@@ -93,7 +82,11 @@ export default function Home() {
   const months = getMonthList(24)
   const scheduleMonthOptions = [localYearMonth(), getNextMonth(localYearMonth())]
 
-  useEffect(() => { loadReps() }, [])
+  // organizationId が確定したタイミングで担当者一覧を読み込む（初回 + 変化時）
+  useEffect(() => {
+    if (!orgLoading) loadReps()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organizationId, orgLoading])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -106,6 +99,7 @@ export default function Home() {
   }, [])
 
   async function loadReps() {
+    // org フィルタなし — organization_id=NULL の既存データも含めて全件取得（Allow all RLS）
     const [{ data }, { data: teamData }] = await Promise.all([
       supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
       supabase.from('teams').select('*').order('display_order'),
@@ -114,25 +108,6 @@ export default function Home() {
     setTeams(teamData || [])
     setLoading(false)
   }
-
-  async function loadCombinedRepsTeams(orgIds: string[]) {
-    setLoading(true)
-    const res = await fetch(`/api/combined/data?orgIds=${orgIds.join(',')}&yearMonth=${selectedMonth}`)
-    if (res.ok) {
-      const d = await res.json()
-      setReps(d.reps)
-      setTeams(d.teams)
-    }
-    setLoading(false)
-  }
-
-  // orgMode変更時にデータ再読み込み（ORIGIN superadmin/管理者のみ）
-  useEffect(() => {
-    if (!canViewAllOrgs) return
-    if (orgMode === 'current') loadReps()
-    else if (orgMode === 'all') loadCombinedRepsTeams(ALL_ORG_IDS)
-    else loadCombinedRepsTeams([orgMode])
-  }, [orgMode, canViewAllOrgs])
 
   // rep自動選択: membership と reps が揃ったタイミングで実行
   useEffect(() => {
@@ -180,17 +155,16 @@ export default function Home() {
     )
   }
 
-  // member で担当者が紐付いていない場合
-  if (!isManager && role !== null && !selectedRep) {
+  // member で担当者が紐付いていない場合 — loading中はスピナーで待つ（auto-provision が完了次第 membership 更新）
+  if (!isManager && role !== null && !selectedRep && reps.length > 0) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4"
         style={{ background: 'linear-gradient(160deg, #0c1220 0%, #0f172a 100%)' }}>
         <img src="/logo.png" alt="logo" className="h-12 w-auto opacity-80 mb-2" />
-        <p className="text-slate-300 text-sm font-semibold text-center leading-relaxed px-8">
-          担当者が設定されていません。<br />管理者に連絡してください。
-        </p>
+        <div className="w-7 h-7 border-2 border-indigo-800 border-t-indigo-400 rounded-full animate-spin" />
+        <p className="text-slate-500 text-xs font-semibold tracking-widest uppercase">担当者を設定中...</p>
         <button onClick={signOut}
-          className="text-slate-500 text-xs mt-4 hover:text-slate-300 transition-colors underline">
+          className="text-slate-500 text-xs mt-8 hover:text-slate-300 transition-colors underline">
           ログアウト
         </button>
       </div>
@@ -215,6 +189,7 @@ export default function Home() {
     { id: 'sheet'            as SubTab, label: '表',         Icon: Table },
     { id: 'team_sheet'       as SubTab, label: 'チーム表',   Icon: FileSpreadsheet },
     { id: 'stats_sheet'      as SubTab, label: '数値表',     Icon: BarChart3 },
+    { id: 'weekly_kpi'       as SubTab, label: '週KPI',      Icon: TrendingUp },
     { id: 'daily_report'     as SubTab, label: '日報',       Icon: FileText },
     ...(isManager ? [{ id: 'submission_check' as SubTab, label: '提出確認', Icon: CheckSquare }] : []),
     ...(isManager ? [{ id: 'settings' as SubTab, label: '設定', Icon: Settings }] : []),
@@ -232,22 +207,6 @@ export default function Home() {
         {/* Row 1: Logo + Selectors */}
         <div className="flex items-center gap-2 mb-2.5">
           <img src="/logo.png" alt="ORIGIN SALES REPORTING" className="h-11 w-auto flex-shrink-0" />
-
-          {/* 代理店セレクター（ORIGINのsuperadmin/管理者のみ） */}
-          {canViewAllOrgs && (
-            <select
-              value={orgMode}
-              onChange={e => setOrgMode(e.target.value)}
-              className="text-slate-200 text-xs font-semibold rounded-xl px-2.5 py-1.5 outline-none cursor-pointer flex-shrink-0"
-              style={{ background: orgMode === 'all' ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,.09)', border: orgMode === 'all' ? '1px solid rgba(99,102,241,0.5)' : '1px solid rgba(255,255,255,.1)' }}
-            >
-              <option value="current" className="bg-slate-800">現在の代理店</option>
-              {MULTI_ORGS.map(o => (
-                <option key={o.id} value={o.id} className="bg-slate-800">{o.label}</option>
-              ))}
-              <option value="all" className="bg-slate-800">全代理店合計</option>
-            </select>
-          )}
 
           {isShiftSubmitTab ? (
             <div className="flex gap-1.5">
@@ -423,7 +382,7 @@ export default function Home() {
             <ContractListView
               key={contractRefreshKey}
               reps={reps}
-              selectedRepId={orgMode === 'all' ? null : (selectedRep?.id || null)}
+              selectedRepId={selectedRep?.id || null}
               onAdd={() => setShowContractAdd(true)}
               orgIds={activeOrgIds}
             />
@@ -433,7 +392,7 @@ export default function Home() {
           <ContractStatsView orgIds={activeOrgIds} />
         )}
         {activeSubTab === 'shift_submit' && selectedRep && (
-          <ScheduleSubmitForm repId={selectedRep.id} repName={selectedRep.name} yearMonth={scheduleMonth} />
+          <ShiftMyCalendar repId={selectedRep.id} repName={selectedRep.name} initialYearMonth={scheduleMonth} />
         )}
         {activeSubTab === 'shift' && (
           <ShiftCalendarView yearMonth={scheduleMonth} teams={teams} orgIds={activeOrgIds} />
@@ -452,6 +411,9 @@ export default function Home() {
         )}
         {activeSubTab === 'stats_sheet' && (
           <TeamStatsView yearMonth={selectedMonth} teams={teams} orgIds={activeOrgIds} />
+        )}
+        {activeSubTab === 'weekly_kpi' && (
+          <WeeklyKPIView yearMonth={selectedMonth} teams={teams} orgIds={activeOrgIds} />
         )}
         {activeSubTab === 'daily_report' && (
           <DailyReportListView teams={teams} orgIds={activeOrgIds} />

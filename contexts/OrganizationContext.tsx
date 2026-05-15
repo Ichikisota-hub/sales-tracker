@@ -62,17 +62,55 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       return
     }
 
+    // membership がない、または sales_rep_id が未設定の場合は auto-provision を呼ぶ
+    const needsProvision = !memberData || !memberData.sales_rep_id
+
     if (memberData) {
       setMembership(memberData as OrganizationMember)
 
-      // 組織情報を別途取得
       const { data: orgData } = await supabase
         .from('organizations')
         .select('*')
         .eq('id', memberData.organization_id)
         .maybeSingle()
-
       if (orgData) setOrganization(orgData as Organization)
+    }
+
+    if (needsProvision) {
+      try {
+        const session = (await supabase.auth.getSession()).data.session
+        const res = await fetch('/api/auth/auto-provision', {
+          method: 'POST',
+          headers: session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {},
+        })
+        if (res.ok) {
+          const result = await res.json()
+          if (result.provisioned) {
+            // 再取得して state を更新
+            const { data: refreshedData } = await supabase
+              .from('organization_members')
+              .select('*')
+              .eq('user_id', user.id)
+              .order('joined_at', { ascending: true })
+              .limit(1)
+
+            const refreshed = refreshedData?.[0] ?? null
+            if (refreshed) {
+              setMembership(refreshed as OrganizationMember)
+              const { data: orgData } = await supabase
+                .from('organizations')
+                .select('*')
+                .eq('id', refreshed.organization_id)
+                .maybeSingle()
+              if (orgData) setOrganization(orgData as Organization)
+            }
+          }
+        }
+      } catch (e) {
+        console.error('auto-provision error:', e)
+      }
     }
 
     setLoading(false)

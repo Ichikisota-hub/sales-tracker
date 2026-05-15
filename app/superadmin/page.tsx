@@ -98,6 +98,28 @@ export default function SuperAdminPage() {
   const [saInviteLink, setSaInviteLink] = useState<string | null>(null)
   const [saCopied, setSaCopied] = useState(false)
 
+  // 全データ修復
+  const [fixLoading, setFixLoading] = useState(false)
+  const [fixResult, setFixResult] = useState<{ success: boolean; stats: Record<string, number> } | null>(null)
+
+  async function runFixAll() {
+    if (!confirm('全データ修復を実行しますか？\n・organization_id=NULLのレコードをORIGINに紐付け\n・未リンクメンバーにsales_repを自動作成')) return
+    setFixLoading(true)
+    setFixResult(null)
+    try {
+      const res = await fetch('/api/superadmin/fix-all', {
+        method: 'POST',
+        headers: { 'x-superadmin-key': SUPERADMIN_KEY },
+      })
+      const d = await res.json()
+      setFixResult(d)
+    } catch (e: any) {
+      setFixResult({ success: false, stats: { error: -1 } })
+    } finally {
+      setFixLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (localStorage.getItem(STORAGE_KEY) === 'true') {
       setUnlocked(true)
@@ -540,6 +562,33 @@ export default function SuperAdminPage() {
                   <p className="text-xs text-slate-500 mt-2">※ リンクの有効期限は24時間です</p>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* 全データ修復 */}
+        <div className="bg-red-950 border border-red-800 rounded-xl px-5 py-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h2 className="font-bold text-red-300">🔧 全データ修復</h2>
+              <p className="text-xs text-red-400 mt-1">
+                organization_id=NULLのレコードをORIGINに紐付け＋未リンクメンバーにsales_repを自動作成
+              </p>
+            </div>
+            <button
+              onClick={runFixAll}
+              disabled={fixLoading}
+              className="text-sm px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white font-bold transition-colors disabled:opacity-50"
+            >
+              {fixLoading ? '実行中...' : '全データ修復を実行'}
+            </button>
+          </div>
+          {fixResult && (
+            <div className={`mt-3 p-3 rounded-lg text-xs font-mono ${fixResult.success ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}`}>
+              {fixResult.success ? '✅ 修復完了' : '❌ 失敗'}
+              {Object.entries(fixResult.stats ?? {}).map(([k, v]) => (
+                <div key={k}>{k}: {v}</div>
+              ))}
             </div>
           )}
         </div>
