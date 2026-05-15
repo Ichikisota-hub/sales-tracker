@@ -1,8 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase-browser'
-import { useRouter } from 'next/navigation'
 import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
@@ -10,29 +8,22 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const router = useRouter()
-  const supabase = createClient()
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError('')
     setLoading(true)
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      if (error.message.includes('Email not confirmed') || error.message.includes('email_not_confirmed')) {
-        setError('メールアドレスが未確認です。管理者に連絡するか、登録メールの確認リンクをクリックしてください。')
-      } else if (error.message.includes('Invalid login credentials')) {
-        setError('メールアドレスまたはパスワードが正しくありません。')
-      } else {
-        setError(`ログイン失敗: ${error.message}`)
-      }
-      setLoading(false)
-      return
-    }
+    // サーバーAPI経由でログイン → httpOnly Cookie が Set-Cookie ヘッダーで確実にセットされる
+    const res = await fetch('/api/auth/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+    const data = await res.json()
 
-    if (!data.session) {
-      setError('セッションの取得に失敗しました。メール確認が必要な場合は登録時に届いたメールを確認してください。')
+    if (!res.ok) {
+      setError(data.error || 'ログインに失敗しました')
       setLoading(false)
       return
     }
