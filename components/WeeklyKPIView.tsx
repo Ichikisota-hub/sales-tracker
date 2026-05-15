@@ -5,6 +5,101 @@ import { supabase, SalesRep, Team } from '@/lib/supabase'
 
 type Props = { yearMonth: string; teams: Team[]; orgIds?: string[] }
 
+// ── テーマ定義 ────────────────────────────────────────────────────────────────
+
+type Theme = 1 | 2 | 3
+
+const THEMES: { id: Theme; label: string; desc: string }[] = [
+  { id: 1, label: 'スタンダード', desc: 'Google Sheets風・シンプル' },
+  { id: 2, label: 'ミニマル',    desc: 'Notion風・ボーダーレス' },
+  { id: 3, label: 'ファイナンス', desc: '財務表風・数字重視' },
+]
+
+type ThemeTokens = {
+  // テーブル外
+  wrapBg: string
+  wrapBorder: string
+  wrapRadius: string
+  // ヘッダー
+  headerBg: string
+  headerText: string
+  subHeaderBg: string
+  subHeaderText: string
+  currentWeekHeaderBg: string
+  currentWeekHeaderText: string
+  // 偶数/奇数行
+  rowEven: string
+  rowOdd: string
+  currentRowEven: string
+  currentRowOdd: string
+  // 固定列
+  stickyBg: (even: boolean) => string
+  stickyBorder: string
+  // セルボーダー
+  cellBorder: string
+  rowBorder: string
+  // 数字スタイル
+  numFont: string
+  numSize: string
+  nameFont: string
+  // フッター行
+  footerBg: string
+  footerText: string
+  // タグ・バッジ
+  tagBg: string
+  tagText: string
+}
+
+function getTokens(t: Theme): ThemeTokens {
+  switch (t) {
+    case 1: return {
+      wrapBg: '#ffffff', wrapBorder: '1px solid #d1d5db', wrapRadius: '12px',
+      headerBg: '#1e293b', headerText: '#f1f5f9',
+      subHeaderBg: '#0f172a', subHeaderText: '#94a3b8',
+      currentWeekHeaderBg: '#1e3a5f', currentWeekHeaderText: '#93c5fd',
+      rowEven: '#ffffff', rowOdd: '#f8fafc',
+      currentRowEven: '#eff6ff', currentRowOdd: '#dbeafe',
+      stickyBg: (e) => e ? '#ffffff' : '#f8fafc',
+      stickyBorder: '#e2e8f0',
+      cellBorder: '#e2e8f0', rowBorder: '#f1f5f9',
+      numFont: 'inherit', numSize: '13px',
+      nameFont: '600',
+      footerBg: '#334155', footerText: '#cbd5e1',
+      tagBg: '#e0f2fe', tagText: '#0369a1',
+    }
+    case 2: return {
+      wrapBg: '#fafaf9', wrapBorder: '1px solid #e7e5e4', wrapRadius: '16px',
+      headerBg: '#292524', headerText: '#fafaf9',
+      subHeaderBg: '#1c1917', subHeaderText: '#a8a29e',
+      currentWeekHeaderBg: '#1e3a5f', currentWeekHeaderText: '#bfdbfe',
+      rowEven: '#ffffff', rowOdd: '#fafaf9',
+      currentRowEven: '#f0f9ff', currentRowOdd: '#e0f2fe',
+      stickyBg: (e) => e ? '#ffffff' : '#fafaf9',
+      stickyBorder: 'transparent',
+      cellBorder: 'transparent', rowBorder: '#f5f5f4',
+      numFont: 'inherit', numSize: '13px',
+      nameFont: '500',
+      footerBg: '#292524', footerText: '#d6d3d1',
+      tagBg: '#f0f9ff', tagText: '#0369a1',
+    }
+    case 3: return {
+      wrapBg: '#ffffff', wrapBorder: '2px solid #1e293b', wrapRadius: '4px',
+      headerBg: '#0f172a', headerText: '#e2e8f0',
+      subHeaderBg: '#1e293b', subHeaderText: '#64748b',
+      currentWeekHeaderBg: '#1e3a5f', currentWeekHeaderText: '#93c5fd',
+      rowEven: '#ffffff', rowOdd: '#f8fafc',
+      currentRowEven: '#eff6ff', currentRowOdd: '#dbeafe',
+      stickyBg: (e) => e ? '#f8fafc' : '#f1f5f9',
+      stickyBorder: '#cbd5e1',
+      cellBorder: '#e2e8f0', rowBorder: '#e2e8f0',
+      numFont: 'monospace', numSize: '13px',
+      nameFont: '700',
+      footerBg: '#0f172a', footerText: '#94a3b8',
+      tagBg: '#dbeafe', tagText: '#1e40af',
+    }
+  }
+}
+
 // ── 週定義（水〜月の6日サイクル、火=定休を除く） ────────────────────────────
 type Week = { label: string; range: string; start: string; end: string }
 
@@ -190,6 +285,8 @@ export default function WeeklyKPIView({ yearMonth, teams, orgIds }: Props) {
   const [rows, setRows] = useState<RepRow[]>([])
   const [loading, setLoading] = useState(true)
   const [filterTeamId, setFilterTeamId] = useState<string | null>(null)
+  const [theme, setTheme] = useState<Theme>(1)
+  const tk = getTokens(theme)
   const today = new Date().toISOString().slice(0, 10)
   const weeks = buildWeeks(yearMonth)
 
@@ -257,25 +354,46 @@ export default function WeeklyKPIView({ yearMonth, teams, orgIds }: Props) {
           </p>
         </div>
 
-        {/* チームフィルタ */}
-        {teams.length > 0 && (
-          <div className="flex gap-1.5 flex-wrap">
-            <button onClick={() => setFilterTeamId(null)}
-              className={`text-xs px-3 py-1 rounded-full font-bold transition-colors ${filterTeamId === null ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-              全体
-            </button>
-            {teams.map(t => (
-              <button key={t.id} onClick={() => setFilterTeamId(t.id)}
-                className={`text-xs px-3 py-1 rounded-full font-bold transition-colors ${filterTeamId === t.id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-                {t.name}
+        <div className="flex flex-col gap-2 items-end">
+          {/* テーマ切り替え */}
+          <div className="flex gap-1 p-1 rounded-xl" style={{ background: '#f1f5f9' }}>
+            {THEMES.map(th => (
+              <button
+                key={th.id}
+                onClick={() => setTheme(th.id)}
+                title={th.desc}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                style={{
+                  background: theme === th.id ? '#1e293b' : 'transparent',
+                  color: theme === th.id ? '#f1f5f9' : '#64748b',
+                  boxShadow: theme === th.id ? '0 1px 4px rgba(0,0,0,0.25)' : 'none',
+                }}
+              >
+                {th.id}. {th.label}
               </button>
             ))}
           </div>
-        )}
+
+          {/* チームフィルタ */}
+          {teams.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap justify-end">
+              <button onClick={() => setFilterTeamId(null)}
+                className={`text-xs px-3 py-1 rounded-full font-bold transition-colors ${filterTeamId === null ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                全体
+              </button>
+              {teams.map(t => (
+                <button key={t.id} onClick={() => setFilterTeamId(t.id)}
+                  className={`text-xs px-3 py-1 rounded-full font-bold transition-colors ${filterTeamId === t.id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ─── テーブル ─── */}
-      <div className="rounded-xl border border-slate-200 overflow-x-auto shadow-sm bg-white">
+      <div className="overflow-x-auto shadow-sm" style={{ background: tk.wrapBg, border: tk.wrapBorder, borderRadius: tk.wrapRadius }}>
         <table className="border-collapse text-sm" style={{ minWidth: weeks.length * 4 * 52 + 240 }}>
 
           {/* ─── 週ヘッダー ─── */}
@@ -283,27 +401,28 @@ export default function WeeklyKPIView({ yearMonth, teams, orgIds }: Props) {
             <tr>
               {/* 担当者 + 月目標 */}
               <th rowSpan={2}
-                className="sticky left-0 z-20 px-4 py-3 text-left text-xs font-bold text-white whitespace-nowrap"
-                style={{ background: '#1e293b', minWidth: 120, borderRight: '2px solid #334155' }}>
+                className="sticky left-0 z-20 px-4 py-3 text-left whitespace-nowrap"
+                style={{ background: tk.headerBg, color: tk.headerText, minWidth: 120, fontSize: 12, fontWeight: 700, borderRight: `2px solid ${tk.stickyBorder}` }}>
                 担当者
               </th>
               <th rowSpan={2}
-                className="sticky z-20 px-3 py-3 text-center text-xs font-bold text-white whitespace-nowrap"
-                style={{ background: '#1e293b', left: 120, minWidth: 72, borderRight: '2px solid #475569' }}>
-                月目標<br /><span className="text-slate-400 font-normal text-[10px]">✎ 編集可</span>
+                className="sticky z-20 px-3 py-3 text-center whitespace-nowrap"
+                style={{ background: tk.headerBg, color: tk.headerText, left: 120, minWidth: 72, fontSize: 12, fontWeight: 700, borderRight: `2px solid ${tk.stickyBorder}` }}>
+                月目標<br /><span style={{ color: tk.subHeaderText, fontWeight: 400, fontSize: 10 }}>✎ 編集可</span>
               </th>
               {/* 週 */}
               {weeks.map((w, wi) => (
                 <th key={w.label} colSpan={4}
-                  className="px-2 py-2 text-center text-xs font-bold border-l"
+                  className="px-2 py-2 text-center border-l"
                   style={{
-                    background: wi === currentWeekIdx ? '#1e3a5f' : '#334155',
-                    color: wi === currentWeekIdx ? '#93c5fd' : '#cbd5e1',
-                    borderColor: '#475569',
+                    background: wi === currentWeekIdx ? tk.currentWeekHeaderBg : tk.headerBg,
+                    color: wi === currentWeekIdx ? tk.currentWeekHeaderText : tk.headerText,
+                    fontSize: 12, fontWeight: 700,
+                    borderColor: tk.subHeaderBg,
                   }}>
                   <div>{w.label}</div>
-                  <div className="text-[10px] font-normal opacity-70">{w.range}</div>
-                  {wi === currentWeekIdx && <div className="text-[9px] text-blue-300 mt-0.5">◀ 今週</div>}
+                  <div style={{ fontSize: 10, fontWeight: 400, opacity: 0.7 }}>{w.range}</div>
+                  {wi === currentWeekIdx && <div style={{ fontSize: 9, color: tk.currentWeekHeaderText, marginTop: 2 }}>◀ 今週</div>}
                 </th>
               ))}
             </tr>
@@ -312,15 +431,16 @@ export default function WeeklyKPIView({ yearMonth, teams, orgIds }: Props) {
               {weeks.map((w, wi) => (
                 ['現状', '進捗', '生産性', '離席稼働'].map(col => (
                   <th key={`${wi}-${col}`}
-                    className="px-1 py-1.5 text-center text-[11px] font-semibold border-l"
+                    className="px-1 py-1.5 text-center border-l"
                     style={{
-                      background: wi === currentWeekIdx ? '#172554' : '#1e293b',
-                      color: '#94a3b8',
-                      borderColor: '#334155',
+                      background: wi === currentWeekIdx ? tk.currentWeekHeaderBg : tk.subHeaderBg,
+                      color: tk.subHeaderText,
+                      fontSize: 11, fontWeight: 600,
+                      borderColor: tk.headerBg,
                       minWidth: col === '進捗' ? 52 : 48,
                     }}>
                     {col}
-                    <div className="text-[9px] font-normal text-slate-600 leading-none mt-0.5">
+                    <div style={{ fontSize: 9, fontWeight: 400, color: '#475569', marginTop: 1 }}>
                       {col === '現状' ? '件' : col === '進捗' ? '%' : col === '生産性' ? '件/日' : '日'}
                     </div>
                   </th>
@@ -333,25 +453,25 @@ export default function WeeklyKPIView({ yearMonth, teams, orgIds }: Props) {
           <tbody>
             {visible.map((row, ri) => {
               const isEven = ri % 2 === 0
-              const rowBg = isEven ? '#ffffff' : '#f8fafc'
+              const rowBg = isEven ? tk.rowEven : tk.rowOdd
 
               return (
                 <tr key={row.rep.id}>
                   {/* 担当者名 */}
                   <td className="sticky left-0 z-10 px-4 py-2.5 whitespace-nowrap"
-                    style={{ background: rowBg, borderRight: '2px solid #e2e8f0', borderBottom: '1px solid #f1f5f9' }}>
+                    style={{ background: tk.stickyBg(isEven), borderRight: `2px solid ${tk.stickyBorder}`, borderBottom: `1px solid ${tk.rowBorder}` }}>
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0"
                         style={{ background: 'linear-gradient(135deg,#6366f1,#2563eb)' }}>
                         {row.rep.name.charAt(0)}
                       </div>
-                      <span className="text-sm font-semibold text-slate-700">{row.rep.name}</span>
+                      <span style={{ fontSize: 13, fontWeight: tk.nameFont, color: '#1e293b' }}>{row.rep.name}</span>
                     </div>
                   </td>
 
                   {/* 月目標（編集可） */}
                   <td className="sticky z-10 px-2 py-2 text-center"
-                    style={{ background: rowBg, left: 120, borderRight: '2px solid #e2e8f0', borderBottom: '1px solid #f1f5f9' }}>
+                    style={{ background: tk.stickyBg(isEven), left: 120, borderRight: `2px solid ${tk.stickyBorder}`, borderBottom: `1px solid ${tk.rowBorder}` }}>
                     <EditableCell
                       value={row.monthPlan}
                       repId={row.rep.id}
@@ -363,45 +483,40 @@ export default function WeeklyKPIView({ yearMonth, teams, orgIds }: Props) {
                   {/* 週KPI */}
                   {row.weeks.map((wk, wi) => {
                     const isCurr = wi === currentWeekIdx
-                    const isPast = weeks[wi].end < today
                     const hasData = wk.actual > 0 || wk.workDays > 0
                     const pc = wk.progress > 0 ? pColor(wk.progress) : { cell: 'transparent', text: '#cbd5e1' }
-                    const cellBg = isCurr ? (isEven ? '#f0f9ff' : '#e0f2fe') : rowBg
+                    const cellBg = isCurr ? (isEven ? tk.currentRowEven : tk.currentRowOdd) : rowBg
+                    const td = (key: string, content: React.ReactNode, bg?: string) => (
+                      <td key={key}
+                        className="px-2 py-2.5 text-center border-l"
+                        style={{ background: bg ?? cellBg, borderColor: tk.cellBorder, borderBottom: `1px solid ${tk.rowBorder}` }}>
+                        {content}
+                      </td>
+                    )
 
                     return (
                       <>
-                        {/* 現状件数 */}
-                        <td key={`${wi}-actual`}
-                          className="px-2 py-2.5 text-center border-l"
-                          style={{ background: cellBg, borderColor: '#e2e8f0', borderBottom: '1px solid #f1f5f9' }}>
-                          <span className="text-sm font-bold" style={{ color: hasData ? '#1e293b' : '#cbd5e1' }}>
+                        {td(`${wi}-a`,
+                          <span style={{ fontFamily: tk.numFont, fontSize: tk.numSize, fontWeight: 700, color: hasData ? '#1e293b' : '#cbd5e1' }}>
                             {hasData ? wk.actual : '—'}
                           </span>
-                        </td>
-                        {/* 進捗% */}
-                        <td key={`${wi}-progress`}
-                          className="px-2 py-2.5 text-center border-l"
-                          style={{ background: wk.progress > 0 ? pc.cell : cellBg, borderColor: '#e2e8f0', borderBottom: '1px solid #f1f5f9' }}>
-                          <span className="text-xs font-bold" style={{ color: pc.text }}>
+                        )}
+                        {td(`${wi}-p`,
+                          <span style={{ fontFamily: tk.numFont, fontSize: 12, fontWeight: 700, color: pc.text }}>
                             {wk.progress > 0 ? `${wk.progress}%` : '—'}
-                          </span>
-                        </td>
-                        {/* 生産性 */}
-                        <td key={`${wi}-prod`}
-                          className="px-2 py-2.5 text-center border-l"
-                          style={{ background: cellBg, borderColor: '#e2e8f0', borderBottom: '1px solid #f1f5f9' }}>
-                          <span className="text-xs font-semibold text-slate-600">
+                          </span>,
+                          wk.progress > 0 ? pc.cell : cellBg
+                        )}
+                        {td(`${wi}-pr`,
+                          <span style={{ fontFamily: tk.numFont, fontSize: 12, fontWeight: 600, color: wk.productivity > 0 ? '#475569' : '#cbd5e1' }}>
                             {wk.productivity > 0 ? fmt1(wk.productivity) : '—'}
                           </span>
-                        </td>
-                        {/* 離席稼働 */}
-                        <td key={`${wi}-work`}
-                          className="px-2 py-2.5 text-center border-l"
-                          style={{ background: cellBg, borderColor: '#e2e8f0', borderBottom: '1px solid #f1f5f9' }}>
-                          <span className="text-xs font-semibold" style={{ color: wk.workDays > 0 ? '#64748b' : '#cbd5e1' }}>
+                        )}
+                        {td(`${wi}-w`,
+                          <span style={{ fontFamily: tk.numFont, fontSize: 12, fontWeight: 600, color: wk.workDays > 0 ? '#64748b' : '#cbd5e1' }}>
                             {wk.workDays > 0 ? wk.workDays : '—'}
                           </span>
-                        </td>
+                        )}
                       </>
                     )
                   })}
@@ -412,34 +527,30 @@ export default function WeeklyKPIView({ yearMonth, teams, orgIds }: Props) {
             {/* ─── 合計行 ─── */}
             {visible.length > 0 && (
               <tr>
-                <td className="sticky left-0 z-10 px-4 py-2.5 text-xs font-black text-white"
-                  style={{ background: '#334155', borderRight: '2px solid #475569' }}>
+                <td className="sticky left-0 z-10 px-4 py-2.5"
+                  style={{ background: tk.footerBg, color: tk.footerText, fontWeight: 800, fontSize: 12, borderRight: `2px solid ${tk.stickyBorder}` }}>
                   合計
                 </td>
-                <td className="sticky z-10 px-2 py-2 text-center text-sm font-black text-slate-200"
-                  style={{ background: '#334155', left: 120, borderRight: '2px solid #475569' }}>
+                <td className="sticky z-10 px-2 py-2 text-center"
+                  style={{ background: tk.footerBg, color: '#e2e8f0', fontWeight: 800, fontSize: 13, left: 120, borderRight: `2px solid ${tk.stickyBorder}` }}>
                   {visible.reduce((s, r) => s + r.monthPlan, 0) || '—'}
                 </td>
                 {weeks.map((w, wi) => {
                   const totalActual   = visible.reduce((s, r) => s + r.weeks[wi].actual, 0)
                   const totalWorkDays = visible.reduce((s, r) => s + r.weeks[wi].workDays, 0)
                   const totalProd = totalWorkDays > 0 ? fmt1(totalActual / totalWorkDays) : '—'
+                  const ftd = (key: string, content: React.ReactNode) => (
+                    <td key={key} className="px-2 py-2 text-center border-l"
+                      style={{ background: tk.footerBg, borderColor: tk.subHeaderBg }}>
+                      {content}
+                    </td>
+                  )
                   return (
                     <>
-                      <td key={`${wi}-a`} className="px-2 py-2 text-center border-l text-sm font-bold text-slate-200"
-                        style={{ background: '#334155', borderColor: '#475569' }}>
-                        {totalActual || '—'}
-                      </td>
-                      <td key={`${wi}-p`} className="px-2 py-2 text-center border-l text-xs text-slate-400"
-                        style={{ background: '#334155', borderColor: '#475569' }}>—</td>
-                      <td key={`${wi}-pr`} className="px-2 py-2 text-center border-l text-xs font-semibold text-slate-300"
-                        style={{ background: '#334155', borderColor: '#475569' }}>
-                        {totalProd}
-                      </td>
-                      <td key={`${wi}-w`} className="px-2 py-2 text-center border-l text-xs font-semibold text-slate-300"
-                        style={{ background: '#334155', borderColor: '#475569' }}>
-                        {totalWorkDays || '—'}
-                      </td>
+                      {ftd(`${wi}-a`, <span style={{ fontFamily: tk.numFont, fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>{totalActual || '—'}</span>)}
+                      {ftd(`${wi}-p`, <span style={{ color: '#64748b', fontSize: 11 }}>—</span>)}
+                      {ftd(`${wi}-pr`, <span style={{ fontFamily: tk.numFont, fontSize: 12, fontWeight: 600, color: tk.footerText }}>{totalProd}</span>)}
+                      {ftd(`${wi}-w`, <span style={{ fontFamily: tk.numFont, fontSize: 12, fontWeight: 600, color: tk.footerText }}>{totalWorkDays || '—'}</span>)}
                     </>
                   )
                 })}
