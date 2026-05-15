@@ -1,168 +1,197 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase, SalesRep, Team } from '@/lib/supabase'
 
 type Props = { yearMonth: string; teams: Team[]; orgIds?: string[] }
 
-// ── 週定義（水〜月の6日サイクル、火=定休を除く） ──────────────────────────
-type Week = { label: string; range: string; start: string; end: string; planDays: number }
+// ── 週定義（水〜月の6日サイクル、火=定休を除く） ────────────────────────────
+type Week = { label: string; range: string; start: string; end: string }
 
 function buildWeeks(yearMonth: string): Week[] {
   const [y, m] = yearMonth.split('-').map(Number)
-  const daysInMonth = new Date(y, m, 0).getDate()
+  const total = new Date(y, m, 0).getDate()
   const firstDow = new Date(y, m - 1, 1).getDay()
   const daysToWed = (firstDow - 3 + 7) % 7
-  let wedDay = 1 - daysToWed
-
+  let wed = 1 - daysToWed
   const weeks: Week[] = []
   let n = 1
-  while (wedDay <= daysInMonth) {
-    const monDay = wedDay + 5
-    const s = Math.max(wedDay, 1)
-    const e = Math.min(monDay, daysInMonth)
+  while (wed <= total) {
+    const s = Math.max(wed, 1)
+    const e = Math.min(wed + 5, total)
     if (e >= 1) {
-      let planDays = 0
-      for (let d = s; d <= e; d++) {
-        if (new Date(y, m - 1, d).getDay() !== 2) planDays++ // 火曜(2)除外
-      }
-      const startStr = `${yearMonth}-${String(s).padStart(2, '0')}`
-      const endStr   = `${yearMonth}-${String(e).padStart(2, '0')}`
       weeks.push({
         label: `第${n}週`,
         range: `${s}日〜${e}日`,
-        start: startStr,
-        end: endStr,
-        planDays,
+        start: `${yearMonth}-${String(s).padStart(2, '0')}`,
+        end: `${yearMonth}-${String(e).padStart(2, '0')}`,
       })
       n++
     }
-    wedDay += 7
+    wed += 7
   }
   return weeks
 }
 
-// ── KPI計算 ────────────────────────────────────────────────────────────────
-
-type RepKPIRow = {
-  rep: SalesRep
-  weeks: WeekKPI[]
-  monthlyLanding: number   // 月着地（全体）
-  monthPlan: number
-  monthActual: number
-  monthActualDays: number
-  monthPlanDays: number
-}
+// ── KPI計算 ─────────────────────────────────────────────────────────────────
 
 type WeekKPI = {
-  target: number       // 目標件数（週按分）
-  actual: number       // 現状件数
-  progress: number     // 進捗%
-  productivity: number // 生産性（件/実稼働日）
-  planDays: number     // 計画稼働日数
-  actualDays: number   // 実稼働日数
-  remainDays: number   // 残稼働日数
+  actual: number          // 現状件数（週）
+  landing: number         // 着地（累計ベース）
+  progress: number        // 進捗% = 着地/月目標
+  productivity: number    // 生産性 = 現状/離席稼働
+  workDays: number        // 離席稼働日数
 }
 
-function calcKPI(
-  rep: SalesRep,
+type RepRow = {
+  rep: SalesRep
+  monthPlan: number
+  planWorkDays: number
+  weeks: WeekKPI[]
+  totalActual: number
+}
+
+function calcRows(
+  reps: SalesRep[],
   records: any[],
   schedules: any[],
-  plan: any,
+  plans: any[],
   weeks: Week[],
   today: string,
-): RepKPIRow {
-  const monthPlan = Number(plan?.plan_cases) || 0
-  const monthPlanDays = Number(plan?.plan_working_days) || 0
+): RepRow[] {
+  return reps.map(rep => {
+    const plan = plans.find((p: any) => p.sales_rep_id === rep.id)
+    const monthPlan = Number(plan?.plan_cases) || 0
+    const scheduledDays = schedules.filter((s: any) => s.sales_rep_id === rep.id && s.work_status === '稼働').length
+    const planWorkDays = Math.max(Number(plan?.plan_working_days) || 0, scheduledDays)
+    const repRecords = records.filter((r: any) => r.sales_rep_id === rep.id)
 
-  // 月の計画稼働日数（work_schedules から再計算して補完）
-  const scheduledDays = schedules.filter(s => s.sales_rep_id === rep.id && s.work_status === '稼働').length
-  const totalPlanDays = monthPlanDays > 0 ? monthPlanDays : scheduledDays
+    let cumActual = 0
+    let cumWorkDays = 0
 
-  // 月全体の実績
-  const repRecords = records.filter(r => r.sales_rep_id === rep.id)
-  const monthActual = repRecords.reduce((s, r) => s + (Number(r.acquisitions) || 0), 0)
-  const monthActualDays = repRecords.filter(r => r.work_status === '稼働').length
+    const weekKPIs: WeekKPI[] = weeks.map(week => {
+      const weekRecs = repRecords.filter((r: any) => r.record_date >= week.start && r.record_date <= week.end)
+      const actual = weekRecs.reduce((s: number, r: any) => s + (Number(r.acquisitions) || 0), 0)
+      const workDays = weekRecs.filter((r: any) => r.work_status === '稼働').length
 
-  // 月着地 = 現在の生産性 × 計画稼働日数
-  const monthlyLanding = monthActualDays > 0
-    ? Math.round((monthActual / monthActualDays) * totalPlanDays * 10) / 10
-    : 0
+      // 週が過去または進行中のみ累計更新
+      const weekIsPast = week.end <= today
+      const weekIsCurrent = week.start <= today && today <= week.end
+      if (weekIsPast || weekIsCurrent) {
+        cumActual += actual
+        cumWorkDays += workDays
+      }
 
-  const repSchedules = schedules.filter(s => s.sales_rep_id === rep.id)
+      // 着地 = 累計件数 / 累計稼働日 × 計画稼働日(月)
+      const landing = (weekIsPast || weekIsCurrent) && cumWorkDays > 0 && planWorkDays > 0
+        ? Math.round((cumActual / cumWorkDays) * planWorkDays * 10) / 10
+        : 0
 
-  const weekKPIs: WeekKPI[] = weeks.map(week => {
-    // 計画稼働日数（この週）
-    const planDays = repSchedules.filter(s =>
-      s.work_status === '稼働' && s.schedule_date >= week.start && s.schedule_date <= week.end
-    ).length
+      // 進捗 = 着地 / 月目標
+      const progress = monthPlan > 0 && landing > 0
+        ? Math.round((landing / monthPlan) * 100)
+        : 0
 
-    // 実稼働日数（この週）
-    const weekRecords = repRecords.filter(r =>
-      r.record_date >= week.start && r.record_date <= week.end && r.work_status === '稼働'
-    )
-    const actualDays = weekRecords.length
+      // 生産性 = 週件数 / 週稼働日
+      const productivity = workDays > 0
+        ? Math.round((actual / workDays) * 100) / 100
+        : 0
 
-    // 現状件数（この週）
-    const actual = repRecords
-      .filter(r => r.record_date >= week.start && r.record_date <= week.end)
-      .reduce((s, r) => s + (Number(r.acquisitions) || 0), 0)
+      return { actual, landing, progress, productivity, workDays }
+    })
 
-    // 目標件数（週按分: 計画稼働日数ベース）
-    const target = totalPlanDays > 0
-      ? Math.round(monthPlan * (planDays / totalPlanDays) * 10) / 10
-      : 0
-
-    // 進捗%
-    const progress = target > 0 ? Math.round((actual / target) * 100) : 0
-
-    // 生産性
-    const productivity = actualDays > 0
-      ? Math.round((actual / actualDays) * 100) / 100
-      : 0
-
-    // 残稼働日数（未来の計画稼働日）
-    const remainDays = repSchedules.filter(s =>
-      s.work_status === '稼働' &&
-      s.schedule_date >= week.start && s.schedule_date <= week.end &&
-      s.schedule_date > today
-    ).length
-
-    return { target, actual, progress, productivity, planDays, actualDays, remainDays }
+    return {
+      rep,
+      monthPlan,
+      planWorkDays,
+      weeks: weekKPIs,
+      totalActual: repRecords.reduce((s: number, r: any) => s + (Number(r.acquisitions) || 0), 0),
+    }
   })
+}
 
-  return {
-    rep,
-    weeks: weekKPIs,
-    monthlyLanding,
-    monthPlan,
-    monthActual,
-    monthActualDays,
-    monthPlanDays: totalPlanDays,
+// ── 進捗カラー ───────────────────────────────────────────────────────────────
+
+function pColor(pct: number): { cell: string; text: string } {
+  if (pct >= 100) return { cell: '#f0fdf4', text: '#15803d' }
+  if (pct >=  80) return { cell: '#eff6ff', text: '#1d4ed8' }
+  if (pct >=  60) return { cell: '#fefce8', text: '#a16207' }
+  if (pct >    0) return { cell: '#fff1f2', text: '#be123c' }
+  return { cell: 'transparent', text: '#94a3b8' }
+}
+
+const fmt1 = (n: number) => Number.isInteger(n) ? String(n) : n.toFixed(1)
+
+// ── インライン編集セル ────────────────────────────────────────────────────────
+
+function EditableCell({
+  value,
+  repId,
+  yearMonth,
+  onSaved,
+}: {
+  value: number
+  repId: string
+  yearMonth: string
+  onSaved: (repId: string, val: number) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(String(value || ''))
+  const [saving, setSaving] = useState(false)
+  const ref = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { if (editing) ref.current?.focus() }, [editing])
+
+  async function commit() {
+    const v = parseInt(draft, 10)
+    const n = isNaN(v) ? 0 : Math.max(0, v)
+    setSaving(true)
+    await supabase.from('monthly_plans').upsert(
+      { sales_rep_id: repId, year_month: yearMonth, plan_cases: n, plan_working_days: 0 },
+      { onConflict: 'sales_rep_id,year_month' }
+    )
+    setSaving(false)
+    setEditing(false)
+    onSaved(repId, n)
   }
+
+  if (editing) {
+    return (
+      <input
+        ref={ref}
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false) }}
+        className="w-12 text-center text-xs font-bold border-2 border-indigo-400 rounded outline-none py-0.5"
+        style={{ background: '#eef2ff', color: '#3730a3' }}
+        disabled={saving}
+        type="number"
+        min="0"
+      />
+    )
+  }
+
+  return (
+    <button
+      onClick={() => { setDraft(String(value || '')); setEditing(true) }}
+      title="クリックして編集"
+      className="w-full text-center text-xs font-bold rounded transition-colors hover:bg-indigo-50"
+      style={{ color: value ? '#3730a3' : '#cbd5e1', cursor: 'text' }}
+    >
+      {value || '—'}
+    </button>
+  )
 }
 
-// ── カラーヘルパー ─────────────────────────────────────────────────────────
-
-function progressColor(pct: number) {
-  if (pct >= 100) return { bg: 'bg-emerald-100', text: 'text-emerald-700', bold: true }
-  if (pct >= 80)  return { bg: 'bg-blue-50',     text: 'text-blue-700',    bold: false }
-  if (pct >= 60)  return { bg: 'bg-yellow-50',   text: 'text-yellow-700',  bold: false }
-  return              { bg: 'bg-red-50',       text: 'text-red-600',    bold: false }
-}
-
-const fmt1 = (n: number) => n % 1 === 0 ? String(n) : n.toFixed(1)
-const dash  = <span className="text-slate-300">—</span>
-
-// ── メインコンポーネント ───────────────────────────────────────────────────
+// ── メイン ───────────────────────────────────────────────────────────────────
 
 export default function WeeklyKPIView({ yearMonth, teams, orgIds }: Props) {
-  const [rows, setRows] = useState<RepKPIRow[]>([])
+  const [rows, setRows] = useState<RepRow[]>([])
   const [loading, setLoading] = useState(true)
   const [filterTeamId, setFilterTeamId] = useState<string | null>(null)
-  const weeks = buildWeeks(yearMonth)
-
   const today = new Date().toISOString().slice(0, 10)
+  const weeks = buildWeeks(yearMonth)
 
   useEffect(() => { load() }, [yearMonth, orgIds?.join(',')])
 
@@ -170,8 +199,8 @@ export default function WeeklyKPIView({ yearMonth, teams, orgIds }: Props) {
     setLoading(true)
     const [yStr, mStr] = yearMonth.split('-')
     const lastDay = new Date(parseInt(yStr), parseInt(mStr), 0).getDate()
-    const dateFrom = `${yStr}-${mStr}-01`
-    const dateTo   = `${yStr}-${mStr}-${String(lastDay).padStart(2, '0')}`
+    const from = `${yStr}-${mStr}-01`
+    const to   = `${yStr}-${mStr}-${String(lastDay).padStart(2, '0')}`
 
     let reps: any[], records: any[], schedules: any[], plans: any[]
 
@@ -182,265 +211,265 @@ export default function WeeklyKPIView({ yearMonth, teams, orgIds }: Props) {
     } else {
       const [r1, r2, r3, r4] = await Promise.all([
         supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
-        supabase.from('daily_records').select('sales_rep_id,record_date,acquisitions,work_status')
-          .gte('record_date', dateFrom).lte('record_date', dateTo),
-        supabase.from('work_schedules').select('sales_rep_id,schedule_date,work_status')
-          .gte('schedule_date', dateFrom).lte('schedule_date', dateTo),
-        supabase.from('monthly_plans').select('sales_rep_id,plan_cases,plan_working_days').eq('year_month', yearMonth),
+        supabase.from('daily_records')
+          .select('sales_rep_id,record_date,acquisitions,work_status')
+          .gte('record_date', from).lte('record_date', to),
+        supabase.from('work_schedules')
+          .select('sales_rep_id,schedule_date,work_status')
+          .gte('schedule_date', from).lte('schedule_date', to),
+        supabase.from('monthly_plans')
+          .select('sales_rep_id,plan_cases,plan_working_days').eq('year_month', yearMonth),
       ])
       reps = r1.data ?? []; records = r2.data ?? []; schedules = r3.data ?? []; plans = r4.data ?? []
     }
 
-    if (!reps || reps.length === 0) { setLoading(false); return }
-
-    const kpiRows = reps.map((rep: SalesRep) => {
-      const plan = plans.find((p: any) => p.sales_rep_id === rep.id)
-      return calcKPI(rep, records, schedules, plan, weeks, today)
-    })
-
-    setRows(kpiRows)
+    if (!reps?.length) { setLoading(false); return }
+    setRows(calcRows(reps, records, schedules, plans, weeks, today))
     setLoading(false)
   }
 
-  const visibleRows = filterTeamId
-    ? rows.filter(r => r.rep.team_id === filterTeamId)
-    : rows
+  function handleTargetSaved(repId: string, val: number) {
+    setRows(prev => prev.map(r =>
+      r.rep.id === repId ? { ...r, monthPlan: val } : r
+    ))
+  }
 
-  if (loading) return <div className="p-6 text-center text-slate-400 text-sm">読み込み中...</div>
+  const visible = filterTeamId ? rows.filter(r => r.rep.team_id === filterTeamId) : rows
 
-  const KPI_COLS = [
-    { key: 'target',       label: '目標', unit: '件' },
-    { key: 'actual',       label: '現状', unit: '件' },
-    { key: 'progress',     label: '進捗', unit: '%'  },
-    { key: 'productivity', label: '生産', unit: ''   },
-    { key: 'planDays',     label: '計画', unit: '日' },
-    { key: 'actualDays',   label: '実稼', unit: '日' },
-    { key: 'remainDays',   label: '残稼', unit: '日' },
-  ] as const
+  if (loading) return (
+    <div className="text-center py-12 text-slate-400 text-sm">読み込み中...</div>
+  )
+
+  // 凡例
+  const today2 = today
+  const currentWeekIdx = weeks.findIndex(w => w.start <= today2 && today2 <= w.end)
 
   return (
     <div>
-      {/* ヘッダー */}
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+      {/* ─── ヘッダー ─── */}
+      <div className="flex items-start justify-between mb-4 gap-3 flex-wrap">
         <div>
-          <h2 className="font-black text-slate-800 text-lg">
+          <h2 className="text-lg font-extrabold text-slate-800">
             {yearMonth.replace('-', '年')}月 週間KPI
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            目標=月目標の週按分 / 現状=本週件数 / 進捗=現状÷目標 / 生産=件/実稼働日
+            月目標をクリックして入力 / 進捗＝着地÷月目標 / 着地＝累計ペース×計画稼働日数
           </p>
         </div>
 
         {/* チームフィルタ */}
         {teams.length > 0 && (
           <div className="flex gap-1.5 flex-wrap">
-            <button
-              onClick={() => setFilterTeamId(null)}
-              className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${filterTeamId === null ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}
-            >全体</button>
+            <button onClick={() => setFilterTeamId(null)}
+              className={`text-xs px-3 py-1 rounded-full font-bold transition-colors ${filterTeamId === null ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+              全体
+            </button>
             {teams.map(t => (
-              <button key={t.id}
-                onClick={() => setFilterTeamId(t.id)}
-                className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${filterTeamId === t.id ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}
-              >{t.name}</button>
+              <button key={t.id} onClick={() => setFilterTeamId(t.id)}
+                className={`text-xs px-3 py-1 rounded-full font-bold transition-colors ${filterTeamId === t.id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                {t.name}
+              </button>
             ))}
           </div>
         )}
       </div>
 
-      {/* KPI凡例 */}
-      <div className="flex gap-2 mb-3 flex-wrap text-xs">
-        {[
-          { label: '目標', desc: '月目標÷計画稼/週計画稼' },
-          { label: '現状', desc: '今週の獲得件数' },
-          { label: '進捗', desc: '現状÷目標' },
-          { label: '生産', desc: '件÷実稼働日数' },
-          { label: '計画', desc: '計画稼働日数' },
-          { label: '実稼', desc: '実稼働日数' },
-          { label: '残稼', desc: '未来の計画稼働日数' },
-        ].map(({ label, desc }) => (
-          <span key={label} className="bg-slate-100 px-2 py-0.5 rounded-full text-slate-500">
-            <span className="font-bold text-slate-700">{label}</span>={desc}
-          </span>
-        ))}
-      </div>
+      {/* ─── テーブル ─── */}
+      <div className="rounded-xl border border-slate-200 overflow-x-auto shadow-sm bg-white">
+        <table className="border-collapse text-sm" style={{ minWidth: weeks.length * 4 * 52 + 240 }}>
 
-      {/* テーブル */}
-      <div className="bg-white rounded-xl border border-slate-100 overflow-x-auto">
-        <table className="border-collapse text-xs" style={{ minWidth: weeks.length * 7 * 48 + 160 }}>
+          {/* ─── 週ヘッダー ─── */}
           <thead>
-            {/* 週ヘッダー */}
-            <tr className="bg-slate-800">
-              <th
-                rowSpan={2}
-                className="sticky left-0 bg-slate-800 z-10 px-3 py-2 text-left text-slate-300 font-bold text-sm"
-                style={{ minWidth: 108 }}
-              >
+            <tr>
+              {/* 担当者 + 月目標 */}
+              <th rowSpan={2}
+                className="sticky left-0 z-20 px-4 py-3 text-left text-xs font-bold text-white whitespace-nowrap"
+                style={{ background: '#1e293b', minWidth: 120, borderRight: '2px solid #334155' }}>
                 担当者
               </th>
-              {weeks.map(w => (
-                <th
-                  key={w.label}
-                  colSpan={KPI_COLS.length}
-                  className="px-2 py-1.5 text-center border-l border-slate-700"
-                >
-                  <div className="text-white font-black text-[11px]">{w.label}</div>
-                  <div className="text-slate-400 text-[9px]">{w.range}</div>
+              <th rowSpan={2}
+                className="sticky z-20 px-3 py-3 text-center text-xs font-bold text-white whitespace-nowrap"
+                style={{ background: '#1e293b', left: 120, minWidth: 72, borderRight: '2px solid #475569' }}>
+                月目標<br /><span className="text-slate-400 font-normal text-[10px]">✎ 編集可</span>
+              </th>
+              {/* 週 */}
+              {weeks.map((w, wi) => (
+                <th key={w.label} colSpan={4}
+                  className="px-2 py-2 text-center text-xs font-bold border-l"
+                  style={{
+                    background: wi === currentWeekIdx ? '#1e3a5f' : '#334155',
+                    color: wi === currentWeekIdx ? '#93c5fd' : '#cbd5e1',
+                    borderColor: '#475569',
+                  }}>
+                  <div>{w.label}</div>
+                  <div className="text-[10px] font-normal opacity-70">{w.range}</div>
+                  {wi === currentWeekIdx && <div className="text-[9px] text-blue-300 mt-0.5">◀ 今週</div>}
                 </th>
               ))}
-              {/* 月計列 */}
-              <th colSpan={4} className="px-2 py-1.5 text-center border-l border-slate-600 bg-slate-700">
-                <div className="text-yellow-300 font-black text-[11px]">月計</div>
-              </th>
             </tr>
             {/* KPI小ヘッダー */}
-            <tr className="bg-slate-700">
-              {weeks.map(w =>
-                KPI_COLS.map(col => (
-                  <th key={`${w.label}-${col.key}`}
-                    className="px-1 py-1 text-center border-l border-slate-600"
-                    style={{ minWidth: 44 }}>
-                    <span className="text-slate-300 font-bold text-[10px]">{col.label}</span>
-                    {col.unit && <span className="text-slate-500 text-[9px]">{col.unit}</span>}
+            <tr>
+              {weeks.map((w, wi) => (
+                ['現状', '進捗', '生産性', '離席稼働'].map(col => (
+                  <th key={`${wi}-${col}`}
+                    className="px-1 py-1.5 text-center text-[11px] font-semibold border-l"
+                    style={{
+                      background: wi === currentWeekIdx ? '#172554' : '#1e293b',
+                      color: '#94a3b8',
+                      borderColor: '#334155',
+                      minWidth: col === '進捗' ? 52 : 48,
+                    }}>
+                    {col}
+                    <div className="text-[9px] font-normal text-slate-600 leading-none mt-0.5">
+                      {col === '現状' ? '件' : col === '進捗' ? '%' : col === '生産性' ? '件/日' : '日'}
+                    </div>
                   </th>
                 ))
-              )}
-              {/* 月計小ヘッダー */}
-              {['目標', '現状', '着地', '進捗%'].map(h => (
-                <th key={h} className="px-1 py-1 text-center border-l border-slate-600" style={{ minWidth: 44 }}>
-                  <span className="text-yellow-200 font-bold text-[10px]">{h}</span>
-                </th>
               ))}
             </tr>
           </thead>
 
+          {/* ─── データ行 ─── */}
           <tbody>
-            {visibleRows.map((row, i) => {
-              const monthProgress = row.monthPlan > 0
-                ? Math.round((row.monthActual / row.monthPlan) * 100)
-                : 0
-              const pc = progressColor(monthProgress)
+            {visible.map((row, ri) => {
+              const isEven = ri % 2 === 0
+              const rowBg = isEven ? '#ffffff' : '#f8fafc'
 
               return (
-                <tr key={row.rep.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
+                <tr key={row.rep.id}>
                   {/* 担当者名 */}
-                  <td className={`sticky left-0 z-10 px-3 py-2 font-bold border-b border-slate-100 whitespace-nowrap ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
+                  <td className="sticky left-0 z-10 px-4 py-2.5 whitespace-nowrap"
+                    style={{ background: rowBg, borderRight: '2px solid #e2e8f0', borderBottom: '1px solid #f1f5f9' }}>
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-black flex-shrink-0"
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0"
                         style={{ background: 'linear-gradient(135deg,#6366f1,#2563eb)' }}>
                         {row.rep.name.charAt(0)}
                       </div>
-                      <span className="text-slate-800 text-xs">{row.rep.name}</span>
+                      <span className="text-sm font-semibold text-slate-700">{row.rep.name}</span>
                     </div>
+                  </td>
+
+                  {/* 月目標（編集可） */}
+                  <td className="sticky z-10 px-2 py-2 text-center"
+                    style={{ background: rowBg, left: 120, borderRight: '2px solid #e2e8f0', borderBottom: '1px solid #f1f5f9' }}>
+                    <EditableCell
+                      value={row.monthPlan}
+                      repId={row.rep.id}
+                      yearMonth={yearMonth}
+                      onSaved={handleTargetSaved}
+                    />
                   </td>
 
                   {/* 週KPI */}
                   {row.weeks.map((wk, wi) => {
-                    const pc2 = progressColor(wk.progress)
-                    const isCurrentWeek = weeks[wi].start <= today && today <= weeks[wi].end
-                    return KPI_COLS.map(col => {
-                      let val: React.ReactNode
-                      const raw = wk[col.key]
-                      if (col.key === 'progress') {
-                        if (raw === 0 && wk.target === 0) { val = dash; }
-                        else {
-                          val = (
-                            <span className={`font-bold ${pc2.text}`}>{raw}%</span>
-                          )
-                        }
-                      } else if (col.key === 'productivity') {
-                        val = raw > 0 ? fmt1(raw) : dash
-                      } else {
-                        val = raw > 0 ? raw : (col.key === 'target' || col.key === 'actual' ? raw : dash)
-                      }
+                    const isCurr = wi === currentWeekIdx
+                    const isPast = weeks[wi].end < today
+                    const hasData = wk.actual > 0 || wk.workDays > 0
+                    const pc = wk.progress > 0 ? pColor(wk.progress) : { cell: 'transparent', text: '#cbd5e1' }
+                    const cellBg = isCurr ? (isEven ? '#f0f9ff' : '#e0f2fe') : rowBg
 
-                      return (
-                        <td key={`${wi}-${col.key}`}
-                          className={`border-b border-slate-100 text-center py-2 px-1 border-l ${
-                            col.key === 'target' ? 'border-l-slate-200' : 'border-l-slate-100'
-                          } ${isCurrentWeek && col.key === 'target' ? 'bg-blue-50/40' : ''}`}
-                        >
-                          <span className={`text-xs ${col.key === 'progress' ? '' : 'text-slate-700'}`}>{val}</span>
+                    return (
+                      <>
+                        {/* 現状件数 */}
+                        <td key={`${wi}-actual`}
+                          className="px-2 py-2.5 text-center border-l"
+                          style={{ background: cellBg, borderColor: '#e2e8f0', borderBottom: '1px solid #f1f5f9' }}>
+                          <span className="text-sm font-bold" style={{ color: hasData ? '#1e293b' : '#cbd5e1' }}>
+                            {hasData ? wk.actual : '—'}
+                          </span>
                         </td>
-                      )
-                    })
+                        {/* 進捗% */}
+                        <td key={`${wi}-progress`}
+                          className="px-2 py-2.5 text-center border-l"
+                          style={{ background: wk.progress > 0 ? pc.cell : cellBg, borderColor: '#e2e8f0', borderBottom: '1px solid #f1f5f9' }}>
+                          <span className="text-xs font-bold" style={{ color: pc.text }}>
+                            {wk.progress > 0 ? `${wk.progress}%` : '—'}
+                          </span>
+                        </td>
+                        {/* 生産性 */}
+                        <td key={`${wi}-prod`}
+                          className="px-2 py-2.5 text-center border-l"
+                          style={{ background: cellBg, borderColor: '#e2e8f0', borderBottom: '1px solid #f1f5f9' }}>
+                          <span className="text-xs font-semibold text-slate-600">
+                            {wk.productivity > 0 ? fmt1(wk.productivity) : '—'}
+                          </span>
+                        </td>
+                        {/* 離席稼働 */}
+                        <td key={`${wi}-work`}
+                          className="px-2 py-2.5 text-center border-l"
+                          style={{ background: cellBg, borderColor: '#e2e8f0', borderBottom: '1px solid #f1f5f9' }}>
+                          <span className="text-xs font-semibold" style={{ color: wk.workDays > 0 ? '#64748b' : '#cbd5e1' }}>
+                            {wk.workDays > 0 ? wk.workDays : '—'}
+                          </span>
+                        </td>
+                      </>
+                    )
                   })}
-
-                  {/* 月計 */}
-                  <td className="border-b border-slate-100 text-center py-2 px-2 border-l border-l-slate-300">
-                    <span className="text-xs text-slate-500">{row.monthPlan > 0 ? row.monthPlan : '—'}</span>
-                  </td>
-                  <td className="border-b border-slate-100 text-center py-2 px-2 border-l border-l-slate-100">
-                    <span className={`text-xs font-bold ${row.monthActual > 0 ? 'text-slate-800' : 'text-slate-300'}`}>
-                      {row.monthActual > 0 ? row.monthActual : '—'}
-                    </span>
-                  </td>
-                  <td className="border-b border-slate-100 text-center py-2 px-2 border-l border-l-slate-100">
-                    <span className={`text-xs font-bold ${row.monthlyLanding > 0 ? 'text-indigo-600' : 'text-slate-300'}`}>
-                      {row.monthlyLanding > 0 ? fmt1(row.monthlyLanding) : '—'}
-                    </span>
-                  </td>
-                  <td className={`border-b border-slate-100 text-center py-2 px-2 border-l border-l-slate-100 ${pc.bg}`}>
-                    <span className={`text-xs font-bold ${pc.text}`}>
-                      {row.monthPlan > 0 ? `${monthProgress}%` : '—'}
-                    </span>
-                  </td>
                 </tr>
               )
             })}
 
-            {/* 合計行 */}
-            {visibleRows.length > 0 && (
-              <tr className="bg-slate-800 font-bold">
-                <td className="sticky left-0 bg-slate-800 z-10 px-3 py-2 text-slate-300 text-xs font-bold border-b border-slate-700">
+            {/* ─── 合計行 ─── */}
+            {visible.length > 0 && (
+              <tr>
+                <td className="sticky left-0 z-10 px-4 py-2.5 text-xs font-black text-white"
+                  style={{ background: '#334155', borderRight: '2px solid #475569' }}>
                   合計
                 </td>
-                {weeks.map((w, wi) =>
-                  KPI_COLS.map(col => {
-                    let total: React.ReactNode = dash
-                    if (col.key === 'progress' || col.key === 'productivity') {
-                      total = dash
-                    } else {
-                      const sum = visibleRows.reduce((s, r) => s + (r.weeks[wi]?.[col.key] ?? 0), 0)
-                      total = <span className="text-slate-200">{fmt1(sum)}</span>
-                    }
-                    return (
-                      <td key={`total-${wi}-${col.key}`}
-                        className="border-b border-slate-700 text-center py-2 px-1 border-l border-l-slate-700">
-                        <span className="text-xs">{total}</span>
+                <td className="sticky z-10 px-2 py-2 text-center text-sm font-black text-slate-200"
+                  style={{ background: '#334155', left: 120, borderRight: '2px solid #475569' }}>
+                  {visible.reduce((s, r) => s + r.monthPlan, 0) || '—'}
+                </td>
+                {weeks.map((w, wi) => {
+                  const totalActual   = visible.reduce((s, r) => s + r.weeks[wi].actual, 0)
+                  const totalWorkDays = visible.reduce((s, r) => s + r.weeks[wi].workDays, 0)
+                  const totalProd = totalWorkDays > 0 ? fmt1(totalActual / totalWorkDays) : '—'
+                  return (
+                    <>
+                      <td key={`${wi}-a`} className="px-2 py-2 text-center border-l text-sm font-bold text-slate-200"
+                        style={{ background: '#334155', borderColor: '#475569' }}>
+                        {totalActual || '—'}
                       </td>
-                    )
-                  })
-                )}
-                {/* 月計合計 */}
-                <td className="border-b border-slate-700 text-center py-2 px-2 border-l border-l-slate-600">
-                  <span className="text-xs text-slate-300">{visibleRows.reduce((s, r) => s + r.monthPlan, 0)}</span>
-                </td>
-                <td className="border-b border-slate-700 text-center py-2 px-2 border-l border-l-slate-700">
-                  <span className="text-xs text-slate-200 font-bold">{visibleRows.reduce((s, r) => s + r.monthActual, 0)}</span>
-                </td>
-                <td className="border-b border-slate-700 text-center py-2 px-2 border-l border-l-slate-700">
-                  <span className="text-xs text-indigo-300 font-bold">
-                    {fmt1(visibleRows.reduce((s, r) => s + r.monthlyLanding, 0))}
-                  </span>
-                </td>
-                <td className="border-b border-slate-700 text-center py-2 px-2 border-l border-l-slate-700">
-                  <span className="text-xs text-slate-300">
-                    {(() => {
-                      const totalPlan = visibleRows.reduce((s, r) => s + r.monthPlan, 0)
-                      const totalActual = visibleRows.reduce((s, r) => s + r.monthActual, 0)
-                      return totalPlan > 0 ? `${Math.round((totalActual / totalPlan) * 100)}%` : '—'
-                    })()}
-                  </span>
-                </td>
+                      <td key={`${wi}-p`} className="px-2 py-2 text-center border-l text-xs text-slate-400"
+                        style={{ background: '#334155', borderColor: '#475569' }}>—</td>
+                      <td key={`${wi}-pr`} className="px-2 py-2 text-center border-l text-xs font-semibold text-slate-300"
+                        style={{ background: '#334155', borderColor: '#475569' }}>
+                        {totalProd}
+                      </td>
+                      <td key={`${wi}-w`} className="px-2 py-2 text-center border-l text-xs font-semibold text-slate-300"
+                        style={{ background: '#334155', borderColor: '#475569' }}>
+                        {totalWorkDays || '—'}
+                      </td>
+                    </>
+                  )
+                })}
               </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      {visibleRows.length === 0 && (
-        <p className="text-center text-slate-400 text-sm py-8">データがありません</p>
+      {/* 凡例 */}
+      <div className="flex gap-4 mt-3 flex-wrap text-xs text-slate-500">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded" style={{ background: '#f0fdf4', border: '1px solid #15803d' }} />進捗 ≥100%
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded" style={{ background: '#eff6ff', border: '1px solid #1d4ed8' }} />≥80%
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded" style={{ background: '#fefce8', border: '1px solid #a16207' }} />≥60%
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded" style={{ background: '#fff1f2', border: '1px solid #be123c' }} />&lt;60%
+        </span>
+        <span className="ml-2">
+          進捗 ＝ 着地（累計ペース×計画稼働日）÷ 月目標 × 100%
+        </span>
+      </div>
+
+      {visible.length === 0 && (
+        <p className="text-center text-slate-400 text-sm py-10">データがありません</p>
       )}
     </div>
   )
