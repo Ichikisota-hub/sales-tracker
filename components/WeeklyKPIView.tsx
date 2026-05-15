@@ -523,7 +523,7 @@ export default function WeeklyKPIView({ yearMonth, teams, orgIds }: Props) {
                                 : r))
                             }} />
                         </td>
-                        {wtd(`${wi}-wa`, wk.actual>0 ? wk.actual : DASH, { fw:700, color:'#1e293b' })}
+                        {wtd(`${wi}-wa`, row.monthActual>0 ? row.monthActual : DASH, { fw:700, color:'#1e293b' })}
                         {wtd(`${wi}-wp`, wk.planDays>0 ? wk.planDays : DASH, { color:'#15803d' })}
                         {wtd(`${wi}-wd`, wk.actualDays>0 ? wk.actualDays : DASH, { color:'#475569' })}
                       </>
@@ -569,12 +569,14 @@ export default function WeeklyKPIView({ yearMonth, teams, orgIds }: Props) {
                   {weeks.map((_, wi) => {
                     const wSum = (fn: (w: RepRow['weeks'][0]) => number) =>
                       visible.reduce((s, r) => s + fn(r.weeks[wi]), 0)
-                    const wt = wSum(w => w.target), wa = wSum(w => w.actual)
+                    const wt = wSum(w => w.target)
+                    // 現状は月トータル（各週とも同じ）
+                    const waTotal = visible.reduce((s, r) => s + r.monthActual, 0)
                     const wp = wSum(w => w.planDays), wd = wSum(w => w.actualDays)
                     return (
                       <>
                         {ftr(`${wi}-wt`, wt||DASH, true)}
-                        {ftr(`${wi}-wa`, wa||DASH)}
+                        {ftr(`${wi}-wa`, waTotal||DASH)}
                         {ftr(`${wi}-wp`, wp||DASH)}
                         {ftr(`${wi}-wd`, wd||DASH)}
                       </>
