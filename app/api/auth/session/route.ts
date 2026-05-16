@@ -24,10 +24,10 @@ export async function POST(request: NextRequest) {
           cookiesToSet.forEach(({ name, value, options }) => {
             cookieStore.set(name, value, {
               ...options,
-              // ブラウザ問わず永続化するために明示的に設定
               maxAge: (options as any)?.maxAge ?? COOKIE_MAX_AGE,
               sameSite: 'lax',
-              httpOnly: true,
+              // httpOnly不要: サーバー経由Set-CookieでITP対策済み。
+              // httpOnly=trueにするとブラウザ側createBrowserClientがセッションを読めなくなる
               path: '/',
               secure: process.env.NODE_ENV === 'production',
             })
