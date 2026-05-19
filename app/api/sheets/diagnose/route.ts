@@ -63,14 +63,16 @@ export async function GET(req: NextRequest) {
 
     // マッチした担当者の行3ヘッダーも確認
     const headerSamples: Record<string, string[]> = {}
-    for (const m of matched.slice(0, 3)) {
+    for (const m of matched.slice(0, 2)) {
       const tabTitle = m.tab.replace(' ※スペース差あり', '')
       try {
         const hr = await sheets.spreadsheets.values.get({
-          spreadsheetId, range: `${tabTitle}!A3:ZZ3`,
+          spreadsheetId, range: `${tabTitle}!A1:ZZ6`,
         })
-        const h = (hr.data.values?.[0] ?? []).map((v: any) => String(v).replace(/\n/g, '\\n'))
-        headerSamples[tabTitle] = h
+        const rows = hr.data.values ?? []
+        headerSamples[tabTitle] = rows.map((row: any[], rowIdx: number) =>
+          `row${rowIdx + 1}: [${row.map((v: any) => String(v).replace(/\n/g, '\\n').slice(0, 20)).join(' | ')}]`
+        )
       } catch {}
     }
 
