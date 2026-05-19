@@ -354,68 +354,38 @@ function normalizeHeader(h: string): string {
 
 // 担当者タブへの日別データ書き込み
 // 構造: 行1=名前, 行2=セクション, 行3=列ヘッダー, 行4〜34=日別データ, 行35=TTL(数式)
-// 書き込み対象の列名 → DB フィールドキーのマップ
-const WRITE_TARGET_HEADERS = new Map<string, string>([
-  ['獲得件数',   'acquisitions'],
-  ['出勤状態',   'attendance'],
-  ['訪問',       'visits'],
-  ['対面',       'net_meetings'],
-  ['主権対面',   'owner_meetings'],
-  ['商談',       'negotiations'],
-  ['商談数',     'negotiations'],
-  ['獲得',       'acquisitions'],
-  ['獲得数',     'acquisitions'],
-  ['稼働地域①', 'area1'],
-  ['獲得件数①', 'acq1'],
-  ['稼働地域②', 'area2'],
-  ['獲得件数②', 'acq2'],
-  ['稼働地域③', 'area3'],
-  ['獲得件数③', 'acq3'],
-])
+// 列アドレス直指定マッピング（ヘッダー名照合なし）
+// 構造: 行1=空白, 行2=名前, 行3=セクション見出し, 行4=列ヘッダー, 行5〜35=日別データ, 行36=TTL
+const COLUMN_MAP: { col: string; field: string }[] = [
+  { col: 'D', field: 'acquisitions'  },  // 獲得件数
+  { col: 'E', field: 'attendance'    },  // 出勤状態
+  { col: 'F', field: 'visits'        },  // 訪問
+  { col: 'G', field: 'net_meetings'  },  // 対面
+  { col: 'H', field: 'owner_meetings'},  // 主権対面
+  { col: 'I', field: 'negotiations'  },  // 商談
+  { col: 'J', field: 'acquisitions'  },  // 獲得
+  // K〜R はメニュー欄（書き込まない）
+  { col: 'S', field: 'area1'         },  // 稼働地域①
+  { col: 'T', field: 'acq1'          },  // 獲得件数①
+  { col: 'U', field: 'area2'         },  // 稼働地域②
+  // V以降 獲得件数②③ は空白のまま
+]
+
+const DATA_START_ROW = 5   // 1日 = 行5
+const TTL_ROW_NUM    = 36  // TTL行（書き込まない）
 
 async function syncRepToPersonalSheet(
   sheets: any,
   spreadsheetId: string,
   sheetTitle: string,
   repRecords: any[],
-  _planCases: number,   // 計画件数は書き込まない（手動入力のため）
+  _planCases: number,
   yearMonth: string,
 ) {
-  const HEADER_ROW   = 4  // 列ヘッダー行（行3=セクション見出し、行4=計画件数/獲得件数等）
-  const DATA_START   = 5  // データ開始行（1=金 が行5）
-  const TTL_ROW      = 37 // TTL行より前まで（行36以降は触れない）
-
   const [y, m] = yearMonth.split('-').map(Number)
   const totalDays = new Date(y, m, 0).getDate()
 
-  // ① ヘッダー行を読み取る
-  const headerRes = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${sheetTitle}!A${HEADER_ROW}:ZZ${HEADER_ROW}`,
-  })
-  const rawHeaders: string[] = (headerRes.data.values?.[0] ?? [])
-    .map((h: any) => normalizeHeader(String(h)))
-
-  // ② 書き込み対象列のインデックスを収集（0始まり）
-  const targetCols: { colIdx: number; fieldKey: string }[] = []
-  for (let i = 0; i < rawHeaders.length; i++) {
-    const fieldKey = WRITE_TARGET_HEADERS.get(rawHeaders[i])
-    if (fieldKey) targetCols.push({ colIdx: i, fieldKey })
-  }
-  // デバッグ: ヘッダー不一致の場合ログ出力（後で削除可）
-  if (targetCols.length === 0) {
-    console.error(`[sync] ${sheetTitle}: 対象列が見つからない。ヘッダー=${JSON.stringify(rawHeaders)}`)
-    return { cellsWritten: 0, debug: { headers: rawHeaders, targetCols: [] } }
-  }
-
-  // ③ 現在の値を一括取得（既存データ確認用）
-  const existingRes = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${sheetTitle}!A${DATA_START}:ZZ${TTL_ROW - 1}`,
-  })
-  const existingRows: any[][] = existingRes.data.values ?? []
-
-  // ④ 日付 → レコードのマップ
+  // 日付 → レコードのマップ
   const byDay: Record<number, any> = {}
   for (const r of repRecords) {
     const day = parseInt(r.record_date.slice(-2), 10)
@@ -429,62 +399,64 @@ async function syncRepToPersonalSheet(
     return [a.pref, a.city].filter(Boolean).join(' ')
   }
 
-  function getFieldValue(fieldKey: string, r: any): any {
-    switch (fieldKey) {
-      case 'acquisitions': return r.acquisitions ?? 0
-      case 'attendance':   return r.attendance_status || r.work_status || ''
-      case 'visits':       return r.visits ?? 0
-      case 'net_meetings': return r.net_meetings ?? 0
+  function getValue(field: string, r: any): any {
+    switch (field) {
+      case 'acquisitions':   return r.acquisitions ?? 0
+      case 'attendance':     return r.attendance_status || r.work_status || ''
+      case 'visits':         return r.visits ?? 0
+      case 'net_meetings':   return r.net_meetings ?? 0
       case 'owner_meetings': return r.owner_meetings ?? 0
-      case 'negotiations': return r.negotiations ?? 0
+      case 'negotiations':   return r.negotiations ?? 0
       case 'area1': return getArea(r, 0)
       case 'acq1':  return r.acquisitions ?? 0
       case 'area2': return getArea(r, 1)
-      case 'acq2':  return ''
-      case 'area3': return getArea(r, 2)
-      case 'acq3':  return ''
       default: return ''
     }
   }
 
-  // ⑤ 書き込みリストを生成
-  // - データがある日 AND 対象列 AND 既存値が空 のセルのみ書き込む
-  const valueRanges: { range: string; values: any[][] }[] = []
+  // 現在の値を一括取得（既存データがあるセルはスキップするため）
+  const existingRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetTitle}!A${DATA_START_ROW}:Z${TTL_ROW_NUM - 1}`,
+  })
+  const existingRows: any[][] = existingRes.data.values ?? []
+
+  // 列アドレス → 0始まりインデックスへ変換
+  function colToIdx(col: string): number {
+    let n = 0
+    for (const c of col.toUpperCase()) n = n * 26 + (c.charCodeAt(0) - 64)
+    return n - 1
+  }
+
+  // 書き込みリストを生成（既存値があるセルはスキップ）
+  const data: { range: string; values: any[][] }[] = []
 
   for (let day = 1; day <= totalDays; day++) {
     const r = byDay[day]
-    if (!r) continue  // その日のレコードなし → スキップ
+    if (!r) continue  // その日のレコードなし
 
-    const rowOffset = day - 1  // DATA_START からの行オフセット（0始まり）
-    const existingRow: any[] = existingRows[rowOffset] ?? []
+    const rowIdx = day - 1  // existingRows 内のインデックス
+    const sheetRow = DATA_START_ROW + rowIdx
+    const existingRow: any[] = existingRows[rowIdx] ?? []
 
-    for (const { colIdx, fieldKey } of targetCols) {
+    for (const { col, field } of COLUMN_MAP) {
+      const colIdx = colToIdx(col)
+      const existing = existingRow[colIdx]
       // 既存値があるセルはスキップ
-      const existingVal = existingRow[colIdx]
-      if (existingVal !== undefined && existingVal !== null && String(existingVal).trim() !== '') {
-        continue
-      }
+      if (existing !== undefined && existing !== null && String(existing).trim() !== '') continue
 
-      const newVal = getFieldValue(fieldKey, r)
-      if (newVal === '' || newVal === null || newVal === undefined) continue
+      const val = getValue(field, r)
+      if (val === '' || val === null || val === undefined) continue
 
-      const cellAddr = `${columnIndexToLetter(colIdx)}${DATA_START + rowOffset}`
-      valueRanges.push({
-        range: `${sheetTitle}!${cellAddr}`,
-        values: [[newVal]],
-      })
+      data.push({ range: `${sheetTitle}!${col}${sheetRow}`, values: [[val]] })
     }
   }
 
-  if (valueRanges.length === 0) return
+  if (data.length === 0) return
 
-  // ⑥ 対象セルのみ batchUpdate（クリアなし）
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId,
-    requestBody: {
-      valueInputOption: 'USER_ENTERED',
-      data: valueRanges,
-    },
+    requestBody: { valueInputOption: 'USER_ENTERED', data },
   })
 }
 
