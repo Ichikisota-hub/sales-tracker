@@ -117,36 +117,47 @@ async function formatHeaderAndFilter(
   }
 }
 
-// 1シートを全クリア → データ書き込み
-// targetGid を渡すと、既存の特定シート(gid)に書き込む
-async function writeSheet(
-  sheets: any,
-  spreadsheetId: string,
-  sheetTitle: string,
-  rows: any[][],
-  targetGid?: number,
-  metaList?: { gid: number; title: string }[]
-) {
-  const sheetId = await ensureSheet(sheets, spreadsheetId, sheetTitle, targetGid, metaList)
-
-  // gid が一致するシートの実際のタイトルを使ってクリア
-  const actualTitle = (metaList ?? []).find(s => s.gid === sheetId)?.title ?? sheetTitle
-  await sheets.spreadsheets.values.clear({ spreadsheetId, range: `${actualTitle}!A:ZZ` })
-
+// 1シートを全クリア → データ書き込み（新規シート用）
+async function writeSheet(sheets: any, spreadsheetId: string, sheetTitle: string, rows: any[][]) {
+  const sheetId = await ensureSheet(sheets, spreadsheetId, sheetTitle)
+  await sheets.spreadsheets.values.clear({ spreadsheetId, range: `${sheetTitle}!A:ZZ` })
   if (rows.length === 0) return
-
-  // データ書き込み（実際のシートタイトルを使用）
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `${actualTitle}!A1`,
+    range: `${sheetTitle}!A1`,
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: rows },
   })
+  await formatHeaderAndFilter(sheets, spreadsheetId, sheetId, rows[0].length)
+}
 
-  // ヘッダー書式 + オートフィルター
-  // 既存シート(gid指定)への書き込みは結合セルの可能性があるためフィルターはスキップ
-  const skipFilter = targetGid !== undefined
-  await formatHeaderAndFilter(sheets, spreadsheetId, sheetId, rows[0].length, skipFilter)
+// 既存テンプレートシートにデータだけ流し込む
+// - ヘッダー行を読み取って列の順番を把握
+// - ヘッダーは一切上書きしない（書式・結合セルを保持）
+// - データは headerRow+1 行目からのみ書き込む
+// - 古いデータ行だけクリアしてから書き直す
+async function writeToExistingTemplate(
+  sheets: any,
+  spreadsheetId: string,
+  sheetTitle: string,
+  dataRows: any[][], // ヘッダーなし・データ行のみ
+  headerRow: number = 1, // ヘッダーが何行目か（1始まり）
+) {
+  if (dataRows.length === 0) return
+
+  const dataStartRow = headerRow + 1 // データ書き込み開始行（1始まり）
+  const dataRange = `${sheetTitle}!A${dataStartRow}:ZZ`
+
+  // データ行だけクリア（ヘッダーは触らない）
+  await sheets.spreadsheets.values.clear({ spreadsheetId, range: dataRange })
+
+  // データを書き込む
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${sheetTitle}!A${dataStartRow}`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: dataRows },
+  })
 }
 
 // バックアップ用: 既存シートを消さず、日付サフィックス付きで書き込む
@@ -345,20 +356,49 @@ export async function syncAllToSheets(spreadsheetId: string, orgIds?: string[]) 
   const auth = getAuth()
   const sheets = google.sheets({ version: 'v4', auth })
 
-  // シート一覧を1回だけ取得（全関数で使い回す）
+  // シート一覧を1回だけ取得
   const metaList = await getSheetsMeta(sheets, spreadsheetId)
 
   const data = await fetchAllData(supabase, orgIds)
   const { repsRows, plansRows, recordsRows, schedulesRows, contractsRows, reportsRows, personalDailyRows } = buildRows(data)
 
-  // 人別日次集計: gid=1456071973 の既存シートに書き込む（なければ新規作成）
-  await writeSheet(sheets, spreadsheetId, '人別日次集計', personalDailyRows, PERSONAL_DAILY_SHEET_GID, metaList)
-  await writeSheet(sheets, spreadsheetId, '担当者', repsRows, undefined, metaList)
-  await writeSheet(sheets, spreadsheetId, '月間計画', plansRows, undefined, metaList)
-  await writeSheet(sheets, spreadsheetId, '日別実績', recordsRows, undefined, metaList)
-  await writeSheet(sheets, spreadsheetId, 'シフト', schedulesRows, undefined, metaList)
-  await writeSheet(sheets, spreadsheetId, '契約宅', contractsRows, undefined, metaList)
-  await writeSheet(sheets, spreadsheetId, '日報', reportsRows, undefined, metaList)
+  // 人別日次集計: 既存テンプレートシート(gid=1456071973)に「データだけ」流し込む
+  // ヘッダー行(1行目)は触らず、2行目以降にデータを書き込む
+  const personalSheetMeta = metaList.find(s => s.gid === PERSONAL_DAILY_SHEET_GID)
+  if (personalSheetMeta) {
+    // 既存シートのヘッダー行を読み取って列順を確認
+    const headerRes = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${personalSheetMeta.title}!1:1`,
+    })
+    const existingHeaders: string[] = (headerRes.data.values?.[0] ?? []).map((h: any) => String(h).trim())
+
+    // ヘッダーが存在する場合は列順を合わせてデータを並び替え
+    let dataOnly = personalDailyRows.slice(1)
+    if (existingHeaders.length > 0) {
+      const ourHeaders: string[] = personalDailyRows[0].map((h: any) => String(h).replace(/\n/g, ' ').trim())
+      dataOnly = dataOnly.map(row => {
+        return existingHeaders.map(eh => {
+          // 既存ヘッダーと一致するインデックスを探す（改行や空白を除去して比較）
+          const normalizedEh = eh.replace(/\n/g, '').trim()
+          const idx = ourHeaders.findIndex(oh => oh.replace(/\n/g, '').trim() === normalizedEh || normalizedEh.includes(oh.replace(/\n/g, '').trim()) || oh.replace(/\n/g, '').trim().includes(normalizedEh))
+          return idx >= 0 ? row[idx] : ''
+        })
+      })
+    }
+
+    await writeToExistingTemplate(sheets, spreadsheetId, personalSheetMeta.title, dataOnly, 1)
+  } else {
+    // 既存シートがない → 新規作成してすべて書き込み
+    await writeSheet(sheets, spreadsheetId, '人別日次集計', personalDailyRows)
+  }
+
+  await writeSheet(sheets, spreadsheetId, '担当者', repsRows)
+  await writeSheet(sheets, spreadsheetId, '月間計画', plansRows)
+  await writeSheet(sheets, spreadsheetId, '日別実績', recordsRows)
+  await writeSheet(sheets, spreadsheetId, 'シフト', schedulesRows)
+  await writeSheet(sheets, spreadsheetId, '契約宅', contractsRows)
+  await writeSheet(sheets, spreadsheetId, '日報', reportsRows)
 
   return {
     reps: (data.salesReps || []).length,
