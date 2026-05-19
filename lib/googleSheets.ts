@@ -483,10 +483,15 @@ export async function syncAllToSheets(spreadsheetId: string, orgIds?: string[]) 
     if (p.year_month === yearMonth) planMap[p.sales_rep_id] = p.plan_cases
   }
 
-  // 各担当者のタブを名前で探して書き込む
+  // 既存タブにのみ書き込む（新規タブは一切作成しない）
   let syncedReps = 0
+  const skippedReps: string[] = []
+
   for (const rep of (data.salesReps ?? [])) {
-    if (!sheetNames.has(rep.name)) continue  // タブが存在しない担当者はスキップ
+    if (!sheetNames.has(rep.name)) {
+      skippedReps.push(rep.name) // タブが存在しない → スキップ
+      continue
+    }
 
     const repRecords = (data.dailyRecords ?? []).filter(
       (r: any) => r.sales_rep_id === rep.id && r.record_date.startsWith(yearMonth)
@@ -497,22 +502,10 @@ export async function syncAllToSheets(spreadsheetId: string, orgIds?: string[]) 
     syncedReps++
   }
 
-  // 補助シートも同期（既存シートがあれば上書き、なければ新規作成）
-  await writeSheet(sheets, spreadsheetId, '担当者', repsRows)
-  await writeSheet(sheets, spreadsheetId, '月間計画', plansRows)
-  await writeSheet(sheets, spreadsheetId, '日別実績', recordsRows)
-  await writeSheet(sheets, spreadsheetId, 'シフト', schedulesRows)
-  await writeSheet(sheets, spreadsheetId, '契約宅', contractsRows)
-  await writeSheet(sheets, spreadsheetId, '日報', reportsRows)
-
   return {
     synced_reps: syncedReps,
-    reps: (data.salesReps || []).length,
+    skipped_reps: skippedReps,
     records: (data.dailyRecords || []).length,
-    schedules: (data.workSchedules || []).length,
-    plans: (data.monthlyPlans || []).length,
-    contracts: (data.contracts || []).length,
-    reports: (data.dailyReports || []).length,
   }
 }
 
