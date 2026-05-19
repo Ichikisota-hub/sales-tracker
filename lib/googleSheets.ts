@@ -61,8 +61,15 @@ async function ensureSheet(
   return res.data.replies![0].addSheet!.properties!.sheetId!
 }
 
-// ヘッダー行を太字にする + オートフィルターを設定
-async function formatHeaderAndFilter(sheets: any, spreadsheetId: string, sheetId: number, colCount: number) {
+// ヘッダー行を太字にする（結合セルがあるシートでもエラーにならないよう分割実行）
+async function formatHeaderAndFilter(
+  sheets: any,
+  spreadsheetId: string,
+  sheetId: number,
+  colCount: number,
+  skipFilter = false
+) {
+  // ①ヘッダー書式 + 行固定
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
@@ -85,22 +92,29 @@ async function formatHeaderAndFilter(sheets: any, spreadsheetId: string, sheetId
             fields: 'gridProperties.frozenRowCount',
           },
         },
-        {
-          // オートフィルター設定（代理店・名前等で絞り込み可能）
-          setBasicFilter: {
-            filter: {
-              range: {
-                sheetId,
-                startRowIndex: 0,
-                startColumnIndex: 0,
-                endColumnIndex: colCount,
-              },
-            },
-          },
-        },
       ],
     },
   })
+
+  // ②オートフィルター（結合セルがあると失敗するので別リクエストでtry/catch）
+  if (!skipFilter) {
+    try {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [{
+            setBasicFilter: {
+              filter: {
+                range: { sheetId, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: colCount },
+              },
+            },
+          }],
+        },
+      })
+    } catch {
+      // 結合セルがある場合はフィルター設定をスキップ（データ書き込みは完了済み）
+    }
+  }
 }
 
 // 1シートを全クリア → データ書き込み
@@ -130,7 +144,9 @@ async function writeSheet(
   })
 
   // ヘッダー書式 + オートフィルター
-  await formatHeaderAndFilter(sheets, spreadsheetId, sheetId, rows[0].length)
+  // 既存シート(gid指定)への書き込みは結合セルの可能性があるためフィルターはスキップ
+  const skipFilter = targetGid !== undefined
+  await formatHeaderAndFilter(sheets, spreadsheetId, sheetId, rows[0].length, skipFilter)
 }
 
 // バックアップ用: 既存シートを消さず、日付サフィックス付きで書き込む
