@@ -594,3 +594,9 @@ body {
 .animate-slide-in          { animation: slideInFromRight  0.18s ease both; }
 .animate-slide-out-left    { animation: slideOutToLeft    0.18s ease both; }
 .animate-slide-out-right   { animation: slideOutToRight   0.18s ease both; }
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.animate-slide-up { animation: slideUp 0.28s cubic-bezier(0.22,0.68,0,1.2) both; }

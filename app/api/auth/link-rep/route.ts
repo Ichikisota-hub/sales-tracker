@@ -42,7 +42,8 @@ export async function POST(req: NextRequest) {
 
   if (!userId) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
 
-  const { fullName } = await req.json()
+  const body = await req.json()
+  const { fullName, repId: directRepId } = body
   if (!fullName?.trim()) return NextResponse.json({ error: 'fullName が必要です' }, { status: 400 })
 
   const supabase = getServiceClient()
@@ -55,6 +56,25 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (!membership) return NextResponse.json({ error: 'メンバーシップが見つかりません' }, { status: 404 })
+
+  // ── 方式0: RepLinkScreenからIDが直接渡された場合（同名重複を回避）──
+  if (directRepId) {
+    const { data: directRep } = await supabase
+      .from('sales_reps')
+      .select('id, name')
+      .eq('id', directRepId)
+      .eq('organization_id', membership.organization_id)
+      .eq('is_active', true)
+      .single()
+    if (directRep) {
+      const { error } = await supabase
+        .from('organization_members')
+        .update({ sales_rep_id: directRep.id })
+        .eq('id', membership.id)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ success: true, linked: true, repName: directRep.name, method: 'direct_id' })
+    }
+  }
 
   // ── 方式1: user_metadataにsales_rep_idがあればIDで直接紐付け ──
   const { data: { user: authUser } } = await supabase.auth.admin.getUserById(userId)

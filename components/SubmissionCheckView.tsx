@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { supabase, SalesRep, Team } from '@/lib/supabase'
 
 type Props = { yearMonth: string; teams: Team[]; orgIds?: string[] }
@@ -37,6 +37,23 @@ export default function SubmissionCheckView({ yearMonth, teams, orgIds }: Props)
   const [loading, setLoading] = useState(true)
   const [filterMode, setFilterMode] = useState<'all' | 'missing'>('missing')
   const [selectedTeamId, setSelectedTeamId] = useState<string | '__all__'>('__all__')
+  const [remindPending, startRemind] = useTransition()
+  const [remindMsg, setRemindMsg] = useState('')
+
+  async function sendDailyReportRemind(offset: number) {
+    startRemind(async () => {
+      const target = offset === 0 ? 'today' : 'yesterday'
+      const res = await fetch('/api/remind/daily-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_date: target }),
+      })
+      const data = await res.json()
+      const sent = (data.results ?? []).filter((r: any) => r.sent).length
+      setRemindMsg(`${data.unsubmitted ?? 0}名に催促送信（LINE: ${sent}件）`)
+      setTimeout(() => setRemindMsg(''), 4000)
+    })
+  }
 
   useEffect(() => { load() }, [yearMonth, orgIds?.join(',')])
 
@@ -172,6 +189,29 @@ export default function SubmissionCheckView({ yearMonth, teams, orgIds }: Props)
           <div className="text-xs text-slate-400 mt-0.5">日報 未提出</div>
         </div>
       </div>
+
+      {/* 日報催促ボタン */}
+      {missingReports > 0 && (
+        <div className="flex gap-2 flex-wrap items-center">
+          <button
+            disabled={remindPending}
+            onClick={() => sendDailyReportRemind(0)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-500 text-white text-xs font-bold hover:bg-orange-600 disabled:opacity-50 transition-colors"
+          >
+            {remindPending ? '送信中...' : '📣 今日の日報を催促（LINE）'}
+          </button>
+          <button
+            disabled={remindPending}
+            onClick={() => sendDailyReportRemind(-1)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-500 text-white text-xs font-bold hover:bg-slate-600 disabled:opacity-50 transition-colors"
+          >
+            {remindPending ? '送信中...' : '📣 昨日の日報を催促（LINE）'}
+          </button>
+          {remindMsg && (
+            <span className="text-xs text-emerald-600 font-bold">✓ {remindMsg}</span>
+          )}
+        </div>
+      )}
 
       {/* フィルターバー */}
       <div className="flex gap-2 flex-wrap items-center">

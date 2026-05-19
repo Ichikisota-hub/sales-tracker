@@ -42,6 +42,17 @@ export async function POST(req: NextRequest) {
 
   const supabase = getServiceClient()
 
+  // users テーブルに存在するか確認（ゴーストユーザー防止）
+  // public.users に存在しないユーザー（削除済み・未登録）はプロビジョニングしない
+  const { data: publicUser } = await supabase
+    .from('users')
+    .select('id')
+    .eq('id', userId)
+    .maybeSingle()
+  if (!publicUser) {
+    return NextResponse.json({ success: false, message: 'users テーブルに存在しないユーザーはプロビジョニング対象外' })
+  }
+
   // 既存 membership チェック
   const { data: existing } = await supabase
     .from('organization_members')
@@ -94,6 +105,8 @@ export async function POST(req: NextRequest) {
   const { data: { user: authUser } } = await supabase.auth.admin.getUserById(userId)
   const fullName = (authUser?.user_metadata?.full_name as string | undefined)?.trim()
 
+  let linkedRepId: string | null = null
+
   if (fullName) {
     // 既存 sales_rep を名前マッチで検索
     const { data: rep } = await supabase
@@ -135,8 +148,14 @@ export async function POST(req: NextRequest) {
         .from('organization_members')
         .update({ sales_rep_id: repId })
         .eq('id', memberId)
+      linkedRepId = repId
     }
   }
 
-  return NextResponse.json({ success: true, provisioned: true })
+  // provisioned: true は sales_rep_id が実際にリンクされた場合のみ
+  return NextResponse.json({
+    success: true,
+    provisioned: linkedRepId !== null,
+    message: linkedRepId ? '担当者を紐付けました' : 'full_name が未設定のため担当者を自動作成できませんでした',
+  })
 }

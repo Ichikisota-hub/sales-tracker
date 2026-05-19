@@ -27,10 +27,12 @@ function RepLinkScreen({ reps, signOut }: { reps: SalesRep[]; signOut: () => voi
     setLinking(true)
     setError('')
     try {
+      // selected は "名前__repId" 形式。idで直接リンクすることで同名重複問題を回避
+      const [name, repId] = selected.split('__')
       const res = await fetch('/api/auth/link-rep', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName: selected }),
+        body: JSON.stringify({ fullName: name, repId }),
       })
       const d = await res.json()
       if (!res.ok) { setError(d.error || '紐付けに失敗しました'); setLinking(false); return }
@@ -57,7 +59,8 @@ function RepLinkScreen({ reps, signOut }: { reps: SalesRep[]; signOut: () => voi
         >
           <option value="" style={{ background: '#1e293b' }}>— 選択してください —</option>
           {reps.map(r => (
-            <option key={r.id} value={r.name} style={{ background: '#1e293b' }}>{r.name}</option>
+            // value に "名前__repId" を埋め込みIDで一意特定
+            <option key={r.id} value={`${r.name}__${r.id}`} style={{ background: '#1e293b' }}>{r.name}</option>
           ))}
         </select>
         {error && <p className="text-red-400 text-xs text-center">{error}</p>}

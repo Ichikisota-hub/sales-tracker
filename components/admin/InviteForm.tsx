@@ -9,6 +9,11 @@ type Props = {
   onInvited: () => void
 }
 
+interface Org {
+  id: string
+  name: string
+}
+
 export default function InviteForm({ onInvited }: Props) {
   const { organizationId } = useOrganization()
   const supabase = createClient()
@@ -17,21 +22,38 @@ export default function InviteForm({ onInvited }: Props) {
   const [role, setRole] = useState<'member' | 'manager' | 'admin'>('member')
   const [repId, setRepId] = useState<string>('')
   const [reps, setReps] = useState<SalesRep[]>([])
+  const [orgs, setOrgs] = useState<Org[]>([])
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [inviteUrl, setInviteUrl] = useState('')
   const [emailSent, setEmailSent] = useState(false)
 
+  // 組織一覧取得
   useEffect(() => {
-    if (!organizationId) return
+    fetch('/api/public/orgs')
+      .then(r => r.json())
+      .then((data: Org[]) => setOrgs(data ?? []))
+      .catch(() => {})
+  }, [])
+
+  // ログイン中の組織をデフォルト選択
+  useEffect(() => {
+    if (organizationId && !selectedOrgId) setSelectedOrgId(organizationId)
+  }, [organizationId])
+
+  // 選択中の組織の担当者一覧を取得
+  useEffect(() => {
+    if (!selectedOrgId) return
+    setRepId('')
     supabase
       .from('sales_reps')
       .select('*')
       .eq('is_active', true)
-      .eq('organization_id', organizationId)
+      .eq('organization_id', selectedOrgId)
       .order('display_order')
       .then(({ data }: { data: import('@/lib/supabase').SalesRep[] | null }) => setReps(data ?? []))
-  }, [organizationId])
+  }, [selectedOrgId])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -46,7 +68,7 @@ export default function InviteForm({ onInvited }: Props) {
       body: JSON.stringify({
         email,
         role,
-        organizationId,
+        organizationId: selectedOrgId,
         ...(repId ? { repId } : {}),
       }),
     })
@@ -106,6 +128,22 @@ export default function InviteForm({ onInvited }: Props) {
           </div>
         )}
 
+        {/* 代理店選択 */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">代理店</label>
+          <select
+            value={selectedOrgId}
+            onChange={e => { setSelectedOrgId(e.target.value); setRepId('') }}
+            required
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">代理店を選択</option>
+            {orgs.map(o => (
+              <option key={o.id} value={o.id}>{o.name}</option>
+            ))}
+          </select>
+        </div>
+
         {/* メール + ロール */}
         <div className="flex gap-2 flex-wrap">
           <input
@@ -146,7 +184,7 @@ export default function InviteForm({ onInvited }: Props) {
 
         <button
           type="submit"
-          disabled={loading || !organizationId}
+          disabled={loading || !selectedOrgId}
           className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
         >
           {loading ? '送信中...' : '招待メールを送信'}
