@@ -468,10 +468,18 @@ export async function syncAllToSheets(spreadsheetId: string, orgIds?: string[]) 
   const sheets = google.sheets({ version: 'v4', auth })
 
   const metaList = await getSheetsMeta(sheets, spreadsheetId)
-  const sheetNames = new Set(metaList.map(s => s.title))
+
+  // スペース正規化マップ: 正規化名 → 実際のタブ名
+  // 半角・全角スペースを除去して比較（例: "福永　航世" → "福永航世" で一致）
+  function stripSpaces(s: string): string {
+    return s.replace(/[\s　]/g, '')
+  }
+  const normalizedTabMap = new Map<string, string>()
+  for (const s of metaList) {
+    normalizedTabMap.set(stripSpaces(s.title), s.title)
+  }
 
   const data = await fetchAllData(supabase, orgIds)
-  const { repsRows, plansRows, recordsRows, schedulesRows, contractsRows, reportsRows } = buildRows(data)
 
   // 現在の年月を取得（JST）
   const jstNow = new Date(Date.now() + 9 * 3600_000)
@@ -488,8 +496,10 @@ export async function syncAllToSheets(spreadsheetId: string, orgIds?: string[]) 
   const skippedReps: string[] = []
 
   for (const rep of (data.salesReps ?? [])) {
-    if (!sheetNames.has(rep.name)) {
-      skippedReps.push(rep.name) // タブが存在しない → スキップ
+    // スペース除去で一致するタブを探す
+    const actualTabName = normalizedTabMap.get(stripSpaces(rep.name))
+    if (!actualTabName) {
+      skippedReps.push(rep.name)
       continue
     }
 
@@ -498,7 +508,7 @@ export async function syncAllToSheets(spreadsheetId: string, orgIds?: string[]) 
     )
     const planCases = planMap[rep.id] ?? 0
 
-    await syncRepToPersonalSheet(sheets, spreadsheetId, rep.name, repRecords, planCases, yearMonth)
+    await syncRepToPersonalSheet(sheets, spreadsheetId, actualTabName, repRecords, planCases, yearMonth)
     syncedReps++
   }
 

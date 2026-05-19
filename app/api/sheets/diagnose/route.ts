@@ -30,17 +30,43 @@ export async function GET(req: NextRequest) {
       title: s.properties?.title,
     }))
 
-    const tabTitles = new Set(tabs.map((t: any) => t.title))
+    const strip = (s: string) => s.replace(/[\s　]/g, '')
+    // スペース正規化マップ
+    const normalizedMap = new Map<string, string>()
+    for (const t of tabs) normalizedMap.set(strip(t.title), t.title)
+
     const repNames = (reps ?? []).map((r: any) => r.name)
-    const matched = repNames.filter((n: string) => tabTitles.has(n))
-    const unmatched = repNames.filter((n: string) => !tabTitles.has(n))
+    const matched: { db: string; tab: string }[] = []
+    const unmatched: string[] = []
+    const needsRename: { db: string; tab: string }[] = []
+
+    for (const name of repNames) {
+      const exactMatch = tabs.find((t: any) => t.title === name)
+      if (exactMatch) {
+        matched.push({ db: name, tab: name })
+        continue
+      }
+      const fuzzyMatch = normalizedMap.get(strip(name))
+      if (fuzzyMatch) {
+        matched.push({ db: name, tab: `${fuzzyMatch} ※スペース差あり` })
+        needsRename.push({ db: name, tab: fuzzyMatch })
+        continue
+      }
+      unmatched.push(name)
+    }
+
+    // タブはあるがDB未登録
+    const dbNamesStripped = new Set(repNames.map((n: string) => strip(n)))
+    const tabsNotInDB = tabs
+      .filter((t: any) => !['祝日リスト','単日'].includes(t.title) && !dbNamesStripped.has(strip(t.title)))
+      .map((t: any) => t.title)
 
     return NextResponse.json({
-      spreadsheet_tabs: tabs.map((t: any) => `${t.title} (gid:${t.gid})`),
-      db_rep_names: repNames,
-      matched_tabs: matched,
+      summary: `${matched.length}/${repNames.length}名が一致（スペース差含む）`,
+      matched,
       unmatched_reps: unmatched,
-      summary: `${matched.length}/${repNames.length}名のタブが一致`,
+      tabs_not_in_db: tabsNotInDB,
+      needs_rename: needsRename,
     })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
