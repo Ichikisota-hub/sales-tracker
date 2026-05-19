@@ -347,8 +347,119 @@ function buildRows(data: ReturnType<typeof fetchAllData> extends Promise<infer T
   return { repsRows, plansRows, recordsRows, schedulesRows, contractsRows, reportsRows, personalDailyRows }
 }
 
-// 人別日次集計を書き込む既存シートのgid（スプレッドシートのURLの gid= 部分）
-const PERSONAL_DAILY_SHEET_GID = 1456071973
+// 列名の正規化（改行・スペース除去）
+function normalizeHeader(h: string): string {
+  return h.replace(/\n/g, '').replace(/\s+/g, '').trim()
+}
+
+// 担当者タブへの日別データ書き込み
+// 構造: 行1=名前, 行2=セクション, 行3=列ヘッダー, 行4〜34=日別データ, 行35=TTL(数式)
+async function syncRepToPersonalSheet(
+  sheets: any,
+  spreadsheetId: string,
+  sheetTitle: string,
+  repRecords: any[],  // この担当者の daily_records
+  planCases: number,
+  yearMonth: string,
+) {
+  const HEADER_ROW = 3           // 列ヘッダー行（1始まり）
+  const DATA_START_ROW = 4       // データ開始行
+  const DAYS_IN_COL_A = true     // A列=日番号, B列=曜日
+
+  const [y, m] = yearMonth.split('-').map(Number)
+  const totalDays = new Date(y, m, 0).getDate()
+
+  // 列ヘッダーを読み取る（行3）
+  const headerRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetTitle}!A${HEADER_ROW}:ZZ${HEADER_ROW}`,
+  })
+  const headers: string[] = (headerRes.data.values?.[0] ?? []).map((h: any) => normalizeHeader(String(h)))
+
+  // 日付 → レコードのマップ
+  const byDay: Record<number, any> = {}
+  for (const r of repRecords) {
+    const day = parseInt(r.record_date.slice(-2), 10)
+    byDay[day] = r
+  }
+
+  // area_list から地域名を取得
+  function getArea(r: any, idx: number): string {
+    const list: { pref?: string; city?: string }[] = Array.isArray(r.area_list) ? r.area_list : []
+    const a = list[idx] || (idx === 0 && r.area_pref ? { pref: r.area_pref, city: r.area_city } : null)
+    if (!a) return ''
+    return [a.pref, a.city].filter(Boolean).join(' ')
+  }
+
+  // 列ヘッダーと値のマッピング
+  function getValueForHeader(key: string, r: any | null, day: number): any {
+    if (!key) return ''
+    // A列=日番号, B列=曜日 は書き込まない（既存の値を保持）
+    if (key === '' && headers.indexOf(key) <= 1) return null // skip
+
+    if (!r) return ''
+    switch (key) {
+      case '計画件数': return planCases || ''
+      case '獲得件数': return r.acquisitions ?? 0
+      case '出勤状態': return r.attendance_status || r.work_status || ''
+      case '訪問': return r.visits ?? 0
+      case '対面': return r.net_meetings ?? 0
+      case '主権対面': return r.owner_meetings ?? 0
+      case '商談': return r.negotiations ?? 0
+      case '獲得': return r.acquisitions ?? 0
+      // 商材別は未対応（空白）
+      case 'マンション': case 'ホーム': case 'S-SAFE':
+      case '安心サポート': case '住まいと暮らしの相談':
+      case 'BenefitStation': case '詐欺ウォール': case '備えて安心データ復旧':
+        return ''
+      case '稼働地域①': return getArea(r, 0)
+      case '獲得件数①': return r.acquisitions ?? 0
+      case '稼働地域②': return getArea(r, 1)
+      case '獲得件数②': return ''
+      case '稼働地域③': return getArea(r, 2)
+      case '獲得件数③': return ''
+      default: return ''
+    }
+  }
+
+  // 31日分のデータ行を生成（A列・B列はスキップ、C列以降のみ）
+  // A列=日番号・B列=曜日は既存の値を保持するため、C列から書き込む
+  const dataColStart = DAYS_IN_COL_A ? 2 : 0  // 0始まりインデックスでC列=2
+  const dataHeaders = headers.slice(dataColStart)
+  const startColLetter = columnIndexToLetter(dataColStart) // 'C'
+
+  const rows: any[][] = []
+  for (let day = 1; day <= 31; day++) {
+    const r = day <= totalDays ? byDay[day] || null : null
+    const rowData = dataHeaders.map((key, i) => {
+      return getValueForHeader(key, r, day)
+    })
+    rows.push(rowData)
+  }
+
+  // データ行のみクリアしてから書き込む（TTL行=35行目は触れない）
+  const clearRange = `${sheetTitle}!${startColLetter}${DATA_START_ROW}:ZZ${DATA_START_ROW + 30}`
+  await sheets.spreadsheets.values.clear({ spreadsheetId, range: clearRange })
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${sheetTitle}!${startColLetter}${DATA_START_ROW}`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: rows },
+  })
+}
+
+// 列インデックス(0始まり)をA,B,C...表記に変換
+function columnIndexToLetter(index: number): string {
+  let letter = ''
+  let n = index + 1
+  while (n > 0) {
+    const rem = (n - 1) % 26
+    letter = String.fromCharCode(65 + rem) + letter
+    n = Math.floor((n - 1) / 26)
+  }
+  return letter
+}
 
 // 全データを同期する
 export async function syncAllToSheets(spreadsheetId: string, orgIds?: string[]) {
@@ -356,43 +467,37 @@ export async function syncAllToSheets(spreadsheetId: string, orgIds?: string[]) 
   const auth = getAuth()
   const sheets = google.sheets({ version: 'v4', auth })
 
-  // シート一覧を1回だけ取得
   const metaList = await getSheetsMeta(sheets, spreadsheetId)
+  const sheetNames = new Set(metaList.map(s => s.title))
 
   const data = await fetchAllData(supabase, orgIds)
-  const { repsRows, plansRows, recordsRows, schedulesRows, contractsRows, reportsRows, personalDailyRows } = buildRows(data)
+  const { repsRows, plansRows, recordsRows, schedulesRows, contractsRows, reportsRows } = buildRows(data)
 
-  // 人別日次集計: 既存テンプレートシート(gid=1456071973)に「データだけ」流し込む
-  // ヘッダー行(1行目)は触らず、2行目以降にデータを書き込む
-  const personalSheetMeta = metaList.find(s => s.gid === PERSONAL_DAILY_SHEET_GID)
-  if (personalSheetMeta) {
-    // 既存シートのヘッダー行を読み取って列順を確認
-    const headerRes = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${personalSheetMeta.title}!1:1`,
-    })
-    const existingHeaders: string[] = (headerRes.data.values?.[0] ?? []).map((h: any) => String(h).trim())
+  // 現在の年月を取得（JST）
+  const jstNow = new Date(Date.now() + 9 * 3600_000)
+  const yearMonth = `${jstNow.getFullYear()}-${String(jstNow.getMonth() + 1).padStart(2, '0')}`
 
-    // ヘッダーが存在する場合は列順を合わせてデータを並び替え
-    let dataOnly = personalDailyRows.slice(1)
-    if (existingHeaders.length > 0) {
-      const ourHeaders: string[] = personalDailyRows[0].map((h: any) => String(h).replace(/\n/g, ' ').trim())
-      dataOnly = dataOnly.map(row => {
-        return existingHeaders.map(eh => {
-          // 既存ヘッダーと一致するインデックスを探す（改行や空白を除去して比較）
-          const normalizedEh = eh.replace(/\n/g, '').trim()
-          const idx = ourHeaders.findIndex(oh => oh.replace(/\n/g, '').trim() === normalizedEh || normalizedEh.includes(oh.replace(/\n/g, '').trim()) || oh.replace(/\n/g, '').trim().includes(normalizedEh))
-          return idx >= 0 ? row[idx] : ''
-        })
-      })
-    }
-
-    await writeToExistingTemplate(sheets, spreadsheetId, personalSheetMeta.title, dataOnly, 1)
-  } else {
-    // 既存シートがない → 新規作成してすべて書き込み
-    await writeSheet(sheets, spreadsheetId, '人別日次集計', personalDailyRows)
+  // 月間計画マップ
+  const planMap: Record<string, number> = {}
+  for (const p of (data.monthlyPlans ?? [])) {
+    if (p.year_month === yearMonth) planMap[p.sales_rep_id] = p.plan_cases
   }
 
+  // 各担当者のタブを名前で探して書き込む
+  let syncedReps = 0
+  for (const rep of (data.salesReps ?? [])) {
+    if (!sheetNames.has(rep.name)) continue  // タブが存在しない担当者はスキップ
+
+    const repRecords = (data.dailyRecords ?? []).filter(
+      (r: any) => r.sales_rep_id === rep.id && r.record_date.startsWith(yearMonth)
+    )
+    const planCases = planMap[rep.id] ?? 0
+
+    await syncRepToPersonalSheet(sheets, spreadsheetId, rep.name, repRecords, planCases, yearMonth)
+    syncedReps++
+  }
+
+  // 補助シートも同期（既存シートがあれば上書き、なければ新規作成）
   await writeSheet(sheets, spreadsheetId, '担当者', repsRows)
   await writeSheet(sheets, spreadsheetId, '月間計画', plansRows)
   await writeSheet(sheets, spreadsheetId, '日別実績', recordsRows)
@@ -401,6 +506,7 @@ export async function syncAllToSheets(spreadsheetId: string, orgIds?: string[]) 
   await writeSheet(sheets, spreadsheetId, '日報', reportsRows)
 
   return {
+    synced_reps: syncedReps,
     reps: (data.salesReps || []).length,
     records: (data.dailyRecords || []).length,
     schedules: (data.workSchedules || []).length,
