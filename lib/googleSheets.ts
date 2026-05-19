@@ -354,36 +354,70 @@ function normalizeHeader(h: string): string {
 
 // 担当者タブへの日別データ書き込み
 // 構造: 行1=名前, 行2=セクション, 行3=列ヘッダー, 行4〜34=日別データ, 行35=TTL(数式)
+// 書き込み対象の列名 → DB フィールドキーのマップ
+const WRITE_TARGET_HEADERS = new Map<string, string>([
+  ['獲得件数',   'acquisitions'],
+  ['出勤状態',   'attendance'],
+  ['訪問',       'visits'],
+  ['対面',       'net_meetings'],
+  ['主権対面',   'owner_meetings'],
+  ['商談',       'negotiations'],
+  ['商談数',     'negotiations'],
+  ['獲得',       'acquisitions'],
+  ['獲得数',     'acquisitions'],
+  ['稼働地域①', 'area1'],
+  ['獲得件数①', 'acq1'],
+  ['稼働地域②', 'area2'],
+  ['獲得件数②', 'acq2'],
+  ['稼働地域③', 'area3'],
+  ['獲得件数③', 'acq3'],
+])
+
 async function syncRepToPersonalSheet(
   sheets: any,
   spreadsheetId: string,
   sheetTitle: string,
-  repRecords: any[],  // この担当者の daily_records
-  planCases: number,
+  repRecords: any[],
+  _planCases: number,   // 計画件数は書き込まない（手動入力のため）
   yearMonth: string,
 ) {
-  const HEADER_ROW = 3           // 列ヘッダー行（1始まり）
-  const DATA_START_ROW = 4       // データ開始行
-  const DAYS_IN_COL_A = true     // A列=日番号, B列=曜日
+  const HEADER_ROW   = 3  // 列ヘッダー行（1始まり）
+  const DATA_START   = 4  // データ開始行
+  const TTL_ROW      = 35 // 数式行 — 絶対に触れない
 
   const [y, m] = yearMonth.split('-').map(Number)
   const totalDays = new Date(y, m, 0).getDate()
 
-  // 列ヘッダーを読み取る（行3）
+  // ① ヘッダー行を読み取る
   const headerRes = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: `${sheetTitle}!A${HEADER_ROW}:ZZ${HEADER_ROW}`,
   })
-  const headers: string[] = (headerRes.data.values?.[0] ?? []).map((h: any) => normalizeHeader(String(h)))
+  const rawHeaders: string[] = (headerRes.data.values?.[0] ?? [])
+    .map((h: any) => normalizeHeader(String(h)))
 
-  // 日付 → レコードのマップ
+  // ② 書き込み対象列のインデックスを収集（0始まり）
+  const targetCols: { colIdx: number; fieldKey: string }[] = []
+  for (let i = 0; i < rawHeaders.length; i++) {
+    const fieldKey = WRITE_TARGET_HEADERS.get(rawHeaders[i])
+    if (fieldKey) targetCols.push({ colIdx: i, fieldKey })
+  }
+  if (targetCols.length === 0) return  // 対象列がなければスキップ
+
+  // ③ 現在の値を一括取得（既存データ確認用）
+  const existingRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetTitle}!A${DATA_START}:ZZ${TTL_ROW - 1}`,
+  })
+  const existingRows: any[][] = existingRes.data.values ?? []
+
+  // ④ 日付 → レコードのマップ
   const byDay: Record<number, any> = {}
   for (const r of repRecords) {
     const day = parseInt(r.record_date.slice(-2), 10)
     byDay[day] = r
   }
 
-  // area_list から地域名を取得
   function getArea(r: any, idx: number): string {
     const list: { pref?: string; city?: string }[] = Array.isArray(r.area_list) ? r.area_list : []
     const a = list[idx] || (idx === 0 && r.area_pref ? { pref: r.area_pref, city: r.area_city } : null)
@@ -391,83 +425,62 @@ async function syncRepToPersonalSheet(
     return [a.pref, a.city].filter(Boolean).join(' ')
   }
 
-  // 列ヘッダーと値のマッピング
-  function getValueForHeader(key: string, r: any | null, day: number): any {
-    if (!key) return ''
-    if (!r) return ''
-
-    switch (key) {
-      // ── 書き込む列 ──────────────────────────────────────
-      case '獲得件数':
-        return r.acquisitions ?? 0
-      case '出勤状態':
-        return r.attendance_status || r.work_status || ''
-      case '訪問':
-        return r.visits ?? 0
-      case '対面':
-        return r.net_meetings ?? 0
-      case '試験対面':   // 「主権対面」と同義
-      case '主権対面':
-        return r.owner_meetings ?? 0
-      case '商談':
-      case '商談数':
-        return r.negotiations ?? 0
-      case '獲得':
-      case '獲得数':
-        return r.acquisitions ?? 0
-      // 稼働地図番号 = 稼働エリア（稼働地域①②③）
-      case '稼働地域①':
-      case '稼働地図番号①':
-        return getArea(r, 0)
-      case '獲得件数①':
-        return r.acquisitions ?? 0   // 総獲得を①に
-      case '稼働地域②':
-      case '稼働地図番号②':
-        return getArea(r, 1)
-      case '獲得件数②':
-        return ''
-      case '稼働地域③':
-      case '稼働地図番号③':
-        return getArea(r, 2)
-      case '獲得件数③':
-        return ''
-
-      // ── 書き込まない列（空白を保持）──────────────────────
-      case '計画件数':   // 手動入力のため書き込まない
-      case 'マンション': case 'ホーム': case 'S-SAFE':
-      case '安心サポート': case '住まいと暮らしの相談':
-      case 'BenefitStation': case 'Benefit Station':
-      case '詐欺ウォール': case '備えて安心データ復旧':
-        return ''
-      default:
-        return ''
+  function getFieldValue(fieldKey: string, r: any): any {
+    switch (fieldKey) {
+      case 'acquisitions': return r.acquisitions ?? 0
+      case 'attendance':   return r.attendance_status || r.work_status || ''
+      case 'visits':       return r.visits ?? 0
+      case 'net_meetings': return r.net_meetings ?? 0
+      case 'owner_meetings': return r.owner_meetings ?? 0
+      case 'negotiations': return r.negotiations ?? 0
+      case 'area1': return getArea(r, 0)
+      case 'acq1':  return r.acquisitions ?? 0
+      case 'area2': return getArea(r, 1)
+      case 'acq2':  return ''
+      case 'area3': return getArea(r, 2)
+      case 'acq3':  return ''
+      default: return ''
     }
   }
 
-  // 31日分のデータ行を生成（A列・B列はスキップ、C列以降のみ）
-  // A列=日番号・B列=曜日は既存の値を保持するため、C列から書き込む
-  const dataColStart = DAYS_IN_COL_A ? 2 : 0  // 0始まりインデックスでC列=2
-  const dataHeaders = headers.slice(dataColStart)
-  const startColLetter = columnIndexToLetter(dataColStart) // 'C'
+  // ⑤ 書き込みリストを生成
+  // - データがある日 AND 対象列 AND 既存値が空 のセルのみ書き込む
+  const valueRanges: { range: string; values: any[][] }[] = []
 
-  const rows: any[][] = []
-  for (let day = 1; day <= 31; day++) {
-    const r = day <= totalDays ? byDay[day] || null : null
-    const rowData = dataHeaders.map((key, i) => {
-      return getValueForHeader(key, r, day)
-    })
-    rows.push(rowData)
+  for (let day = 1; day <= totalDays; day++) {
+    const r = byDay[day]
+    if (!r) continue  // その日のレコードなし → スキップ
+
+    const rowOffset = day - 1  // DATA_START からの行オフセット（0始まり）
+    const existingRow: any[] = existingRows[rowOffset] ?? []
+
+    for (const { colIdx, fieldKey } of targetCols) {
+      // 既存値があるセルはスキップ
+      const existingVal = existingRow[colIdx]
+      if (existingVal !== undefined && existingVal !== null && String(existingVal).trim() !== '') {
+        continue
+      }
+
+      const newVal = getFieldValue(fieldKey, r)
+      if (newVal === '' || newVal === null || newVal === undefined) continue
+
+      const cellAddr = `${columnIndexToLetter(colIdx)}${DATA_START + rowOffset}`
+      valueRanges.push({
+        range: `${sheetTitle}!${cellAddr}`,
+        values: [[newVal]],
+      })
+    }
   }
 
-  // データ行のみクリアしてから書き込む（TTL行=35行目は触れない）
-  const clearRange = `${sheetTitle}!${startColLetter}${DATA_START_ROW}:ZZ${DATA_START_ROW + 30}`
-  await sheets.spreadsheets.values.clear({ spreadsheetId, range: clearRange })
+  if (valueRanges.length === 0) return
 
-  await sheets.spreadsheets.values.update({
+  // ⑥ 対象セルのみ batchUpdate（クリアなし）
+  await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId,
-    range: `${sheetTitle}!${startColLetter}${DATA_START_ROW}`,
-    valueInputOption: 'USER_ENTERED',
-    requestBody: { values: rows },
+    requestBody: {
+      valueInputOption: 'USER_ENTERED',
+      data: valueRanges,
+    },
   })
 }
 
