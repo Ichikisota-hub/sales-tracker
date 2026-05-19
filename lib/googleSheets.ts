@@ -381,9 +381,9 @@ async function syncRepToPersonalSheet(
   _planCases: number,   // 計画件数は書き込まない（手動入力のため）
   yearMonth: string,
 ) {
-  const HEADER_ROW   = 3  // 列ヘッダー行（1始まり）
-  const DATA_START   = 4  // データ開始行
-  const TTL_ROW      = 35 // 数式行 — 絶対に触れない
+  const HEADER_ROW   = 4  // 列ヘッダー行（行3=セクション見出し、行4=計画件数/獲得件数等）
+  const DATA_START   = 5  // データ開始行（1=金 が行5）
+  const TTL_ROW      = 37 // TTL行より前まで（行36以降は触れない）
 
   const [y, m] = yearMonth.split('-').map(Number)
   const totalDays = new Date(y, m, 0).getDate()
