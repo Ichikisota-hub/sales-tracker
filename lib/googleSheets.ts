@@ -394,31 +394,53 @@ async function syncRepToPersonalSheet(
   // 列ヘッダーと値のマッピング
   function getValueForHeader(key: string, r: any | null, day: number): any {
     if (!key) return ''
-    // A列=日番号, B列=曜日 は書き込まない（既存の値を保持）
-    if (key === '' && headers.indexOf(key) <= 1) return null // skip
-
     if (!r) return ''
+
     switch (key) {
-      case '計画件数': return planCases || ''
-      case '獲得件数': return r.acquisitions ?? 0
-      case '出勤状態': return r.attendance_status || r.work_status || ''
-      case '訪問': return r.visits ?? 0
-      case '対面': return r.net_meetings ?? 0
-      case '主権対面': return r.owner_meetings ?? 0
-      case '商談': return r.negotiations ?? 0
-      case '獲得': return r.acquisitions ?? 0
-      // 商材別は未対応（空白）
+      // ── 書き込む列 ──────────────────────────────────────
+      case '獲得件数':
+        return r.acquisitions ?? 0
+      case '出勤状態':
+        return r.attendance_status || r.work_status || ''
+      case '訪問':
+        return r.visits ?? 0
+      case '対面':
+        return r.net_meetings ?? 0
+      case '試験対面':   // 「主権対面」と同義
+      case '主権対面':
+        return r.owner_meetings ?? 0
+      case '商談':
+      case '商談数':
+        return r.negotiations ?? 0
+      case '獲得':
+      case '獲得数':
+        return r.acquisitions ?? 0
+      // 稼働地図番号 = 稼働エリア（稼働地域①②③）
+      case '稼働地域①':
+      case '稼働地図番号①':
+        return getArea(r, 0)
+      case '獲得件数①':
+        return r.acquisitions ?? 0   // 総獲得を①に
+      case '稼働地域②':
+      case '稼働地図番号②':
+        return getArea(r, 1)
+      case '獲得件数②':
+        return ''
+      case '稼働地域③':
+      case '稼働地図番号③':
+        return getArea(r, 2)
+      case '獲得件数③':
+        return ''
+
+      // ── 書き込まない列（空白を保持）──────────────────────
+      case '計画件数':   // 手動入力のため書き込まない
       case 'マンション': case 'ホーム': case 'S-SAFE':
       case '安心サポート': case '住まいと暮らしの相談':
-      case 'BenefitStation': case '詐欺ウォール': case '備えて安心データ復旧':
+      case 'BenefitStation': case 'Benefit Station':
+      case '詐欺ウォール': case '備えて安心データ復旧':
         return ''
-      case '稼働地域①': return getArea(r, 0)
-      case '獲得件数①': return r.acquisitions ?? 0
-      case '稼働地域②': return getArea(r, 1)
-      case '獲得件数②': return ''
-      case '稼働地域③': return getArea(r, 2)
-      case '獲得件数③': return ''
-      default: return ''
+      default:
+        return ''
     }
   }
 
