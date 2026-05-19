@@ -57,7 +57,7 @@ export default function AdminPage() {
       const d = await res.json()
       if (res.ok) {
         const s = d.stats
-        setSyncResult({ ok: true, message: `同期完了 ✓ 担当者${s.reps}件・実績${s.records}件・シフト${s.schedules}件・契約${s.contracts}件・日報${s.reports}件` })
+        setSyncResult({ ok: true, message: `同期完了 ✓ 人別日次集計・担当者${s.reps}件・実績${s.records}件・シフト${s.schedules}件・契約${s.contracts}件・日報${s.reports}件` })
       } else {
         setSyncResult({ ok: false, message: d.error || 'エラーが発生しました' })
       }

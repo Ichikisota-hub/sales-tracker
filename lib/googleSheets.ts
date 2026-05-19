@@ -216,7 +216,73 @@ function buildRows(data: ReturnType<typeof fetchAllData> extends Promise<infer T
     ])
   }
 
-  return { repsRows, plansRows, recordsRows, schedulesRows, contractsRows, reportsRows }
+  // ── 人別日次集計（スプレッドシートの主要集計シート） ──
+  // 列: 代理店|担当者|日付|計画件数|獲得件数|出勤状態|訪問|対面|主権対面|商談|獲得|稼働地域①|獲得件数①|稼働地域②|獲得件数②|稼働地域③|獲得件数③
+  const personalDailyHeader = [
+    '代理店', '担当者', '日付',
+    '計画\n件数', '獲得\n件数', '出勤\n状態',
+    '訪問', '対面', '主権対面', '商談', '獲得',
+    '稼働地域①', '獲得件数①',
+    '稼働地域②', '獲得件数②',
+    '稼働地域③', '獲得件数③',
+  ]
+
+  // 月間計画マップ: sales_rep_id → { year_month → plan_cases }
+  const planMap: Record<string, Record<string, number>> = {}
+  for (const p of monthlyPlans || []) {
+    if (!planMap[p.sales_rep_id]) planMap[p.sales_rep_id] = {}
+    planMap[p.sales_rep_id][p.year_month] = p.plan_cases
+  }
+
+  const personalDailyRows: any[][] = [personalDailyHeader]
+
+  for (const r of dailyRecords || []) {
+    const yearMonth = r.record_date?.slice(0, 7)
+    const planCases = planMap[r.sales_rep_id]?.[yearMonth] ?? ''
+
+    // area_list（複数エリア）から最大3件取得
+    const areaList: { pref?: string; city?: string }[] = Array.isArray(r.area_list)
+      ? r.area_list
+      : []
+    // area_listが空なら area_pref/area_city を①に使う
+    const resolvedAreas = areaList.length > 0
+      ? areaList
+      : (r.area_pref ? [{ pref: r.area_pref, city: r.area_city }] : [])
+
+    const areaLabel = (idx: number) => {
+      const a = resolvedAreas[idx]
+      if (!a) return ''
+      return [a.pref, a.city].filter(Boolean).join(' ')
+    }
+
+    // 獲得件数①: 記録されたエリアが1つだけなら全件数を①に、複数エリアは各エリア均等分割（端数は①に集約）
+    const totalAcq = Number(r.acquisitions) || 0
+    const areaCount = Math.max(resolvedAreas.length, 1)
+    const baseAcq = Math.floor(totalAcq / areaCount)
+    const remainder = totalAcq - baseAcq * areaCount
+    const acq1 = resolvedAreas.length > 0 ? baseAcq + remainder : totalAcq
+    const acq2 = resolvedAreas.length >= 2 ? baseAcq : ''
+    const acq3 = resolvedAreas.length >= 3 ? baseAcq : ''
+
+    personalDailyRows.push([
+      orgMap[r.organization_id] || '',
+      repMap[r.sales_rep_id] || r.sales_rep_id,
+      r.record_date,
+      planCases,
+      totalAcq,
+      r.attendance_status || r.work_status || '',
+      r.visits || 0,
+      r.net_meetings || 0,
+      r.owner_meetings || 0,
+      r.negotiations || 0,
+      r.acquisitions || 0,
+      areaLabel(0), acq1,
+      areaLabel(1), acq2,
+      areaLabel(2), acq3,
+    ])
+  }
+
+  return { repsRows, plansRows, recordsRows, schedulesRows, contractsRows, reportsRows, personalDailyRows }
 }
 
 // 全データを同期する
@@ -226,8 +292,10 @@ export async function syncAllToSheets(spreadsheetId: string, orgIds?: string[]) 
   const sheets = google.sheets({ version: 'v4', auth })
 
   const data = await fetchAllData(supabase, orgIds)
-  const { repsRows, plansRows, recordsRows, schedulesRows, contractsRows, reportsRows } = buildRows(data)
+  const { repsRows, plansRows, recordsRows, schedulesRows, contractsRows, reportsRows, personalDailyRows } = buildRows(data)
 
+  // 人別日次集計を最初に書き込む（最重要シート）
+  await writeSheet(sheets, spreadsheetId, '人別日次集計', personalDailyRows)
   await writeSheet(sheets, spreadsheetId, '担当者', repsRows)
   await writeSheet(sheets, spreadsheetId, '月間計画', plansRows)
   await writeSheet(sheets, spreadsheetId, '日別実績', recordsRows)
@@ -252,12 +320,13 @@ export async function backupToSheets(spreadsheetId: string, orgIds?: string[]) {
   const sheets = google.sheets({ version: 'v4', auth })
 
   const data = await fetchAllData(supabase, orgIds)
-  const { repsRows, plansRows, recordsRows, schedulesRows, contractsRows, reportsRows } = buildRows(data)
+  const { repsRows, plansRows, recordsRows, schedulesRows, contractsRows, reportsRows, personalDailyRows } = buildRows(data)
 
   // 日本時間の日付文字列 (YYYY-MM-DD)
   const jstDate = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const suffix = `_${jstDate}`
 
+  await writeBackupSheet(sheets, spreadsheetId, `人別日次集計${suffix}`, personalDailyRows)
   await writeBackupSheet(sheets, spreadsheetId, `担当者${suffix}`, repsRows)
   await writeBackupSheet(sheets, spreadsheetId, `月間計画${suffix}`, plansRows)
   await writeBackupSheet(sheets, spreadsheetId, `日別実績${suffix}`, recordsRows)
