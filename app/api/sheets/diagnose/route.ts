@@ -61,12 +61,26 @@ export async function GET(req: NextRequest) {
       .filter((t: any) => !['祝日リスト','単日'].includes(t.title) && !dbNamesStripped.has(strip(t.title)))
       .map((t: any) => t.title)
 
+    // マッチした担当者の行3ヘッダーも確認
+    const headerSamples: Record<string, string[]> = {}
+    for (const m of matched.slice(0, 3)) {
+      const tabTitle = m.tab.replace(' ※スペース差あり', '')
+      try {
+        const hr = await sheets.spreadsheets.values.get({
+          spreadsheetId, range: `${tabTitle}!A3:ZZ3`,
+        })
+        const h = (hr.data.values?.[0] ?? []).map((v: any) => String(v).replace(/\n/g, '\\n'))
+        headerSamples[tabTitle] = h
+      } catch {}
+    }
+
     return NextResponse.json({
       summary: `${matched.length}/${repNames.length}名が一致（スペース差含む）`,
       matched,
       unmatched_reps: unmatched,
       tabs_not_in_db: tabsNotInDB,
       needs_rename: needsRename,
+      header_samples: headerSamples,
     })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })

@@ -402,7 +402,11 @@ async function syncRepToPersonalSheet(
     const fieldKey = WRITE_TARGET_HEADERS.get(rawHeaders[i])
     if (fieldKey) targetCols.push({ colIdx: i, fieldKey })
   }
-  if (targetCols.length === 0) return  // 対象列がなければスキップ
+  // デバッグ: ヘッダー不一致の場合ログ出力（後で削除可）
+  if (targetCols.length === 0) {
+    console.error(`[sync] ${sheetTitle}: 対象列が見つからない。ヘッダー=${JSON.stringify(rawHeaders)}`)
+    return { cellsWritten: 0, debug: { headers: rawHeaders, targetCols: [] } }
+  }
 
   // ③ 現在の値を一括取得（既存データ確認用）
   const existingRes = await sheets.spreadsheets.values.get({
