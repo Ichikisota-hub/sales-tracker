@@ -20,12 +20,38 @@ function getServiceSupabase() {
   )
 }
 
-// シートが存在しなければ作成し、sheetIdを返す
-async function ensureSheet(sheets: any, spreadsheetId: string, sheetTitle: string): Promise<number> {
+// スプレッドシートの全シート一覧を取得（gid → title マップも返す）
+async function getSheetsMeta(sheets: any, spreadsheetId: string) {
   const meta = await sheets.spreadsheets.get({ spreadsheetId })
-  const existing = meta.data.sheets?.find((s: any) => s.properties?.title === sheetTitle)
-  if (existing) return existing.properties!.sheetId!
+  const list: { gid: number; title: string }[] = (meta.data.sheets ?? []).map((s: any) => ({
+    gid: s.properties?.sheetId,
+    title: s.properties?.title,
+  }))
+  return list
+}
 
+// シートが存在しなければ作成し、sheetIdを返す
+// targetGid が指定されている場合は、そのgidのシートに書き込む（名前変更なし）
+async function ensureSheet(
+  sheets: any,
+  spreadsheetId: string,
+  sheetTitle: string,
+  targetGid?: number,
+  metaList?: { gid: number; title: string }[]
+): Promise<number> {
+  const list = metaList ?? await getSheetsMeta(sheets, spreadsheetId)
+
+  // gid 直指定の場合はそのシートを使う
+  if (targetGid !== undefined) {
+    const byGid = list.find(s => s.gid === targetGid)
+    if (byGid) return byGid.gid
+  }
+
+  // タイトル一致を探す
+  const byTitle = list.find(s => s.title === sheetTitle)
+  if (byTitle) return byTitle.gid
+
+  // 存在しないので新規作成
   const res = await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
@@ -78,18 +104,27 @@ async function formatHeaderAndFilter(sheets: any, spreadsheetId: string, sheetId
 }
 
 // 1シートを全クリア → データ書き込み
-async function writeSheet(sheets: any, spreadsheetId: string, sheetTitle: string, rows: any[][]) {
-  const sheetId = await ensureSheet(sheets, spreadsheetId, sheetTitle)
+// targetGid を渡すと、既存の特定シート(gid)に書き込む
+async function writeSheet(
+  sheets: any,
+  spreadsheetId: string,
+  sheetTitle: string,
+  rows: any[][],
+  targetGid?: number,
+  metaList?: { gid: number; title: string }[]
+) {
+  const sheetId = await ensureSheet(sheets, spreadsheetId, sheetTitle, targetGid, metaList)
 
-  // クリア
-  await sheets.spreadsheets.values.clear({ spreadsheetId, range: `${sheetTitle}!A:ZZ` })
+  // gid が一致するシートの実際のタイトルを使ってクリア
+  const actualTitle = (metaList ?? []).find(s => s.gid === sheetId)?.title ?? sheetTitle
+  await sheets.spreadsheets.values.clear({ spreadsheetId, range: `${actualTitle}!A:ZZ` })
 
   if (rows.length === 0) return
 
-  // データ書き込み
+  // データ書き込み（実際のシートタイトルを使用）
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `${sheetTitle}!A1`,
+    range: `${actualTitle}!A1`,
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: rows },
   })
@@ -285,23 +320,29 @@ function buildRows(data: ReturnType<typeof fetchAllData> extends Promise<infer T
   return { repsRows, plansRows, recordsRows, schedulesRows, contractsRows, reportsRows, personalDailyRows }
 }
 
+// 人別日次集計を書き込む既存シートのgid（スプレッドシートのURLの gid= 部分）
+const PERSONAL_DAILY_SHEET_GID = 1456071973
+
 // 全データを同期する
 export async function syncAllToSheets(spreadsheetId: string, orgIds?: string[]) {
   const supabase = getServiceSupabase()
   const auth = getAuth()
   const sheets = google.sheets({ version: 'v4', auth })
 
+  // シート一覧を1回だけ取得（全関数で使い回す）
+  const metaList = await getSheetsMeta(sheets, spreadsheetId)
+
   const data = await fetchAllData(supabase, orgIds)
   const { repsRows, plansRows, recordsRows, schedulesRows, contractsRows, reportsRows, personalDailyRows } = buildRows(data)
 
-  // 人別日次集計を最初に書き込む（最重要シート）
-  await writeSheet(sheets, spreadsheetId, '人別日次集計', personalDailyRows)
-  await writeSheet(sheets, spreadsheetId, '担当者', repsRows)
-  await writeSheet(sheets, spreadsheetId, '月間計画', plansRows)
-  await writeSheet(sheets, spreadsheetId, '日別実績', recordsRows)
-  await writeSheet(sheets, spreadsheetId, 'シフト', schedulesRows)
-  await writeSheet(sheets, spreadsheetId, '契約宅', contractsRows)
-  await writeSheet(sheets, spreadsheetId, '日報', reportsRows)
+  // 人別日次集計: gid=1456071973 の既存シートに書き込む（なければ新規作成）
+  await writeSheet(sheets, spreadsheetId, '人別日次集計', personalDailyRows, PERSONAL_DAILY_SHEET_GID, metaList)
+  await writeSheet(sheets, spreadsheetId, '担当者', repsRows, undefined, metaList)
+  await writeSheet(sheets, spreadsheetId, '月間計画', plansRows, undefined, metaList)
+  await writeSheet(sheets, spreadsheetId, '日別実績', recordsRows, undefined, metaList)
+  await writeSheet(sheets, spreadsheetId, 'シフト', schedulesRows, undefined, metaList)
+  await writeSheet(sheets, spreadsheetId, '契約宅', contractsRows, undefined, metaList)
+  await writeSheet(sheets, spreadsheetId, '日報', reportsRows, undefined, metaList)
 
   return {
     reps: (data.salesReps || []).length,
