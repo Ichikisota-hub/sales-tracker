@@ -15,36 +15,37 @@ type FunnelBenchmark = {
   benchmark: number  // 基準値（小数: 0.04 = 4%）
 }
 
+// ベンチマーク値: トッププレイヤー16名 8ヶ月実績データ（2025.06〜2026.03）
 const FUNNEL_BENCHMARKS: FunnelBenchmark[] = [
-  { key: 'meeting', label: '訪問→インターホン対面', sub: 'ネット対面÷訪問',    benchmark: 0.040 },
-  { key: 'owner',   label: 'インターホン→対面数',   sub: '対面数÷ネット対面',  benchmark: 0.550 },
-  { key: 'nego',    label: 'フルトーク→商談',       sub: '商談÷フルトーク',    benchmark: 0.620 },
-  { key: 'acq',     label: '商談→受注',             sub: '受注÷商談',          benchmark: 0.310 },
+  { key: 'meeting', label: '訪問→インターホン対面', sub: 'ネット対面÷訪問',   benchmark: 0.038 },
+  { key: 'owner',   label: 'インターホン→対面数',   sub: '対面数÷ネット対面', benchmark: 0.538 },
+  { key: 'nego',    label: 'フルトーク→商談',       sub: '商談÷フルトーク',   benchmark: 0.498 },
+  { key: 'acq',     label: '商談→受注',             sub: '受注÷商談',         benchmark: 0.300 },
 ]
 
-// 読み方の例に基づく自動コメント
+// 自動コメント（基準: TOP16実績 3.8% / 53.8% / 49.8% / 30.0%）
+// good = ≥110% / warning = 80〜110% / critical = <80%
 const AUTO_COMMENTS: Record<string, Record<AchvStatus, string>> = {
   meeting: {
-    good:     '行動量は強み。エリア・時間帯を維持しよう。',
-    warning:  '行動量は標準。エリアや時間帯の見直しで伸び代あり。',
-    critical: 'エリア/時間帯ミスの可能性。稼働場所・時間帯を再検討。',
+    good:     '4.2%以上 — 行動量は強み。エリア・時間帯を維持しよう。',
+    warning:  '3.0〜4.2% — 行動量は標準。エリアや時間帯の見直しで伸び代あり。',
+    critical: '3.0%未満 — エリア/時間帯ミスの可能性。稼働場所・時間帯を再検討。',
   },
   owner: {
-    good:     'インターホントークが強み。継続して磨こう。',
-    warning:  'インターホントークに改善余地あり。',
-    critical: 'インターホントーク改善が急務。対話継続のフレーズを見直し。',
+    good:     '59.2%以上 — インターホントークが強み。継続して磨こう。',
+    warning:  '43.0〜59.2% — インターホントークに改善余地あり。',
+    critical: '43.0%未満 — インターホントーク改善が急務。対話継続のフレーズを見直し。',
   },
   nego: {
-    good:     'フルトークから商談設定が強い。宅内トークが武器。',
-    warning:  'フルトーク→商談の転換に改善余地あり。',
-    critical: 'フルトーク→商談の転換が弱点。宅内での商談設定フレーズを優先改善。',
+    good:     '54.8%以上 — フルトーク→商談の転換が強い。宅内トークが武器。',
+    warning:  '39.8〜54.8% — フルトーク→商談の転換に改善余地あり。',
+    critical: '39.8%未満 — フルトーク→商談が弱点。商談設定フレーズを優先改善。',
   },
   acq: {
-    good:     'クロージングが強い。このペースを維持。',
-    warning:  'クロージングに伸び代あり。最後の一押しを磨こう。',
-    critical: '最後の一押し不足が最優先課題。クロージングトークを強化。',
+    good:     '33.0%以上 — クロージングが強い。このペースを維持。',
+    warning:  '24.0〜33.0% — クロージングに伸び代あり。最後の一押しを磨こう。',
+    critical: '24.0%未満 — 最後の一押し不足が最優先課題。クロージングトークを強化。',
   },
-  // indoor は将来設定のためコメントなし
 }
 
 function calcFunnelRates(r: { visits?: number; net_meetings?: number; owner_meetings?: number; full_talk?: number; negotiations?: number; acquisitions?: number }) {
