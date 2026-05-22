@@ -95,11 +95,16 @@ export async function POST(req: NextRequest) {
     provider:      idx('申し込みプロバイダ'),
     applyDate:     idx('申込日'),
     workDate:      idx('ジャンパ工事予定日'),
-    status:        idx('【回線】契約ステータス'),
-    notes:         idx('備考'),
-    appNumber:     idx('申込書番号'),
-    apoName:       idx('アポインター名'),
-    salesRepId:    idx('営業担当ID'),
+    status:             idx('【回線】契約ステータス'),
+    notes:              idx('備考'),
+    appNumber:          idx('申込書番号'),
+    apoName:            idx('アポインター名'),
+    salesRepId:         idx('営業担当ID'),
+    cancelDate:         idx('【NET】解約年月日'),
+    billingStartDate:   idx('【NET】課金開始日'),
+    cancelReasonMajor:  idx('取消理由大分類'),
+    cancelReasonMinor:  idx('取消理由小分類'),
+    entryStatus:        idx('エントリーステータス'),
   }
 
   // 担当者名 → sales_rep_id マップを事前取得
@@ -139,20 +144,30 @@ export async function POST(req: NextRequest) {
     // 担当者IDを解決
     const repId = repMap.get(repName.replace(/\s/g,'')) || null
 
+    // 取消理由を結合
+    const cancelReason = [g(I.cancelReasonMajor), g(I.cancelReasonMinor)]
+      .filter(Boolean).join(' / ') || null
+
     const contract = {
-      sales_rep_id: repId,
-      customer_name: customerName || '不明',
+      sales_rep_id:       repId,
+      customer_name:      customerName || '不明',
       phone,
       address,
-      area_pref: g(I.pref),
-      area_city: g(I.city),
-      wifi_provider: g(I.provider),
-      acquired_date: parseDate(g(I.applyDate)),
-      construction_date: parseDate(g(I.workDate)),
-      status: I.status >= 0 ? mapStatus(g(I.status)) : 'pending',
-      notes: [appNumber ? `申込書番号:${appNumber}` : '', g(I.notes)].filter(Boolean).join(' / '),
-      organization_id: orgId ?? null,
-      updated_at: new Date().toISOString(),
+      area_pref:          g(I.pref),
+      area_city:          g(I.city),
+      wifi_provider:      g(I.provider),
+      acquired_date:      parseDate(g(I.applyDate)),
+      construction_date:  parseDate(g(I.workDate)),
+      status:             I.status >= 0 ? mapStatus(g(I.status)) : 'pending',
+      notes:              g(I.notes) || null,
+      // 楽楽販売追加フィールド
+      apply_number:       appNumber || null,
+      cancellation_date:  parseDate(g(I.cancelDate)),
+      billing_start_date: parseDate(g(I.billingStartDate)),
+      cancellation_reason: cancelReason,
+      entry_status:       g(I.entryStatus) || null,
+      organization_id:    orgId ?? null,
+      updated_at:         new Date().toISOString(),
     }
 
     previewRows.push({ ...contract, _rep_name: repName, _app_number: appNumber })
@@ -170,12 +185,12 @@ export async function POST(req: NextRequest) {
   for (const row of previewRows) {
     const { _rep_name, _app_number, ...contractData } = row
 
-    // 申込書番号で既存チェック
+    // apply_number で重複チェック（新フィールド）
     if (_app_number) {
       const { data: existing } = await supabase
         .from('contracts')
         .select('id')
-        .like('notes', `%申込書番号:${_app_number}%`)
+        .eq('apply_number', _app_number)
         .maybeSingle()
 
       if (existing) {

@@ -609,6 +609,40 @@ export default function ContractListView({ reps, selectedRepId, onAdd, orgIds }:
                     </div>
                   )}
 
+                  {/* 楽楽販売データ */}
+                  {(c.billing_start_date || c.cancellation_date || c.cancellation_reason || c.entry_status) && (
+                    <div className="mt-2 text-xs bg-blue-50 rounded-xl px-3 py-2 space-y-0.5">
+                      {c.billing_start_date && (
+                        <div className="flex items-center gap-1.5 text-blue-700">
+                          <span>💳</span>
+                          <span className="font-bold">課金開始:</span>
+                          <span>{c.billing_start_date}</span>
+                        </div>
+                      )}
+                      {c.cancellation_date && (
+                        <div className="flex items-center gap-1.5 text-red-600">
+                          <span>❌</span>
+                          <span className="font-bold">解約日:</span>
+                          <span>{c.cancellation_date}</span>
+                        </div>
+                      )}
+                      {c.cancellation_reason && (
+                        <div className="flex items-center gap-1.5 text-red-500">
+                          <span>📋</span>
+                          <span className="font-bold">取消理由:</span>
+                          <span>{c.cancellation_reason}</span>
+                        </div>
+                      )}
+                      {c.entry_status && (
+                        <div className="flex items-center gap-1.5 text-slate-600">
+                          <span>📌</span>
+                          <span className="font-bold">エントリー:</span>
+                          <span>{c.entry_status}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* メモ */}
                   {c.notes && (
                     <div className="mt-2 text-xs text-slate-500 bg-slate-50 rounded-xl px-3 py-2">

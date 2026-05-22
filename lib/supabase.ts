@@ -166,4 +166,10 @@ export type Contract = {
   organization_id: string | null
   created_at: string
   updated_at: string
+  // 楽楽販売連携フィールド
+  cancellation_date:   string | null
+  billing_start_date:  string | null
+  cancellation_reason: string | null
+  entry_status:        string | null
+  apply_number:        string | null
 }
