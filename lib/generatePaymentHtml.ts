@@ -6,6 +6,7 @@ export interface ContractItem {
   status: string
   acquired_date: string
   apo_rep_id: string | null
+  cancellation_date?: string | null
   // オプションフラグ
   opt_s_safe: boolean
   opt_v6_router: boolean
@@ -44,6 +45,8 @@ export interface PaymentDetail {
   apoContracts: ContractItem[]
   // 自分がアポインターとして提供し、他者がクローズした契約
   asApoContracts: ContractItem[]
+  // 当月に解約年月日がある契約
+  cancelContracts: ContractItem[]
   cancelCount: number
   workingDays: number
   rate: IncentiveRate
@@ -250,6 +253,18 @@ export function generatePaymentHtml(detail: PaymentDetail): string {
   </table>
 
   <p style="font-size:10pt;color:#555;margin-bottom:4mm;">お支払予定日：${calc.paymentDate}</p>
+
+  ${detail.cancelContracts.length > 0 ? `
+  <div style="margin-bottom:6mm;">
+    <h3 style="font-size:11pt;color:#c00;border-bottom:1px solid #c00;padding-bottom:3px;margin-bottom:4px;">解約契約一覧（${detail.cancelContracts.length}件）</h3>
+    <table style="width:100%;border-collapse:collapse;font-size:10pt;">
+      <thead><tr style="background:#f5e6e6;"><th style="padding:5px 8px;text-align:left;border-bottom:1px solid #ddd;">顧客名</th><th style="padding:5px 8px;text-align:center;border-bottom:1px solid #ddd;">申込日</th><th style="padding:5px 8px;text-align:center;border-bottom:1px solid #ddd;">解約年月日</th></tr></thead>
+      <tbody>
+        ${detail.cancelContracts.map(c => `
+        <tr><td style="padding:4px 8px;border-bottom:1px solid #eee;">${c.customer_name}</td><td style="padding:4px 8px;text-align:center;border-bottom:1px solid #eee;">${c.acquired_date ?? '—'}</td><td style="padding:4px 8px;text-align:center;border-bottom:1px solid #eee;color:#c00;">${c.cancellation_date ?? '—'}</td></tr>`).join('')}
+      </tbody>
+    </table>
+  </div>` : ''}
 
   ${bankSection}
 

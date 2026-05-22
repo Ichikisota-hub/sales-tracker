@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react'
+import Link from 'next/link'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -130,7 +131,10 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-slate-600 text-sm mt-5">
-          アカウントは管理者からの招待リンクで作成できます
+          アカウントをお持ちでない方は{' '}
+          <Link href="/signup" className="text-indigo-400 hover:text-indigo-300 underline transition-colors">
+            こちらから登録
+          </Link>
         </p>
       </div>
     </div>

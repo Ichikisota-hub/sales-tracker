@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     ? `${year + 1}-01-01`
     : `${year}-${String(month + 1).padStart(2, '0')}-01`
 
-  // 対象月のcontractsを全取得
+  // 対象月に acquired_date がある契約（開通カウント用）
   const { data: contracts, error: cErr } = await supabase
     .from('contracts')
     .select('*')
@@ -21,6 +21,13 @@ export async function POST(req: NextRequest) {
     .lt('acquired_date', endDate)
 
   if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
+
+  // 対象月に cancellation_date がある契約（解約カウント用）
+  const { data: cancelContracts } = await supabase
+    .from('contracts')
+    .select('*')
+    .gte('cancellation_date', startDate)
+    .lt('cancellation_date', endDate)
 
   // 全アクティブな担当者を取得
   const { data: reps } = await supabase
@@ -63,7 +70,10 @@ export async function POST(req: NextRequest) {
 
     const openSelf = repContracts.filter(c => c.status === '開通' && !c.apo_rep_id)
     const openApo  = repContracts.filter(c => c.status === '開通' && c.apo_rep_id)
-    const cancelCount = repContracts.filter(c => c.status === 'キャンセル').length
+    // 解約は cancellation_date が当月にある契約で集計
+    const repCancelContracts = ((cancelContracts ?? []) as (ContractItem & { sales_rep_id: string })[])
+      .filter(c => c.sales_rep_id === rep.id)
+    const cancelCount = repCancelContracts.length
     const openCount = openSelf.length + openApo.length
 
     // キャンセル率計算（自分が引っ張った契約のみ）
@@ -86,6 +96,7 @@ export async function POST(req: NextRequest) {
       selfContracts: openSelf,
       apoContracts: openApo,
       asApoContracts,
+      cancelContracts: repCancelContracts,
       cancelCount,
       workingDays,
       rate,
