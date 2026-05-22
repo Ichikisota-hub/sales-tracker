@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getDaysArray } from '@/lib/dateUtils'
 import { syncSheets } from '@/lib/syncSheets'
+import { useOrganization } from '@/contexts/OrganizationContext'
+import ShiftChangeRequestForm from '@/components/ShiftChangeRequestForm'
 
 const WORK_STATUSES = ['稼働', '休日']
 
@@ -62,6 +64,7 @@ function isAfter25th(yearMonth: string): boolean {
 }
 
 export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props) {
+  const { organizationId } = useOrganization()
   const days = getDaysArray(yearMonth)
   const [schedules, setSchedules] = useState<Record<string, DaySchedule>>({})
   const [saving, setSaving] = useState(false)
@@ -541,6 +544,19 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
           </button>
         )}
       </div>
+
+      {/* ── シフト変更申請 ── */}
+      {organizationId && (
+        <div className="mobile-card">
+          <div className="mobile-card-label text-base text-orange-600">📅 シフト変更申請</div>
+          <p className="text-xs text-slate-400 mb-3">提出済みのシフトを変更したい場合は責任者に申請できます</p>
+          <ShiftChangeRequestForm
+            repId={repId}
+            organizationId={organizationId}
+            currentDate={yearMonth + '-01'}
+          />
+        </div>
+      )}
     </div>
   )
 }

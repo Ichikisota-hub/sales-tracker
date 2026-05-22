@@ -7,9 +7,11 @@ import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import AdminContractSheet from '@/components/admin/AdminContractSheet'
 import CommitDashboard from '@/components/admin/CommitDashboard'
+import ShiftChangeRequests from '@/components/admin/ShiftChangeRequests'
+import OrgChart from '@/components/admin/OrgChart'
 
 export default function AdminPage() {
-  const { organization } = useOrganization()
+  const { organization, membership } = useOrganization()
   const { signOut } = useAuth()
   const supabase = createClient()
   const [memberCount, setMemberCount] = useState(0)
@@ -265,6 +267,20 @@ export default function AdminPage() {
         {/* 本日のコミット */}
         {organization && (
           <CommitDashboard organizationId={organization.id} />
+        )}
+
+        {/* シフト変更申請 */}
+        {organization && membership?.sales_rep_id && (
+          <div className="bg-white rounded-xl shadow-sm p-4 border border-slate-100">
+            <ShiftChangeRequests organizationId={organization.id} reviewerRepId={membership.sales_rep_id} />
+          </div>
+        )}
+
+        {/* 組織図設定 */}
+        {organization && (
+          <div className="bg-white rounded-xl shadow-sm p-4 border border-slate-100">
+            <OrgChart organizationId={organization.id} />
+          </div>
         )}
 
         {/* メンバー管理リンク */}
