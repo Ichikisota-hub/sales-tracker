@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 
 type ImportRow = {
   rep_name: string
@@ -22,12 +22,60 @@ type Props = {
 }
 
 export default function ContractImportModal({ onClose, onImported }: Props) {
+  const [tab, setTab] = useState<'sheet' | 'rakuraku'>('rakuraku')
   const [step, setStep] = useState<'idle' | 'select_rep' | 'preview' | 'done'>('idle')
   const [loading, setLoading] = useState(false)
   const [importing, setImporting] = useState(false)
   const [allRows, setAllRows] = useState<ImportRow[]>([])
   const [sheetName, setSheetName] = useState('')
   const [selectedReps, setSelectedReps] = useState<Set<string>>(new Set())
+
+  // 楽楽販売CSVインポート用state
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [rakurakuStep, setRakurakuStep] = useState<'idle' | 'preview' | 'done'>('idle')
+  const [rakurakuPreview, setRakurakuPreview] = useState<any[]>([])
+  const [rakurakuTotalRows, setRakurakuTotalRows] = useState(0)
+  const [rakurakuLoading, setRakurakuLoading] = useState(false)
+  const [rakurakuResult, setRakurakuResult] = useState<{ imported: number; skipped: string[] } | null>(null)
+  const [rakurakuFile, setRakurakuFile] = useState<File | null>(null)
+  const [rakurakuError, setRakurakuError] = useState('')
+
+  async function handleRakurakuFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setRakurakuFile(file)
+    setRakurakuLoading(true)
+    setRakurakuError('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('preview', 'true')
+      const res = await fetch('/api/contracts/import-rakuraku', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok) { setRakurakuError(json.error || 'エラー'); setRakurakuLoading(false); return }
+      setRakurakuPreview(json.preview || [])
+      setRakurakuTotalRows(json.total_rows || 0)
+      setRakurakuStep('preview')
+    } catch (e: any) { setRakurakuError(e.message) }
+    setRakurakuLoading(false)
+  }
+
+  async function doRakurakuImport() {
+    if (!rakurakuFile) return
+    setRakurakuLoading(true)
+    setRakurakuError('')
+    try {
+      const fd = new FormData()
+      fd.append('file', rakurakuFile)
+      const res = await fetch('/api/contracts/import-rakuraku', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok) { setRakurakuError(json.error || 'エラー'); setRakurakuLoading(false); return }
+      setRakurakuResult({ imported: json.imported, skipped: json.skipped || [] })
+      setRakurakuStep('done')
+      onImported()
+    } catch (e: any) { setRakurakuError(e.message) }
+    setRakurakuLoading(false)
+  }
   const [result, setResult] = useState<{ imported: number; skipped: string[] } | null>(null)
   const [error, setError] = useState('')
 
@@ -116,11 +164,21 @@ export default function ContractImportModal({ onClose, onImported }: Props) {
         <div className="sticky top-0 bg-white z-10 px-5 pt-5 pb-3 border-b border-slate-100">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xl font-black text-slate-800">📥 スプレッドシートから取り込み</div>
-              {sheetName && <div className="text-xs text-slate-400 mt-0.5">シート: {sheetName}</div>}
+              <div className="text-xl font-black text-slate-800">📥 契約台帳インポート</div>
+              {tab === 'sheet' && sheetName && <div className="text-xs text-slate-400 mt-0.5">シート: {sheetName}</div>}
             </div>
             <button onClick={onClose}
               className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 text-lg font-bold">✕</button>
+          </div>
+
+          {/* タブ切り替え */}
+          <div className="flex gap-2 mt-3">
+            {([['rakuraku','楽楽販売CSV'],['sheet','スプレッドシート']] as [string,string][]).map(([t,label])=>(
+              <button key={t} onClick={()=>setTab(t as 'sheet'|'rakuraku')}
+                className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${tab===t?'bg-blue-600 text-white':'bg-slate-100 text-slate-500'}`}>
+                {label}
+              </button>
+            ))}
           </div>
 
           {/* ステップインジケーター */}
@@ -144,6 +202,87 @@ export default function ContractImportModal({ onClose, onImported }: Props) {
         </div>
 
         <div className="px-5 py-4 space-y-4">
+
+          {/* ══ 楽楽販売CSVタブ ══ */}
+          {tab === 'rakuraku' && (
+            <div className="space-y-4">
+              {rakurakuError && (
+                <div className="bg-red-50 border border-red-300 text-red-700 text-sm font-bold rounded-xl px-4 py-3">⚠️ {rakurakuError}</div>
+              )}
+
+              {rakurakuStep === 'idle' && (
+                <div className="text-center py-8 space-y-4">
+                  <div className="text-4xl">📂</div>
+                  <div className="text-sm text-slate-600">
+                    楽楽販売からダウンロードしたCSVファイルを選択してください
+                  </div>
+                  <input ref={fileRef} type="file" accept=".csv" onChange={handleRakurakuFile} className="hidden" />
+                  <button onClick={() => fileRef.current?.click()} disabled={rakurakuLoading}
+                    className="bg-blue-600 text-white font-black text-base px-8 py-3 rounded-2xl disabled:opacity-50 transition-all active:scale-95">
+                    {rakurakuLoading ? '読み込み中...' : 'CSVファイルを選択'}
+                  </button>
+                </div>
+              )}
+
+              {rakurakuStep === 'preview' && (
+                <>
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-700">
+                    合計 <strong>{rakurakuTotalRows}件</strong> のデータを検出。先頭5件のプレビュー：
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-slate-100">
+                          {['担当者','顧客名','電話','住所','プロバイダ','申込日'].map(h=>(
+                            <th key={h} className="px-2 py-1.5 text-left font-bold text-slate-600 whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rakurakuPreview.map((row, i) => (
+                          <tr key={i} className="border-t border-slate-100">
+                            <td className="px-2 py-1.5 whitespace-nowrap">{row._rep_name || '—'}</td>
+                            <td className="px-2 py-1.5 whitespace-nowrap">{row.customer_name}</td>
+                            <td className="px-2 py-1.5 whitespace-nowrap">{row.phone || '—'}</td>
+                            <td className="px-2 py-1.5 max-w-[120px] truncate">{row.address || '—'}</td>
+                            <td className="px-2 py-1.5 whitespace-nowrap">{row.wifi_provider || '—'}</td>
+                            <td className="px-2 py-1.5 whitespace-nowrap">{row.acquired_date || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex gap-2 pb-4">
+                    <button onClick={() => { setRakurakuStep('idle'); setRakurakuFile(null); if(fileRef.current) fileRef.current.value='' }}
+                      className="flex-1 py-3 rounded-2xl bg-slate-100 text-slate-600 font-bold text-sm">
+                      ファイルを変更
+                    </button>
+                    <button onClick={doRakurakuImport} disabled={rakurakuLoading}
+                      className="flex-1 py-3 rounded-2xl bg-blue-600 text-white font-black text-sm disabled:opacity-50 active:scale-95 transition-all">
+                      {rakurakuLoading ? 'インポート中...' : `${rakurakuTotalRows}件を取り込む`}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {rakurakuStep === 'done' && rakurakuResult && (
+                <div className="text-center py-8 space-y-4">
+                  <div className="text-5xl">✅</div>
+                  <div className="text-xl font-black text-slate-800">{rakurakuResult.imported}件 インポート完了</div>
+                  {rakurakuResult.skipped.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-left">
+                      <div className="text-sm font-bold text-amber-700 mb-1">担当者未登録でスキップ {rakurakuResult.skipped.length}件</div>
+                      <ul className="text-xs text-amber-600 space-y-0.5">{rakurakuResult.skipped.map((s,i)=><li key={i}>• {s}</li>)}</ul>
+                    </div>
+                  )}
+                  <button onClick={onClose} className="bg-slate-800 text-white font-black text-base px-8 py-3 rounded-2xl active:scale-95 transition-all">閉じる</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ══ スプレッドシートタブ ══ */}
+          {tab === 'sheet' && <>
           {error && (
             <div className="bg-red-50 border border-red-300 text-red-700 text-sm font-bold rounded-xl px-4 py-3">
               ⚠️ {error}
@@ -311,6 +450,7 @@ export default function ContractImportModal({ onClose, onImported }: Props) {
               </button>
             </div>
           )}
+          </>}
         </div>
       </div>
     </div>
