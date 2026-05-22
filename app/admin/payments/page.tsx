@@ -41,6 +41,7 @@ export default function PaymentsPage() {
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [sending, setSending] = useState<string | null>(null)
   const [sendAll, setSendAll] = useState(false)
+  const [sendingBankReq, setSendingBankReq] = useState(false)
   const supabase = createClient()
 
   const loadNotifications = useCallback(async (y: number, m: number) => {
@@ -100,6 +101,22 @@ export default function PaymentsPage() {
     setSendAll(false)
   }
 
+  async function handleSendBankQuestionnaire() {
+    if (!confirm('銀行情報未登録のメンバー全員にLINEで入力依頼を送信しますか？')) return
+    setSendingBankReq(true)
+    const res = await fetch('/api/line/send-bank-questionnaire', {
+      method: 'POST',
+      headers: { 'x-admin-secret': 'Origin0201' },
+    })
+    const data = await res.json() as { ok?: boolean; sent?: number; total?: number; error?: string }
+    setSendingBankReq(false)
+    if (data.ok) {
+      alert(`銀行情報入力依頼を送信しました（${data.sent}/${data.total}名）`)
+    } else {
+      alert(data.error ?? '送信に失敗しました')
+    }
+  }
+
   const years = Array.from({ length: 3 }, (_, i) => currentYear - 1 + i)
   const months = Array.from({ length: 12 }, (_, i) => i + 1)
 
@@ -134,6 +151,10 @@ export default function PaymentsPage() {
             className="border px-4 py-2 rounded-lg text-sm hover:bg-gray-50">
             ⚙ 支払設定
           </Link>
+          <button onClick={handleSendBankQuestionnaire} disabled={sendingBankReq}
+            className="bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-purple-600 disabled:opacity-50">
+            {sendingBankReq ? '送信中…' : '📲 銀行情報をLINEで収集'}
+          </button>
           {notifications.length > 0 && (
             <button onClick={handleSendAll} disabled={sendAll}
               className="ml-auto bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-green-600 disabled:opacity-50">
