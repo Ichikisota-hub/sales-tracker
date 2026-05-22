@@ -49,19 +49,26 @@ export async function POST(req: NextRequest) {
   const messages = [
     {
       type: 'text',
-      text: `${rep.name} さん\n\n${periodLabel}の業務委託手数料支払通知書を発行しました。\n\n支払金額：¥${notification.net_amount.toLocaleString()}\n\n以下のボタンから確認してください。`,
+      text: `${rep.name} さん\n\n${periodLabel}の業務委託手数料支払通知書を発行しました。\n\n支払金額：¥${notification.net_amount.toLocaleString()}\n\n通知書を確認・PDF保存できます。`,
     },
     {
       type: 'template',
       altText: '支払通知書を確認する',
       template: {
         type: 'buttons',
-        text: '支払通知書',
-        actions: [{
-          type: 'uri',
-          label: '通知書を開く',
-          uri: viewUrl,
-        }],
+        text: '支払通知書の確認・保存',
+        actions: [
+          {
+            type: 'uri',
+            label: '📄 通知書を開く',
+            uri: viewUrl,
+          },
+          {
+            type: 'uri',
+            label: '💾 PDFで保存',
+            uri: `${viewUrl}?print=1`,
+          },
+        ],
       },
     },
   ]

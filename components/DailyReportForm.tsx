@@ -67,10 +67,10 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
     async function load() {
       const [reportData, scheduleData] = await Promise.all([
         supabase
-          .from('daily_records')
+          .from('daily_reports')
           .select('acquisition_case,lost_case,remaining_work,good_points,issues,improvements,learnings,gratitude')
           .eq('sales_rep_id', repId)
-          .eq('record_date', selectedDate)
+          .eq('report_date', selectedDate)
           .single(),
         supabase
           .from('work_schedules')
@@ -162,7 +162,7 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
     try {
       const payload = {
         sales_rep_id: repId,
-        record_date: selectedDate,
+        report_date: selectedDate,
         acquisition_case: acquisitionCase,
         lost_case: lostCase,
         remaining_work: remainingWork,
@@ -174,8 +174,8 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
         updated_at: new Date().toISOString(),
       }
       const { error } = await supabase
-        .from('daily_records')
-        .upsert(payload, { onConflict: 'sales_rep_id,record_date' })
+        .from('daily_reports')
+        .upsert(payload, { onConflict: 'sales_rep_id,report_date' })
       if (error) throw new Error(error.message)
       setSaved(true)
       syncSheets()
