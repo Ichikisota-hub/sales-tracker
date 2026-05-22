@@ -8,7 +8,7 @@ import {
   Home as HomeIcon, BarChart2, CalendarCheck, Calendar, CalendarDays,
   MapPin, Table, FileSpreadsheet, BarChart3,
   FileText, CheckSquare, Settings, Building2, LogOut,
-  ChevronDown, Menu, Shield
+  ChevronDown, Menu, Shield, Flame
 } from 'lucide-react'
 import { supabase, SalesRep, Team } from '@/lib/supabase'
 import { getMonthList, formatYearMonth, localYearMonth } from '@/lib/dateUtils'
@@ -82,6 +82,7 @@ function RepLinkScreen({ reps, signOut }: { reps: SalesRep[]; signOut: () => voi
 
 // タブが開かれた時だけ読み込む（コード分割でバンドルサイズ削減）
 const DailyInputForm    = dynamic(() => import('@/components/DailyInputForm'))
+const DailyCommitForm   = dynamic(() => import('@/components/DailyCommitForm'))
 const StatusView        = dynamic(() => import('@/components/StatusView'))
 const AnalysisView      = dynamic(() => import('@/components/AnalysisView'))
 const OverallView       = dynamic(() => import('@/components/OverallView'))
@@ -108,7 +109,7 @@ function getNextMonth(ym: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-type MainTab = 'form' | 'status' | 'analysis' | 'overall'
+type MainTab = 'form' | 'status' | 'analysis' | 'overall' | 'commit'
 type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings' | 'daily_report' | 'team_sheet' | 'stats_sheet' | 'submission_check' | 'contract_stats' | 'weekly_kpi'
 
 const ORIGIN_ORG_ID = '0524dcfa-685f-4635-971b-39c7899da7cd'
@@ -233,6 +234,7 @@ export default function Home() {
 
   // 設定タブのみ admin/manager 限定。それ以外は全ロール共通
   const mainTabs = [
+    { id: 'commit'   as MainTab, label: 'コミット', Icon: Flame },
     { id: 'form'     as MainTab, label: '入力',    Icon: PenLine },
     { id: 'status'   as MainTab, label: '現状',    Icon: LayoutDashboard },
     { id: 'analysis' as MainTab, label: '分析',    Icon: TrendingUp },
@@ -439,6 +441,9 @@ export default function Home() {
 
       {/* Content */}
       <div className={padContent ? 'p-3 pb-28' : currentTab === 'sheet' ? 'p-2' : 'p-3'}>
+        {activeSubTab === null && activeTab === 'commit' && selectedRep && (
+          <DailyCommitForm repId={selectedRep.id} repName={selectedRep.name} />
+        )}
         {activeSubTab === null && activeTab === 'form' && selectedRep && (
           <DailyInputForm repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />
         )}

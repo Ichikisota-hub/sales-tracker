@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import AdminContractSheet from '@/components/admin/AdminContractSheet'
+import CommitDashboard from '@/components/admin/CommitDashboard'
 
 export default function AdminPage() {
   const { organization } = useOrganization()
@@ -260,6 +261,11 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+
+        {/* 本日のコミット */}
+        {organization && (
+          <CommitDashboard organizationId={organization.id} />
+        )}
 
         {/* メンバー管理リンク */}
         <Link href="/admin/members"
