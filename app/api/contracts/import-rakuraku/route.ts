@@ -141,6 +141,9 @@ export async function POST(req: NextRequest) {
 
     if (!customerName && !phone) continue
 
+    // 担当者が空の行はスキップ
+    if (!repName?.trim()) continue
+
     // 担当者IDを解決
     const repId = repMap.get(repName.replace(/\s/g,'')) || null
 
@@ -201,7 +204,21 @@ export async function POST(req: NextRequest) {
   for (const row of previewRows) {
     const { _rep_name, _app_number, ...contractData } = row
 
-    // apply_number で重複チェック（新フィールド）
+    // 同姓同名チェック（既に同名契約があればスキップ）
+    if (contractData.customer_name && contractData.customer_name !== '不明') {
+      const { data: sameName } = await supabase
+        .from('contracts')
+        .select('id')
+        .eq('customer_name', contractData.customer_name)
+        .maybeSingle()
+
+      if (sameName) {
+        results.skipped.push(`${contractData.customer_name}（同姓同名が既に登録済み）`)
+        continue
+      }
+    }
+
+    // apply_number で重複チェック（申込書番号が一致する場合は上書き更新）
     if (_app_number) {
       const { data: existing } = await supabase
         .from('contracts')
