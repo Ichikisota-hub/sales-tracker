@@ -141,27 +141,17 @@ export async function POST(req: NextRequest) {
 
     if (!customerName && !phone) continue
 
-    // 担当者IDを解決（名前完全一致、または苗字一致でフォールバック）
+    // 担当者IDを解決（完全一致 → 苗字フォールバック → 顧客苗字 → null）
     let repId = repMap.get(repName.replace(/\s/g,'')) || null
-    if (!repId && repName?.trim()) {
-      // 苗字だけで部分一致検索
-      const repSurname = repName.trim().split(/[\s　]/)[0]
-      if (repSurname.length >= 2) {
-        for (const [name, id] of repMap.entries()) {
-          if (name.startsWith(repSurname)) { repId = id; break }
+    if (!repId) {
+      const surname = (repName?.trim() || customerSei || '').split(/[\s　]/)[0].replace(/\s/g,'')
+      if (surname.length >= 1) {
+        const repEntries = Array.from(repMap.entries())
+        for (const [name, id] of repEntries) {
+          if (name.startsWith(surname)) { repId = id; break }
         }
       }
     }
-    if (!repId && !repName?.trim()) {
-      // 担当者名が空でも顧客の苗字が営業担当者の苗字と一致すれば紐付け
-      const custSurname = customerSei.replace(/\s/g,'')
-      if (custSurname.length >= 1) {
-        for (const [name, id] of repMap.entries()) {
-          if (name.startsWith(custSurname)) { repId = id; break }
-        }
-      }
-    }
-    // 担当者名も苗字一致も取れない場合はスキップしない（null rep_idで追加）
 
     // 取消理由を結合
     const cancelReason = [g(I.cancelReasonMajor), g(I.cancelReasonMinor)]
