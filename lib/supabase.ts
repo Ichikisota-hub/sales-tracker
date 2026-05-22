@@ -118,7 +118,8 @@ export type WorkSchedule = {
 export type DailyReport = {
   id: string
   sales_rep_id: string
-  report_date: string
+  report_date: string   // legacy field name
+  record_date?: string  // actual field name in daily_records
   acquisition_case: string
   lost_case: string
   remaining_work: string
