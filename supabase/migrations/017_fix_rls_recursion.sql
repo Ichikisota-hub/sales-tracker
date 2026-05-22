@@ -56,14 +56,21 @@ CREATE POLICY "admin_manage_members" ON organization_members FOR ALL
   WITH CHECK (organization_id = public.get_my_organization_id()
     AND public.get_my_role() IN ('admin', 'manager'));
 
--- ========== invitations ==========
+-- ========== invitations (テーブルが存在する場合のみ適用) ==========
 
-DROP POLICY IF EXISTS "admin_manage_invitations" ON invitations;
-CREATE POLICY "admin_manage_invitations" ON invitations FOR ALL
-  USING (organization_id = public.get_my_organization_id()
-    AND public.get_my_role() IN ('admin', 'manager'))
-  WITH CHECK (organization_id = public.get_my_organization_id()
-    AND public.get_my_role() IN ('admin', 'manager'));
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname='public' AND tablename='invitations') THEN
+    DROP POLICY IF EXISTS "admin_manage_invitations" ON invitations;
+    EXECUTE $pol$
+      CREATE POLICY "admin_manage_invitations" ON invitations FOR ALL
+        USING (organization_id = public.get_my_organization_id()
+          AND public.get_my_role() IN ('admin', 'manager'))
+        WITH CHECK (organization_id = public.get_my_organization_id()
+          AND public.get_my_role() IN ('admin', 'manager'))
+    $pol$;
+  END IF;
+END $$;
 
 -- ========== 既存テーブルの RLS を JWT クレームからヘルパー関数に変更 ==========
 -- JWT hook なしでも動作するよう get_my_organization_id() を使用

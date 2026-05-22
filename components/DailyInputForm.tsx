@@ -65,6 +65,28 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
 
+  // ── コミット達成率 ──
+  const [commitTarget, setCommitTarget] = useState<{ visits: number; contracts: number } | null>(null)
+
+  // 選択日が今日のときコミット目標を取得
+  useEffect(() => {
+    const todayStr = localToday()
+    if (selectedDate !== todayStr) { setCommitTarget(null); return }
+    supabase
+      .from('daily_records')
+      .select('target_visits, target_contracts, committed_at')
+      .eq('sales_rep_id', repId)
+      .eq('record_date', todayStr)
+      .single()
+      .then(({ data }) => {
+        if (data?.committed_at) {
+          setCommitTarget({ visits: data.target_visits ?? 0, contracts: data.target_contracts ?? 0 })
+        } else {
+          setCommitTarget(null)
+        }
+      })
+  }, [repId, selectedDate])
+
   // ── タイマー状態 ──
   type TimerStatus = 'idle' | 'working' | 'paused' | 'ended'
   const timerKey = `timer_${repId}_${selectedDate}`
@@ -555,6 +577,71 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
           })}
         </div>
       )}
+
+      {/* ── コミット達成率 ── */}
+      {commitTarget && isWorking && (() => {
+        const actualVisits    = (record.visits as number) || 0
+        const actualContracts = (record.acquisitions as number) || 0
+        const visitRate    = commitTarget.visits    > 0 ? Math.round(actualVisits    / commitTarget.visits    * 100) : null
+        const contractRate = commitTarget.contracts > 0 ? Math.round(actualContracts / commitTarget.contracts * 100) : null
+        const avgRate = [visitRate, contractRate].filter(r => r !== null) as number[]
+        const overall = avgRate.length > 0 ? Math.round(avgRate.reduce((a, b) => a + b) / avgRate.length) : 0
+
+        const { emoji, label, bg, color } = overall >= 100
+          ? { emoji: '🎉', label: '達成！おめでとう！', bg: '#fef08a', color: '#713f12' }
+          : overall >= 80
+          ? { emoji: '🔥', label: 'あと少し！ラストスパート！', bg: '#fed7aa', color: '#9a3412' }
+          : overall >= 50
+          ? { emoji: '💪', label: 'いい調子！このペースで行こう！', bg: '#bfdbfe', color: '#1e3a8a' }
+          : { emoji: '😤', label: 'まだまだこれから！頑張れ！', bg: '#f1f5f9', color: '#475569' }
+
+        return (
+          <div className="mobile-card" style={{ background: bg, borderRadius: '1rem', padding: '1rem' }}>
+            <div className="text-center mb-3">
+              <span style={{ fontSize: '2.5rem' }}>{emoji}</span>
+              <p style={{ fontWeight: 'bold', color, fontSize: '1rem', marginTop: '0.25rem' }}>{label}</p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              {visitRate !== null && (
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <p style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: '0.25rem' }}>訪問達成率</p>
+                  <p style={{ fontSize: '1.75rem', fontWeight: 'black', color }}>
+                    {visitRate}<span style={{ fontSize: '1rem' }}>%</span>
+                  </p>
+                  <p style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                    {actualVisits} / {commitTarget.visits}件
+                  </p>
+                  {/* プログレスバー */}
+                  <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '9999px', height: '6px', marginTop: '0.25rem', overflow: 'hidden' }}>
+                    <div style={{ width: `${Math.min(visitRate, 100)}%`, height: '100%', background: color, borderRadius: '9999px', transition: 'width 0.5s' }} />
+                  </div>
+                </div>
+              )}
+              {contractRate !== null && (
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <p style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: '0.25rem' }}>受注達成率</p>
+                  <p style={{ fontSize: '1.75rem', fontWeight: 'black', color }}>
+                    {contractRate}<span style={{ fontSize: '1rem' }}>%</span>
+                  </p>
+                  <p style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                    {actualContracts} / {commitTarget.contracts}件
+                  </p>
+                  <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '9999px', height: '6px', marginTop: '0.25rem', overflow: 'hidden' }}>
+                    <div style={{ width: `${Math.min(contractRate, 100)}%`, height: '100%', background: color, borderRadius: '9999px', transition: 'width 0.5s' }} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {overall >= 100 && (
+              <p style={{ textAlign: 'center', fontSize: '1.5rem', marginTop: '0.5rem' }}>
+                🎊🏆🎊
+              </p>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── 日報 ── */}
       <DailyReportForm repId={repId} repName={repName} selectedDate={selectedDate} record={record} />
