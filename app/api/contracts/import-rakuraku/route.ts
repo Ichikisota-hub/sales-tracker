@@ -148,6 +148,22 @@ export async function POST(req: NextRequest) {
     const cancelReason = [g(I.cancelReasonMajor), g(I.cancelReasonMinor)]
       .filter(Boolean).join(' / ') || null
 
+    const cancelDate   = parseDate(g(I.cancelDate))
+    const billingStart = parseDate(g(I.billingStartDate))
+
+    // ステータス自動判定:
+    //   解約年月日あり → キャンセル
+    //   課金開始日（開通日）あり → 開通
+    //   それ以外 → 楽楽販売ステータス or pending
+    let status: string
+    if (cancelDate) {
+      status = 'キャンセル'
+    } else if (billingStart) {
+      status = '開通'
+    } else {
+      status = I.status >= 0 ? mapStatus(g(I.status)) : 'pending'
+    }
+
     const contract = {
       sales_rep_id:       repId,
       customer_name:      customerName || '不明',
@@ -158,12 +174,12 @@ export async function POST(req: NextRequest) {
       wifi_provider:      g(I.provider),
       acquired_date:      parseDate(g(I.applyDate)),
       construction_date:  parseDate(g(I.workDate)),
-      status:             I.status >= 0 ? mapStatus(g(I.status)) : 'pending',
+      status,
       notes:              g(I.notes) || null,
       // 楽楽販売追加フィールド
       apply_number:       appNumber || null,
-      cancellation_date:  parseDate(g(I.cancelDate)),
-      billing_start_date: parseDate(g(I.billingStartDate)),
+      cancellation_date:  cancelDate,
+      billing_start_date: billingStart,
       cancellation_reason: cancelReason,
       entry_status:       g(I.entryStatus) || null,
       organization_id:    orgId ?? null,

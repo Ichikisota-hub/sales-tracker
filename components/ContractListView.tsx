@@ -613,16 +613,16 @@ export default function ContractListView({ reps, selectedRepId, onAdd, orgIds }:
                   {(c.billing_start_date || c.cancellation_date || c.cancellation_reason || c.entry_status) && (
                     <div className="mt-2 text-xs bg-blue-50 rounded-xl px-3 py-2 space-y-0.5">
                       {c.billing_start_date && (
-                        <div className="flex items-center gap-1.5 text-blue-700">
-                          <span>💳</span>
-                          <span className="font-bold">課金開始:</span>
+                        <div className="flex items-center gap-1.5 text-emerald-700">
+                          <span>🟢</span>
+                          <span className="font-bold">開通日:</span>
                           <span>{c.billing_start_date}</span>
                         </div>
                       )}
                       {c.cancellation_date && (
                         <div className="flex items-center gap-1.5 text-red-600">
                           <span>❌</span>
-                          <span className="font-bold">解約日:</span>
+                          <span className="font-bold">キャンセル日:</span>
                           <span>{c.cancellation_date}</span>
                         </div>
                       )}
