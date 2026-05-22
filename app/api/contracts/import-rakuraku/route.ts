@@ -166,19 +166,14 @@ export async function POST(req: NextRequest) {
       .filter(Boolean).join(' / ') || null
 
     const cancelDate   = parseDate(g(I.cancelDate))
-    const rawBilling   = parseDate(g(I.billingStartDate))
-    // 同日・逆転の場合はbilling_start_dateを記録しない（実質未開通）
-    const billingStart = (rawBilling && cancelDate && rawBilling >= cancelDate) ? null : rawBilling
+    const billingStart = parseDate(g(I.billingStartDate))
 
     // ステータス自動判定:
-    //   課金開始日あり かつ 課金開始日 < 解約年月日 → 開通（後で解約されたが billing event は発生）
-    //   課金開始日 == 解約年月日 or 課金開始日 >= 解約年月日 → キャンセル（同日=実質未開通）
-    //   課金開始日のみ（解約なし）→ 開通
+    //   課金開始日あり → 開通（解約年月日の有無に関わらず billing event は発生している）
     //   解約年月日のみ → キャンセル
+    //   それ以外 → 楽楽販売ステータス
     let status: string
-    if (billingStart && cancelDate && billingStart >= cancelDate) {
-      status = 'キャンセル'
-    } else if (billingStart) {
+    if (billingStart) {
       status = '開通'
     } else if (cancelDate) {
       status = 'キャンセル'
