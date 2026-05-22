@@ -6,6 +6,178 @@ import { calcMonthlyStats, pct, round1, MonthlyStats } from '@/lib/calcUtils'
 
 type Props = { repId: string; repName: string; yearMonth: string }
 
+// ─── ファネル転換率ベンチマーク ─────────────────────────────────────────────
+
+type FunnelBenchmark = {
+  key: string
+  label: string
+  sub: string
+  benchmark: number  // 基準値（小数: 0.04 = 4%）
+}
+
+const FUNNEL_BENCHMARKS: FunnelBenchmark[] = [
+  { key: 'meeting',    label: '訪問→ネット対面', sub: 'ネット対面÷訪問',    benchmark: 0.040 },
+  { key: 'owner',      label: 'ネット対面→主権', sub: '主権対面÷ネット対面', benchmark: 0.550 },
+  { key: 'nego',       label: '主権対面→商談',   sub: '商談÷主権対面',       benchmark: 0.620 },
+  { key: 'acq',        label: '商談→獲得',       sub: '獲得÷商談',           benchmark: 0.310 },
+]
+
+function calcFunnelRates(r: { visits?: number; net_meetings?: number; owner_meetings?: number; negotiations?: number; acquisitions?: number }) {
+  const v = r.visits || 0, n = r.net_meetings || 0, o = r.owner_meetings || 0
+  const neg = r.negotiations || 0, acq = r.acquisitions || 0
+  return {
+    meeting: v > 0   ? n   / v   : null,
+    owner:   n > 0   ? o   / n   : null,
+    nego:    o > 0   ? neg / o   : null,
+    acq:     neg > 0 ? acq / neg : null,
+  }
+}
+
+type AchvStatus = 'good' | 'warning' | 'critical'
+function achvStatus(actual: number | null, benchmark: number): AchvStatus | null {
+  if (actual === null) return null
+  const pct = actual / benchmark
+  if (pct >= 1.1) return 'good'
+  if (pct >= 0.8) return 'warning'
+  return 'critical'
+}
+
+const STATUS_COLOR: Record<AchvStatus, { bg: string; text: string; badge: string }> = {
+  good:     { bg: 'bg-emerald-50', text: 'text-emerald-700', badge: 'bg-emerald-500' },
+  warning:  { bg: 'bg-yellow-50',  text: 'text-yellow-700',  badge: 'bg-yellow-400'  },
+  critical: { bg: 'bg-red-50',     text: 'text-red-700',     badge: 'bg-red-500'     },
+}
+
+function AchvBar({ actual, benchmark }: { actual: number | null; benchmark: number }) {
+  if (actual === null) return <span className="text-slate-300 text-xs">データなし</span>
+  const achvPct = Math.round((actual / benchmark) * 100)
+  const st = achvStatus(actual, benchmark)!
+  const c = STATUS_COLOR[st]
+  const barW = Math.min(100, Math.max(0, achvPct))
+  return (
+    <div className="flex items-center gap-2 w-full">
+      <div className="flex-1 bg-slate-100 rounded-full h-2 relative">
+        {/* 基準線(100%) */}
+        <div className="absolute top-0 bottom-0 w-0.5 bg-slate-400 z-10" style={{ left: `${Math.min(100, (1/1)*100)}%` }} />
+        <div
+          className={`${c.badge} h-2 rounded-full transition-all`}
+          style={{ width: `${barW * (100 / Math.max(100, achvPct + 20))}%` }}
+        />
+      </div>
+      <span className={`text-xs font-black w-12 text-right ${c.text}`}>{achvPct}%</span>
+      <span className="text-xs text-slate-400 w-10">{(actual * 100).toFixed(1)}%</span>
+    </div>
+  )
+}
+
+function FunnelBenchmarkSection({
+  stats, dailyRecords,
+}: {
+  stats: MonthlyStats
+  dailyRecords: { record_date: string; visits?: number; net_meetings?: number; owner_meetings?: number; negotiations?: number; acquisitions?: number; attendance_status?: string }[]
+}) {
+  const monthlyRates = calcFunnelRates({
+    visits: stats.totalVisits, net_meetings: stats.totalNetMeetings,
+    owner_meetings: stats.totalOwnerMeetings, negotiations: stats.totalNegotiations,
+    acquisitions: stats.totalAcquisitions,
+  })
+
+  const workingDays = dailyRecords
+    .filter(r => r.attendance_status === '稼働')
+    .sort((a, b) => a.record_date.localeCompare(b.record_date))
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm p-4 mb-3">
+      <div className="text-sm font-bold text-slate-700 mb-3">📊 ファネル転換率 ベンチマーク達成度</div>
+
+      {/* 月間サマリー */}
+      <div className="mb-4">
+        <div className="text-xs font-semibold text-slate-500 mb-2">月間平均（100% = 基準値）</div>
+        <div className="space-y-2">
+          {FUNNEL_BENCHMARKS.map(fb => {
+            const actual = monthlyRates[fb.key as keyof typeof monthlyRates]
+            const st = achvStatus(actual, fb.benchmark)
+            const c = st ? STATUS_COLOR[st] : null
+            return (
+              <div key={fb.key} className={`rounded-lg p-2 ${c?.bg ?? 'bg-slate-50'}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <div>
+                    <span className="text-xs font-bold text-slate-700">{fb.label}</span>
+                    <span className="text-xs text-slate-400 ml-1">{fb.sub}</span>
+                  </div>
+                  <span className="text-xs text-slate-400">基準 {(fb.benchmark * 100).toFixed(1)}%</span>
+                </div>
+                <AchvBar actual={actual} benchmark={fb.benchmark} />
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 日別 */}
+      {workingDays.length > 0 && (
+        <div>
+          <div className="text-xs font-semibold text-slate-500 mb-2">日別達成度（稼働日のみ）</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-100">
+                  <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">日付</th>
+                  {FUNNEL_BENCHMARKS.map(fb => (
+                    <th key={fb.key} className="px-2 py-1.5 text-center font-semibold whitespace-nowrap">
+                      <div>{fb.label.split('→')[0]}</div>
+                      <div className="text-slate-400">→{fb.label.split('→')[1]}</div>
+                    </th>
+                  ))}
+                </tr>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <td className="px-2 py-1 text-slate-400">基準値</td>
+                  {FUNNEL_BENCHMARKS.map(fb => (
+                    <td key={fb.key} className="px-2 py-1 text-center text-slate-500 font-medium">
+                      {(fb.benchmark * 100).toFixed(1)}%
+                    </td>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {workingDays.map(day => {
+                  const rates = calcFunnelRates(day)
+                  const dateLabel = day.record_date.slice(5)  // MM-DD
+                  return (
+                    <tr key={day.record_date} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="px-2 py-1.5 font-medium text-slate-600 whitespace-nowrap">{dateLabel}</td>
+                      {FUNNEL_BENCHMARKS.map(fb => {
+                        const actual = rates[fb.key as keyof typeof rates]
+                        const st = achvStatus(actual, fb.benchmark)
+                        if (actual === null) {
+                          return <td key={fb.key} className="px-2 py-1.5 text-center text-slate-200">—</td>
+                        }
+                        const achvPct = Math.round((actual / fb.benchmark) * 100)
+                        const c = STATUS_COLOR[st!]
+                        return (
+                          <td key={fb.key} className={`px-2 py-1.5 text-center ${c.bg}`}>
+                            <div className={`font-black ${c.text}`}>{achvPct}%</div>
+                            <div className="text-slate-400 text-xs">{(actual * 100).toFixed(1)}%</div>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex gap-3 mt-2 text-xs text-slate-500">
+            <span><span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />good ≥110%</span>
+            <span><span className="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-1" />warning 80-110%</span>
+            <span><span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />critical &lt;80%</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DowTable({ stats }: { stats: MonthlyStats }) {
   return (
     <table className="sheet-table">
@@ -60,6 +232,7 @@ function DowTable({ stats }: { stats: MonthlyStats }) {
 
 export default function AnalysisView({ repId, repName, yearMonth }: Props) {
   const [stats, setStats] = useState<MonthlyStats | null>(null)
+  const [dailyRecords, setDailyRecords] = useState<any[]>([])
 
   useEffect(() => { loadData() }, [repId, yearMonth])
 
@@ -77,6 +250,7 @@ export default function AnalysisView({ repId, repName, yearMonth }: Props) {
         .gte('schedule_date', `${y}-${m}-01`).lte('schedule_date', lastDayStr),
     ])
     const schedWorkingDays = schedData?.map(s => s.schedule_date) || []
+    setDailyRecords(recData || [])
     setStats(calcMonthlyStats(recData || [], planData?.plan_cases || 0, planData?.plan_working_days || 0, yearMonth, schedWorkingDays))
   }
 
@@ -86,6 +260,9 @@ export default function AnalysisView({ repId, repName, yearMonth }: Props) {
 
   return (
     <div>
+
+      {/* ファネル転換率ベンチマーク（共通） */}
+      <FunnelBenchmarkSection stats={stats} dailyRecords={dailyRecords} />
 
       {/* ========== MOBILE (< md) ========== */}
       <div className="md:hidden space-y-3">
