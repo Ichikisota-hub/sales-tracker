@@ -5,19 +5,18 @@ import { useState, useRef } from 'react'
 // ブラウザ側でPDFテキストを抽出（pdfjs-dist使用）
 async function extractTextFromPdf(file: File): Promise<string> {
   const pdfjsLib = await import('pdfjs-dist')
-  // workerを無効化（Next.js環境での問題回避）
   pdfjsLib.GlobalWorkerOptions.workerSrc = ''
 
   const arrayBuffer = await file.arrayBuffer()
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, useWorkerFetch: false, isEvalSupported: false }).promise
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pdf = await (pdfjsLib.getDocument as any)({ data: arrayBuffer, useWorkerFetch: false }).promise
 
   let fullText = ''
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i)
     const content = await page.getTextContent()
-    const pageText = content.items
-      .map((item: any) => item.str || '')
-      .join(' ')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pageText = content.items.map((item: any) => item.str || '').join(' ')
     fullText += pageText + '\n'
   }
   return fullText
@@ -122,10 +121,18 @@ export default function ContractImportModal({ onClose, onImported }: Props) {
       const extractedText = await extractTextFromPdf(file)
       setPdfText(extractedText)
 
+      const textSizeMB = (new Blob([extractedText]).size / 1024 / 1024).toFixed(2)
+      console.log(`PDF extracted text size: ${textSizeMB}MB`)
+
+      // テキストが3MB超なら最初の3MB分だけ送る（後半は繰り返しデータの可能性）
+      const limitedText = extractedText.length > 2_000_000
+        ? extractedText.slice(0, 2_000_000)
+        : extractedText
+
       const res = await fetch('/api/contracts/import-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: extractedText, preview: true }),
+        body: JSON.stringify({ text: limitedText, preview: true }),
       })
       const text = await res.text()
       let json: any
