@@ -51,6 +51,8 @@ export interface PaymentDetail {
   workingDays: number
   rate: IncentiveRate
   cancelRateExceeded: boolean
+  // チームリーダーボーナス（チームの開通件数に応じて加算）
+  teamBonus?: number
 }
 
 const OPT_DEDUCTIONS: { key: keyof ContractItem; label: string; amount: number }[] = [
@@ -141,12 +143,19 @@ export function calculatePayment(detail: PaymentDetail): {
     })
   }
 
+  // チームリーダーボーナス加算
+  if (detail.teamBonus && detail.teamBonus > 0) {
+    lineItems.push({ label: 'チームリーダーボーナス', qty: 1, unitPrice: detail.teamBonus, amount: detail.teamBonus })
+    grossAmount += detail.teamBonus
+  }
+
   if (optionDeduction > 0) {
     lineItems.push({ label: 'オプション未適用控除', qty: 1, unitPrice: -optionDeduction, amount: -optionDeduction })
   }
 
   lineItems.push({ label: '振込手数料', qty: 1, unitPrice: -transferFee, amount: -transferFee })
 
+  const teamBonus = detail.teamBonus ?? 0
   const netAmount = grossAmount - optionDeduction - cancelPenalty - transferFee -
     (detail.cancelRateExceeded ? (detail.selfContracts.length + detail.apoContracts.length + detail.asApoContracts.length) * 3300 : 0)
 

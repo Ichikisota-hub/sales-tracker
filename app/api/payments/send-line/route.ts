@@ -34,23 +34,24 @@ export async function POST(req: NextRequest) {
   }
 
   const periodLabel = `${notification.period_year}年${notification.period_month}月分`
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://sales-tracker-origin-pied.vercel.app'
 
-  // HTMLをStorageに保存してURLを生成
-  const fileName = `payment_${notification.sales_rep_id}_${notification.period_year}${String(notification.period_month).padStart(2, '0')}.html`
-  await supabase.storage
-    .from('payment-notifications')
-    .upload(fileName, new Blob([notification.html_content], { type: 'text/html' }), { upsert: true })
+  // view_token が未設定の場合は生成して保存
+  let viewToken = notification.view_token as string | null
+  if (!viewToken) {
+    const token = crypto.randomUUID()
+    await supabase.from('payment_notifications').update({ view_token: token }).eq('id', notificationId)
+    viewToken = token
+  }
 
-  const { data: signedUrl } = await supabase.storage
-    .from('payment-notifications')
-    .createSignedUrl(fileName, 60 * 60 * 24 * 7) // 7日間有効
+  const viewUrl = `${appUrl}/api/payments/view/${viewToken}`
 
   const messages = [
     {
       type: 'text',
-      text: `${rep.name} さん\n\n${periodLabel}の業務委託手数料支払通知書を発行しました。\n\n支払金額：¥${notification.net_amount.toLocaleString()}\n\n以下のリンクから確認してください。`,
+      text: `${rep.name} さん\n\n${periodLabel}の業務委託手数料支払通知書を発行しました。\n\n支払金額：¥${notification.net_amount.toLocaleString()}\n\n以下のボタンから確認してください。`,
     },
-    ...(signedUrl?.signedUrl ? [{
+    {
       type: 'template',
       altText: '支払通知書を確認する',
       template: {
@@ -59,10 +60,10 @@ export async function POST(req: NextRequest) {
         actions: [{
           type: 'uri',
           label: '通知書を開く',
-          uri: signedUrl.signedUrl,
+          uri: viewUrl,
         }],
       },
-    }] : []),
+    },
   ]
 
   const ok = await pushLineMessage(rep.line_user_id, messages)

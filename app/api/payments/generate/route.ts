@@ -2,9 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
 import { generatePaymentHtml, calculatePayment, PaymentDetail, ContractItem, SalesRep, IncentiveRate } from '@/lib/generatePaymentHtml'
 
+function getTeamBonus(teamOpenings: number): number {
+  if (teamOpenings <= 0)   return 0
+  if (teamOpenings <= 30)  return teamOpenings * 2000
+  if (teamOpenings <= 50)  return teamOpenings * 4000
+  if (teamOpenings <= 69)  return teamOpenings * 5000
+  return teamOpenings * 6000
+}
+
 export async function POST(req: NextRequest) {
   const supabase = await createServiceClient()
-  const { year, month } = await req.json() as { year: number; month: number }
+  const { year, month, organizationId } = await req.json() as { year: number; month: number; organizationId?: string }
 
   if (!year || !month) return NextResponse.json({ error: 'year, month required' }, { status: 400 })
 
@@ -29,28 +37,35 @@ export async function POST(req: NextRequest) {
     .gte('cancellation_date', startDate)
     .lt('cancellation_date', endDate)
 
-  // 全アクティブな担当者を取得
-  const { data: reps } = await supabase
-    .from('sales_reps')
-    .select('*')
-    .eq('is_active', true)
+  // アクティブな担当者（organization_id で絞り込み）
+  const repsQuery = supabase.from('sales_reps').select('*').eq('is_active', true)
+  const { data: reps } = organizationId
+    ? await repsQuery.eq('organization_id', organizationId)
+    : await repsQuery
 
   // インセンティブレートマスタ
-  const { data: rates } = await supabase
-    .from('incentive_rates')
-    .select('*')
+  const { data: rates } = await supabase.from('incentive_rates').select('*')
 
-  // daily_records で稼働日数を集計
+  // チーム情報（リーダーボーナス用）
+  const { data: teams } = await supabase.from('teams').select('*')
+
+  // 稼働日数を daily_records から集計（record_date + work_status='稼働' + 重複排除）
   const { data: dailyRecords } = await supabase
     .from('daily_records')
-    .select('sales_rep_id, date')
-    .gte('date', startDate)
-    .lt('date', endDate)
+    .select('sales_rep_id, record_date')
+    .eq('work_status', '稼働')
+    .gte('record_date', startDate)
+    .lt('record_date', endDate)
 
-  const workingDaysMap: Record<string, number> = {}
-  ;(dailyRecords ?? []).forEach((r: { sales_rep_id: string }) => {
-    workingDaysMap[r.sales_rep_id] = (workingDaysMap[r.sales_rep_id] ?? 0) + 1
-  })
+  // 重複排除: rep ごとの distinct な稼働日数を計算
+  const workingDaysMap: Record<string, Set<string>> = {}
+  for (const r of (dailyRecords ?? []) as { sales_rep_id: string; record_date: string }[]) {
+    if (!workingDaysMap[r.sales_rep_id]) workingDaysMap[r.sales_rep_id] = new Set()
+    workingDaysMap[r.sales_rep_id].add(r.record_date)
+  }
+  const workingDaysCount: Record<string, number> = Object.fromEntries(
+    Object.entries(workingDaysMap).map(([id, s]) => [id, s.size])
+  )
 
   const rateMap: Record<string, IncentiveRate> = {}
   ;(rates ?? []).forEach((r: IncentiveRate) => { rateMap[r.rank] = r })
@@ -64,30 +79,49 @@ export async function POST(req: NextRequest) {
 
     // アポインターとして提供し他者がクロージングした件数
     const asApoContracts = (contracts ?? []).filter(
-      (c: ContractItem & { sales_rep_id: string }) =>
+      (c: ContractItem & { apo_rep_id: string | null; sales_rep_id: string }) =>
         c.apo_rep_id === rep.id && c.sales_rep_id !== rep.id && c.status === '開通'
     ) as ContractItem[]
 
     const openSelf = repContracts.filter(c => c.status === '開通' && !c.apo_rep_id)
     const openApo  = repContracts.filter(c => c.status === '開通' && c.apo_rep_id)
-    // 解約は cancellation_date が当月にある契約で集計
     const repCancelContracts = ((cancelContracts ?? []) as (ContractItem & { sales_rep_id: string })[])
       .filter(c => c.sales_rep_id === rep.id)
     const cancelCount = repCancelContracts.length
     const openCount = openSelf.length + openApo.length
 
-    // キャンセル率計算（自分が引っ張った契約のみ）
     const cancelRate = (openCount + cancelCount) > 0
       ? cancelCount / (openCount + cancelCount)
       : 0
     const cancelRateExceeded = cancelRate > 0.12
 
     const rank = rep.incentive_rank ?? 'アポインター'
-    const rate = rateMap[rank] ?? { rank, rate_per_contract: 20000, apo_rate: 20000 }
+    let rate = rateMap[rank] ?? { rank, rate_per_contract: 20000, apo_rate: 20000 }
+    const workingDays = workingDaysCount[rep.id] ?? 0
 
-    const workingDays = workingDaysMap[rep.id] ?? 0
+    // クローザー1 → クローザー2 自動昇格チェック（今月条件: 8稼働日以上 + 2件以上開通）
+    if (rank === 'クローザー1' && workingDays >= 8 && openCount >= 2) {
+      const closer2 = rateMap['クローザー2']
+      if (closer2) rate = closer2
+    }
 
-    if (openCount === 0 && asApoContracts.length === 0) continue // 開通なしはスキップ
+    if (openCount === 0 && asApoContracts.length === 0) continue
+
+    // チームリーダーボーナス計算
+    let teamBonus = 0
+    if (rank === 'チームリーダー') {
+      const team = (teams ?? []).find((t: { leader_rep_id: string | null }) => t.leader_rep_id === rep.id)
+      if (team) {
+        const teamMemberIds = (reps ?? [])
+          .filter((r: SalesRep & { team_id?: string }) => r.team_id === (team as { id: string }).id)
+          .map((r: SalesRep) => r.id)
+        const teamOpenings = (contracts ?? []).filter(
+          (c: ContractItem & { sales_rep_id: string }) =>
+            teamMemberIds.includes(c.sales_rep_id) && c.status === '開通'
+        ).length
+        teamBonus = getTeamBonus(teamOpenings)
+      }
+    }
 
     const detail: PaymentDetail = {
       rep,
@@ -101,14 +135,12 @@ export async function POST(req: NextRequest) {
       workingDays,
       rate,
       cancelRateExceeded,
+      teamBonus,
     }
 
     const htmlContent = generatePaymentHtml(detail)
+    const { grossAmount, optionDeduction, cancelPenalty, transferFee, netAmount } = calculatePayment(detail)
 
-    const { grossAmount, optionDeduction, cancelPenalty, transferFee, netAmount } =
-      calculatePayment(detail)
-
-    // payment_notifications に upsert
     const { data: saved } = await supabase
       .from('payment_notifications')
       .upsert({
