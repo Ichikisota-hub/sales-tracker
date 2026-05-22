@@ -1,3 +1,6 @@
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerSupabase } from '@/lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
@@ -214,8 +217,8 @@ export async function POST(req: NextRequest) {
   // ── 一括重複チェック（DBに1回だけ問い合わせ）──────────────────────────────
   // 既存の顧客名・申込書番号を一括取得してメモリでチェック
   const [existingNamesRes, existingApplyRes] = await Promise.all([
-    supabase.from('contracts').select('customer_name').not('customer_name','is',null),
-    supabase.from('contracts').select('id,apply_number').not('apply_number','is',null),
+    supabase.from('contracts').select('customer_name').not('customer_name','is',null).limit(5000),
+    supabase.from('contracts').select('id,apply_number').not('apply_number','is',null).limit(5000),
   ])
   const existingNames = new Set((existingNamesRes.data ?? []).map((r: any) => r.customer_name))
   const existingApplyMap = new Map((existingApplyRes.data ?? []).map((r: any) => [r.apply_number, r.id]))
