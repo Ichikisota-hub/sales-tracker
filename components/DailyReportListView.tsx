@@ -48,15 +48,15 @@ export default function DailyReportListView({ teams, orgIds }: Props) {
       const res = await fetch(`/api/combined/data?orgIds=${orgIds.join(',')}&yearMonth=${yearMonth}`)
       const d = await res.json()
       repList = d.reps || []
-      reportData = (d.reports || []).sort((a: any, b: any) => b.report_date.localeCompare(a.report_date))
+      reportData = (d.reports || []).sort((a: any, b: any) => b.record_date.localeCompare(a.record_date))
       setReps(repList)
     } else {
       const { data } = await supabase
-        .from('daily_reports')
+        .from('daily_records')
         .select('*')
-        .gte('report_date', from)
-        .lte('report_date', to)
-        .order('report_date', { ascending: false })
+        .gte('record_date', from)
+        .lte('record_date', to)
+        .order('record_date', { ascending: false })
       reportData = data || []
     }
 
@@ -153,7 +153,7 @@ export default function DailyReportListView({ teams, orgIds }: Props) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-black text-slate-800 text-base">{rep?.name ?? '不明'}</div>
-                    <div className="text-xs text-slate-400 font-medium">{formatDate(report.report_date)}</div>
+                    <div className="text-xs text-slate-400 font-medium">{formatDate(report.record_date)}</div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {isEmpty && (
