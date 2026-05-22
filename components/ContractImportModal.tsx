@@ -5,9 +5,8 @@ import { useState, useRef } from 'react'
 // ブラウザ側でPDFテキストを抽出（pdfjs-dist使用）
 async function extractTextFromPdf(file: File): Promise<string> {
   const pdfjsLib = await import('pdfjs-dist')
-  // CDN経由でworkerを指定（ローカルworkerなしで動作）
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`
+  // ローカルのworkerファイルを使用（/public/pdf.worker.min.mjs）
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
   const arrayBuffer = await file.arrayBuffer()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
