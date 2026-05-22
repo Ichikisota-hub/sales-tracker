@@ -216,47 +216,54 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ preview: previewRows, total_rows: lines.length - 1 })
   }
 
-  // 本番インポート
+  // ── 一括重複チェック（DBに1回だけ問い合わせ）──────────────────────────────
+  // 既存の顧客名・申込書番号を一括取得してメモリでチェック
+  const [existingNamesRes, existingApplyRes] = await Promise.all([
+    supabase.from('contracts').select('customer_name').not('customer_name','is',null),
+    supabase.from('contracts').select('id,apply_number').not('apply_number','is',null),
+  ])
+  const existingNames = new Set((existingNamesRes.data ?? []).map((r: any) => r.customer_name))
+  const existingApplyMap = new Map((existingApplyRes.data ?? []).map((r: any) => [r.apply_number, r.id]))
+
+  // 新規追加リストと更新リストに分類（行ごとのDB問い合わせなし）
+  const toInsert: any[] = []
+  const toUpdate: { id: string; data: any }[] = []
+
   for (const row of previewRows) {
     const { _rep_name, _app_number, ...contractData } = row
 
-    // 同姓同名チェック（既に同名契約があればスキップ）
-    if (contractData.customer_name && contractData.customer_name !== '不明') {
-      const { data: sameName } = await supabase
-        .from('contracts')
-        .select('id')
-        .eq('customer_name', contractData.customer_name)
-        .maybeSingle()
-
-      if (sameName) {
-        results.skipped.push(`${contractData.customer_name}（同姓同名が既に登録済み）`)
-        continue
-      }
+    // 申込書番号一致 → 更新
+    if (_app_number && existingApplyMap.has(_app_number)) {
+      toUpdate.push({ id: existingApplyMap.get(_app_number)!, data: contractData })
+      continue
     }
 
-    // apply_number で重複チェック（申込書番号が一致する場合は上書き更新）
-    if (_app_number) {
-      const { data: existing } = await supabase
-        .from('contracts')
-        .select('id')
-        .eq('apply_number', _app_number)
-        .maybeSingle()
-
-      if (existing) {
-        await supabase.from('contracts').update(contractData).eq('id', existing.id)
-        results.imported++
-        continue
-      }
+    // 同姓同名チェック → スキップ
+    if (contractData.customer_name && contractData.customer_name !== '不明'
+        && existingNames.has(contractData.customer_name)) {
+      results.skipped.push(`${contractData.customer_name}（同姓同名が既に登録済み）`)
+      continue
     }
 
-    const { error } = await supabase.from('contracts').insert(contractData)
+    toInsert.push(contractData)
+    existingNames.add(contractData.customer_name) // インポート内での重複も防ぐ
+  }
+
+  // 更新（50件ずつバッチ）
+  for (const u of toUpdate) {
+    await supabase.from('contracts').update(u.data).eq('id', u.id)
+    results.imported++
+  }
+
+  // 新規一括挿入（50件ずつチャンク）
+  const CHUNK = 50
+  for (let i = 0; i < toInsert.length; i += CHUNK) {
+    const chunk = toInsert.slice(i, i + CHUNK)
+    const { error } = await supabase.from('contracts').insert(chunk)
     if (error) {
-      results.errors.push(`${contractData.customer_name}: ${error.message}`)
+      results.errors.push(`バッチ挿入エラー: ${error.message}`)
     } else {
-      results.imported++
-      if (!contractData.sales_rep_id) {
-        results.skipped.push(`${contractData.customer_name}（担当者「${_rep_name}」未登録）`)
-      }
+      results.imported += chunk.length
     }
   }
 
