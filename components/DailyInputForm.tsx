@@ -593,7 +593,7 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
           ? { emoji: '🔥', label: 'あと少し！ラストスパート！', bg: '#fed7aa', color: '#9a3412' }
           : overall >= 50
           ? { emoji: '💪', label: 'いい調子！このペースで行こう！', bg: '#bfdbfe', color: '#1e3a8a' }
-          : { emoji: '😤', label: 'まだまだこれから！頑張れ！', bg: '#f1f5f9', color: '#475569' }
+          : { emoji: '💀', label: 'ええかげんにせーよ', bg: '#f1f5f9', color: '#475569' }
 
         return (
           <div className="mobile-card" style={{ background: bg, borderRadius: '1rem', padding: '1rem' }}>
