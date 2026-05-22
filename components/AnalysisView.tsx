@@ -22,6 +22,30 @@ const FUNNEL_BENCHMARKS: FunnelBenchmark[] = [
   { key: 'acq',        label: '商談→獲得',       sub: '獲得÷商談',           benchmark: 0.310 },
 ]
 
+// 読み方の例に基づく自動コメント
+const AUTO_COMMENTS: Record<string, Record<AchvStatus, string>> = {
+  meeting: {
+    good:     '行動量は強み。エリア・時間帯を維持しよう。',
+    warning:  '行動量は標準。エリアや時間帯の見直しで伸び代あり。',
+    critical: 'エリア/時間帯ミスの可能性。稼働場所・時間帯を再検討。',
+  },
+  owner: {
+    good:     'インターホントークが強み。継続して磨こう。',
+    warning:  'インターホントークに改善余地あり。',
+    critical: 'インターホントーク改善が急務。対話継続のフレーズを見直し。',
+  },
+  nego: {
+    good:     '宅内トークが武器。商談設定率は高い。',
+    warning:  '商談設定トークに改善余地あり。',
+    critical: '商談設定トークが弱点。宅内での誘導フレーズを優先的に改善。',
+  },
+  acq: {
+    good:     'クロージングが強い。このペースを維持。',
+    warning:  'クロージングに伸び代あり。最後の一押しを磨こう。',
+    critical: '最後の一押し不足が最優先課題。クロージングトークを強化。',
+  },
+}
+
 function calcFunnelRates(r: { visits?: number; net_meetings?: number; owner_meetings?: number; negotiations?: number; acquisitions?: number }) {
   const v = r.visits || 0, n = r.net_meetings || 0, o = r.owner_meetings || 0
   const neg = r.negotiations || 0, acq = r.acquisitions || 0
@@ -78,26 +102,6 @@ function FunnelBenchmarkSection({
   repId: string
   yearMonth: string
 }) {
-  const storageKey = `funnel_comments:${repId}:${yearMonth}`
-  const [comments, setComments] = useState<Record<string, string>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(storageKey) || '{}')
-    } catch { return {} }
-  })
-  const [editingKey, setEditingKey] = useState<string | null>(null)
-  const [draft, setDraft] = useState('')
-
-  function openEdit(key: string) {
-    setDraft(comments[key] || '')
-    setEditingKey(key)
-  }
-  function saveComment(key: string) {
-    const next = { ...comments, [key]: draft }
-    setComments(next)
-    localStorage.setItem(storageKey, JSON.stringify(next))
-    setEditingKey(null)
-  }
-
   const monthlyRates = calcFunnelRates({
     visits: stats.totalVisits, net_meetings: stats.totalNetMeetings,
     owner_meetings: stats.totalOwnerMeetings, negotiations: stats.totalNegotiations,
@@ -120,8 +124,7 @@ function FunnelBenchmarkSection({
             const actual = monthlyRates[fb.key as keyof typeof monthlyRates]
             const st = achvStatus(actual, fb.benchmark)
             const c = st ? STATUS_COLOR[st] : null
-            const hasComment = !!comments[fb.key]
-            const isEditing = editingKey === fb.key
+            const autoComment = st ? AUTO_COMMENTS[fb.key]?.[st] : null
             return (
               <div key={fb.key} className={`rounded-lg p-2 ${c?.bg ?? 'bg-slate-50'}`}>
                 <div className="flex items-center justify-between mb-1">
@@ -132,27 +135,9 @@ function FunnelBenchmarkSection({
                   <span className="text-xs text-slate-400">基準 {(fb.benchmark * 100).toFixed(1)}%</span>
                 </div>
                 <AchvBar actual={actual} benchmark={fb.benchmark} />
-                {/* コメント欄 */}
-                {isEditing ? (
-                  <div className="mt-2 flex gap-1">
-                    <input
-                      autoFocus
-                      className="flex-1 text-xs border border-slate-300 rounded px-2 py-1 bg-white"
-                      value={draft}
-                      onChange={e => setDraft(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') saveComment(fb.key); if (e.key === 'Escape') setEditingKey(null) }}
-                      placeholder="改善メモを入力…"
-                    />
-                    <button onClick={() => saveComment(fb.key)} className="text-xs bg-slate-700 text-white px-2 rounded">保存</button>
-                    <button onClick={() => setEditingKey(null)} className="text-xs text-slate-400 px-1">✕</button>
-                  </div>
-                ) : (
-                  <div className="mt-1 flex items-center gap-1">
-                    {hasComment
-                      ? <span className="flex-1 text-xs text-slate-600 bg-white bg-opacity-60 rounded px-2 py-0.5 cursor-pointer" onClick={() => openEdit(fb.key)}>💬 {comments[fb.key]}</span>
-                      : <span className="text-xs text-slate-300 cursor-pointer hover:text-slate-500" onClick={() => openEdit(fb.key)}>＋ コメントを追加</span>
-                    }
-                    {hasComment && <button onClick={() => openEdit(fb.key)} className="text-xs text-slate-400 hover:text-slate-600">✏️</button>}
+                {autoComment && (
+                  <div className={`mt-1.5 text-xs px-2 py-1 rounded ${c?.text ?? 'text-slate-600'} bg-white bg-opacity-60`}>
+                    💬 {autoComment}
                   </div>
                 )}
               </div>
