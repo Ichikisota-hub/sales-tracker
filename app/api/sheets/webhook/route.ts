@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { syncAllToSheets } from '@/lib/googleSheets'
+import { syncCalendarSheet } from '@/lib/syncCalendarSheet'
 
 // Supabase Database Webhook から呼ばれる
 // POST /api/sheets/webhook
@@ -39,15 +40,16 @@ export async function POST(req: NextRequest) {
       for (const org of orgs || []) {
         const sid = (org.settings as any)?.google_sheet_id
         if (sid) {
-          // バックグラウンドで同期
           syncAllToSheets(sid, [org.id]).catch(err => console.error('[Webhook] sync error:', err.message))
         }
       }
+      syncCalendarSheet().catch(err => console.error('[Webhook] calendar sync error:', err.message))
       return NextResponse.json({ ok: true, message: 'all orgs sync triggered' })
     }
 
-    // バックグラウンドで同期
+    // バックグラウンドで同期（既存 + カレンダー）
     syncAllToSheets(spreadsheetId, [orgId]).catch(err => console.error('[Webhook] sync error:', err.message))
+    syncCalendarSheet().catch(err => console.error('[Webhook] calendar sync error:', err.message))
 
     return NextResponse.json({ ok: true, message: 'sync triggered', orgId })
   } catch (err: any) {
