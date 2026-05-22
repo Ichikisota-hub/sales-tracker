@@ -1,12 +1,9 @@
 export const runtime = 'nodejs'
 export const maxDuration = 60
-export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerSupabase } from '@/lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse')
 
 function getServiceClient() {
   return createClient(
@@ -170,17 +167,14 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabaseUser.auth.getUser()
   if (!user) return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
 
-  const formData = await req.formData()
-  const file = formData.get('file') as File | null
-  if (!file) return NextResponse.json({ error: 'ファイルが見つかりません' }, { status: 400 })
+  // ブラウザ側で抽出したテキストをJSONで受信（ファイル本体は送らない）
+  const body = await req.json().catch(() => null)
+  if (!body?.text) return NextResponse.json({ error: 'テキストデータが見つかりません' }, { status: 400 })
 
-  const isPreview = formData.get('preview') === 'true'
+  const rawText: string = body.text
+  const isPreview: boolean = body.preview === true
 
   try {
-    const buf = Buffer.from(await file.arrayBuffer())
-    const pdfData = await pdfParse(buf)
-    const rawText = pdfData.text
-
     const { rows, raw_lines } = parseRakurakuText(rawText)
 
     if (isPreview) {

@@ -2,6 +2,27 @@
 
 import { useState, useRef } from 'react'
 
+// ブラウザ側でPDFテキストを抽出（pdfjs-dist使用）
+async function extractTextFromPdf(file: File): Promise<string> {
+  const pdfjsLib = await import('pdfjs-dist')
+  // workerを無効化（Next.js環境での問題回避）
+  pdfjsLib.GlobalWorkerOptions.workerSrc = ''
+
+  const arrayBuffer = await file.arrayBuffer()
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, useWorkerFetch: false, isEvalSupported: false }).promise
+
+  let fullText = ''
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i)
+    const content = await page.getTextContent()
+    const pageText = content.items
+      .map((item: any) => item.str || '')
+      .join(' ')
+    fullText += pageText + '\n'
+  }
+  return fullText
+}
+
 type ImportRow = {
   rep_name: string
   customer_name: string
@@ -88,43 +109,46 @@ export default function ContractImportModal({ onClose, onImported }: Props) {
   const [pdfError, setPdfError] = useState('')
   const [rawTextSample, setRawTextSample] = useState('')
 
+  const [pdfText, setPdfText] = useState('')  // ブラウザ抽出テキストを保持
+
   async function handlePdfFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    // 20MB 超はアップロード前にエラー
-    if (file.size > 20 * 1024 * 1024) {
-      setPdfError(`ファイルが大きすぎます（${(file.size/1024/1024).toFixed(1)}MB）。20MB以下のPDFを使用してください。`)
-      return
-    }
     setPdfFile(file)
     setPdfLoading(true)
     setPdfError('')
     try {
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('preview', 'true')
-      const res = await fetch('/api/contracts/import-pdf', { method: 'POST', body: fd })
-      // JSONでない場合のエラーハンドリング
+      // ブラウザ側でPDFテキストを抽出（ファイル本体はサーバーに送らない）
+      const extractedText = await extractTextFromPdf(file)
+      setPdfText(extractedText)
+
+      const res = await fetch('/api/contracts/import-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: extractedText, preview: true }),
+      })
       const text = await res.text()
       let json: any
-      try { json = JSON.parse(text) } catch { setPdfError(`サーバーエラー: ${text.slice(0,100)}`); setPdfLoading(false); return }
+      try { json = JSON.parse(text) } catch { setPdfError(`サーバーエラー: ${text.slice(0,200)}`); setPdfLoading(false); return }
       if (!res.ok) { setPdfError(json.error || 'エラー'); setPdfLoading(false); return }
       setPdfPreview(json.preview || [])
       setPdfTotalRows(json.total_rows || 0)
       setRawTextSample(json.raw_text_sample || '')
       setPdfStep('preview')
-    } catch (e: any) { setPdfError(e.message) }
+    } catch (e: any) { setPdfError(`PDF読み込みエラー: ${e.message}`) }
     setPdfLoading(false)
   }
 
   async function doPdfImport() {
-    if (!pdfFile) return
+    if (!pdfText) return
     setPdfLoading(true)
     setPdfError('')
     try {
-      const fd = new FormData()
-      fd.append('file', pdfFile)
-      const res = await fetch('/api/contracts/import-pdf', { method: 'POST', body: fd })
+      const res = await fetch('/api/contracts/import-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: pdfText }),
+      })
       const json = await res.json()
       if (!res.ok) { setPdfError(json.error || 'エラー'); setPdfLoading(false); return }
       setPdfResult({ imported: json.imported, skipped: json.skipped || [] })
