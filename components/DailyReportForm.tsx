@@ -57,6 +57,7 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
   const [gratitude, setGratitude] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
   const [reportText, setReportText] = useState('')
@@ -66,10 +67,10 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
     async function load() {
       const [reportData, scheduleData] = await Promise.all([
         supabase
-          .from('daily_reports')
-          .select('*')
+          .from('daily_records')
+          .select('acquisition_case,lost_case,remaining_work,good_points,issues,improvements,learnings,gratitude')
           .eq('sales_rep_id', repId)
-          .eq('report_date', selectedDate)
+          .eq('record_date', selectedDate)
           .single(),
         supabase
           .from('work_schedules')
@@ -161,7 +162,7 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
     try {
       const payload = {
         sales_rep_id: repId,
-        report_date: selectedDate,
+        record_date: selectedDate,
         acquisition_case: acquisitionCase,
         lost_case: lostCase,
         remaining_work: remainingWork,
@@ -170,21 +171,12 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
         improvements,
         learnings,
         gratitude,
-        visits:              (record.visits              as number) || 0,
-        interphone_only:     (record.interphone_only     as number) || 0,
-        net_meetings:        (record.net_meetings        as number) || 0,
-        paper_presentation:  (record.paper_presentation  as number) || 0,
-        full_talk:           (record.full_talk           as number) || 0,
-        indoor_entry:        (record.indoor_entry        as number) || 0,
-        owner_meetings:      (record.owner_meetings      as number) || 0,
-        negotiations:        (record.negotiations        as number) || 0,
-        prospects:           (record.prospects           as number) || 0,
-        acquisitions:        (record.acquisitions        as number) || 0,
         updated_at: new Date().toISOString(),
       }
-      await supabase
-        .from('daily_reports')
-        .upsert(payload, { onConflict: 'sales_rep_id,report_date' })
+      const { error } = await supabase
+        .from('daily_records')
+        .upsert(payload, { onConflict: 'sales_rep_id,record_date' })
+      if (error) throw new Error(error.message)
       setSaved(true)
       syncSheets()
       const text = buildReport()
@@ -195,25 +187,35 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
         setCopyFailed(true)
         setReportText(text)
       }
+      setSaveError('')
       setTimeout(() => { setSaved(false); setCopied(false) }, 3000)
+    } catch (e: any) {
+      setSaveError(e.message || '保存に失敗しました')
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <ReportCard
-      acquisitionCase={acquisitionCase} setAcquisitionCase={setAcquisitionCase}
-      lostCase={lostCase} setLostCase={setLostCase}
-      remainingWork={remainingWork} setRemainingWork={setRemainingWork}
-      goodPoints={goodPoints} setGoodPoints={setGoodPoints}
-      issues={issues} setIssues={setIssues}
-      improvements={improvements} setImprovements={setImprovements}
-      learnings={learnings} setLearnings={setLearnings}
-      gratitude={gratitude} setGratitude={setGratitude}
-      saving={saving} saved={saved} copyFailed={copyFailed} reportText={reportText}
-      onSaveAndCopy={handleSaveAndCopy}
-    />
+    <>
+      {saveError && (
+        <div className="mx-4 mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+          ⚠️ 保存エラー: {saveError}
+        </div>
+      )}
+      <ReportCard
+        acquisitionCase={acquisitionCase} setAcquisitionCase={setAcquisitionCase}
+        lostCase={lostCase} setLostCase={setLostCase}
+        remainingWork={remainingWork} setRemainingWork={setRemainingWork}
+        goodPoints={goodPoints} setGoodPoints={setGoodPoints}
+        issues={issues} setIssues={setIssues}
+        improvements={improvements} setImprovements={setImprovements}
+        learnings={learnings} setLearnings={setLearnings}
+        gratitude={gratitude} setGratitude={setGratitude}
+        saving={saving} saved={saved} copyFailed={copyFailed} reportText={reportText}
+        onSaveAndCopy={handleSaveAndCopy}
+      />
+    </>
   )
 }
 
