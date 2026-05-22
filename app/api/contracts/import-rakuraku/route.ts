@@ -21,9 +21,14 @@ function mapStatus(rakurakuStatus: string): string {
 // 日付パース（YYYY/MM/DD or YYYY-MM-DD → YYYY-MM-DD）
 function parseDate(d: string): string | null {
   if (!d?.trim()) return null
-  const m = d.trim().match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
-  if (!m) return null
-  return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`
+  const s = d.trim()
+  // YYYY/MM/DD or YYYY-MM-DD
+  const m = s.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
+  if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`
+  // YYYYMMDD（スラッシュなし）
+  const m2 = s.match(/^(\d{4})(\d{2})(\d{2})$/)
+  if (m2) return `${m2[1]}-${m2[2]}-${m2[3]}`
+  return null
 }
 
 // CSV行パース（ダブルクォート・カンマ対応）
@@ -257,5 +262,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json(results)
+  return NextResponse.json({
+    ...results,
+    debug: {
+      total_preview_rows: previewRows.length,
+      to_insert: toInsert.length,
+      to_update: toUpdate.length,
+      skipped_count: results.skipped.length,
+      first_row_sample: previewRows[0] ? JSON.stringify(previewRows[0]).slice(0,300) : 'none',
+      first_insert_sample: toInsert[0] ? JSON.stringify(toInsert[0]).slice(0,300) : 'none',
+    }
+  })
 }
