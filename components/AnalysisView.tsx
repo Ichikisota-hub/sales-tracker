@@ -16,10 +16,11 @@ type FunnelBenchmark = {
 }
 
 const FUNNEL_BENCHMARKS: FunnelBenchmark[] = [
-  { key: 'meeting',    label: '訪問→ネット対面', sub: 'ネット対面÷訪問',    benchmark: 0.040 },
-  { key: 'owner',      label: 'ネット対面→主権', sub: '主権対面÷ネット対面', benchmark: 0.550 },
-  { key: 'nego',       label: '主権対面→商談',   sub: '商談÷主権対面',       benchmark: 0.620 },
-  { key: 'acq',        label: '商談→獲得',       sub: '獲得÷商談',           benchmark: 0.310 },
+  { key: 'meeting',    label: '訪問→インターホン対面', sub: 'ネット対面÷訪問',     benchmark: 0.040 },
+  { key: 'owner',      label: 'インターホン→対面数',   sub: '主権対面÷ネット対面', benchmark: 0.550 },
+  { key: 'indoor',     label: 'フルトーク→宅内in',    sub: '宅内in÷フルトーク',   benchmark: 0      },  // 将来設定
+  { key: 'nego',       label: '主権対面→商談',         sub: '商談÷主権対面',       benchmark: 0.620 },
+  { key: 'acq',        label: '商談→受注',             sub: '受注÷商談',           benchmark: 0.310 },
 ]
 
 // 読み方の例に基づく自動コメント
@@ -44,14 +45,17 @@ const AUTO_COMMENTS: Record<string, Record<AchvStatus, string>> = {
     warning:  'クロージングに伸び代あり。最後の一押しを磨こう。',
     critical: '最後の一押し不足が最優先課題。クロージングトークを強化。',
   },
+  // indoor は将来設定のためコメントなし
 }
 
-function calcFunnelRates(r: { visits?: number; net_meetings?: number; owner_meetings?: number; negotiations?: number; acquisitions?: number }) {
+function calcFunnelRates(r: { visits?: number; net_meetings?: number; owner_meetings?: number; full_talk?: number; indoor_entry?: number; negotiations?: number; acquisitions?: number }) {
   const v = r.visits || 0, n = r.net_meetings || 0, o = r.owner_meetings || 0
+  const ft = r.full_talk || 0, ind = r.indoor_entry || 0
   const neg = r.negotiations || 0, acq = r.acquisitions || 0
   return {
     meeting: v > 0   ? n   / v   : null,
     owner:   n > 0   ? o   / n   : null,
+    indoor:  ft > 0  ? ind / ft  : null,
     nego:    o > 0   ? neg / o   : null,
     acq:     neg > 0 ? acq / neg : null,
   }
@@ -104,8 +108,9 @@ function FunnelBenchmarkSection({
 }) {
   const monthlyRates = calcFunnelRates({
     visits: stats.totalVisits, net_meetings: stats.totalNetMeetings,
-    owner_meetings: stats.totalOwnerMeetings, negotiations: stats.totalNegotiations,
-    acquisitions: stats.totalAcquisitions,
+    owner_meetings: stats.totalOwnerMeetings,
+    full_talk: stats.totalFullTalk, indoor_entry: stats.totalIndoorEntry,
+    negotiations: stats.totalNegotiations, acquisitions: stats.totalAcquisitions,
   })
 
   const workingDays = dailyRecords
@@ -122,7 +127,8 @@ function FunnelBenchmarkSection({
         <div className="space-y-2">
           {FUNNEL_BENCHMARKS.map(fb => {
             const actual = monthlyRates[fb.key as keyof typeof monthlyRates]
-            const st = achvStatus(actual, fb.benchmark)
+            const hasBenchmark = fb.benchmark > 0
+            const st = hasBenchmark ? achvStatus(actual, fb.benchmark) : null
             const c = st ? STATUS_COLOR[st] : null
             const autoComment = st ? AUTO_COMMENTS[fb.key]?.[st] : null
             return (
@@ -132,9 +138,16 @@ function FunnelBenchmarkSection({
                     <span className="text-xs font-bold text-slate-700">{fb.label}</span>
                     <span className="text-xs text-slate-400 ml-1">{fb.sub}</span>
                   </div>
-                  <span className="text-xs text-slate-400">基準 {(fb.benchmark * 100).toFixed(1)}%</span>
+                  <span className="text-xs text-slate-400">
+                    {hasBenchmark ? `基準 ${(fb.benchmark * 100).toFixed(1)}%` : '基準 設定予定'}
+                  </span>
                 </div>
-                <AchvBar actual={actual} benchmark={fb.benchmark} />
+                {hasBenchmark
+                  ? <AchvBar actual={actual} benchmark={fb.benchmark} />
+                  : <div className="text-xs text-slate-500 font-medium">
+                      {actual !== null ? `${(actual * 100).toFixed(1)}%` : 'データなし'}
+                    </div>
+                }
                 {autoComment && (
                   <div className={`mt-1.5 text-xs px-2 py-1 rounded ${c?.text ?? 'text-slate-600'} bg-white bg-opacity-60`}>
                     💬 {autoComment}
