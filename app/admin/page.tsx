@@ -273,6 +273,18 @@ export default function AdminPage() {
           </div>
         </Link>
 
+        {/* 支払通知書管理 */}
+        <Link href="/admin/payments"
+          className="block bg-white rounded-xl shadow-sm p-5 hover:bg-slate-50 transition-colors border-l-4 border-blue-800">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-bold text-slate-800">支払通知書管理</h2>
+              <p className="text-slate-500 text-xs mt-0.5">月次の支払通知書を自動生成・LINE送付</p>
+            </div>
+            <span className="text-slate-400 text-lg">→</span>
+          </div>
+        </Link>
+
         {/* データエクスポート */}
         <div className="bg-white rounded-xl shadow-sm p-5">
           <h2 className="font-bold text-slate-800 mb-1">データエクスポート</h2>
