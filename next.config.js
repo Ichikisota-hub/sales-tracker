@@ -1,8 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    // lucide-react のツリーシェイキングを最適化（使っているアイコンのみバンドル）
     optimizePackageImports: ['lucide-react'],
   },
+  // PDF・CSVアップロード用にリクエストボディ上限を20MBに拡張
+  serverExternalPackages: ['pdf-parse'],
 }
 module.exports = nextConfig

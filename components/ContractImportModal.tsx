@@ -91,6 +91,11 @@ export default function ContractImportModal({ onClose, onImported }: Props) {
   async function handlePdfFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    // 20MB 超はアップロード前にエラー
+    if (file.size > 20 * 1024 * 1024) {
+      setPdfError(`ファイルが大きすぎます（${(file.size/1024/1024).toFixed(1)}MB）。20MB以下のPDFを使用してください。`)
+      return
+    }
     setPdfFile(file)
     setPdfLoading(true)
     setPdfError('')
@@ -99,7 +104,10 @@ export default function ContractImportModal({ onClose, onImported }: Props) {
       fd.append('file', file)
       fd.append('preview', 'true')
       const res = await fetch('/api/contracts/import-pdf', { method: 'POST', body: fd })
-      const json = await res.json()
+      // JSONでない場合のエラーハンドリング
+      const text = await res.text()
+      let json: any
+      try { json = JSON.parse(text) } catch { setPdfError(`サーバーエラー: ${text.slice(0,100)}`); setPdfLoading(false); return }
       if (!res.ok) { setPdfError(json.error || 'エラー'); setPdfLoading(false); return }
       setPdfPreview(json.preview || [])
       setPdfTotalRows(json.total_rows || 0)
