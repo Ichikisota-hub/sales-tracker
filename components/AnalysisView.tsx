@@ -16,11 +16,10 @@ type FunnelBenchmark = {
 }
 
 const FUNNEL_BENCHMARKS: FunnelBenchmark[] = [
-  { key: 'meeting',    label: '訪問→インターホン対面', sub: 'ネット対面÷訪問',     benchmark: 0.040 },
-  { key: 'owner',      label: 'インターホン→対面数',   sub: '主権対面÷ネット対面', benchmark: 0.550 },
-  { key: 'indoor',     label: 'フルトーク→宅内in',    sub: '宅内in÷フルトーク',   benchmark: 0      },  // 将来設定
-  { key: 'nego',       label: '主権対面→商談',         sub: '商談÷主権対面',       benchmark: 0.620 },
-  { key: 'acq',        label: '商談→受注',             sub: '受注÷商談',           benchmark: 0.310 },
+  { key: 'meeting', label: '訪問→インターホン対面', sub: 'ネット対面÷訪問',    benchmark: 0.040 },
+  { key: 'owner',   label: 'インターホン→対面数',   sub: '対面数÷ネット対面',  benchmark: 0.550 },
+  { key: 'nego',    label: 'フルトーク→商談',       sub: '商談÷フルトーク',    benchmark: 0.620 },
+  { key: 'acq',     label: '商談→受注',             sub: '受注÷商談',          benchmark: 0.310 },
 ]
 
 // 読み方の例に基づく自動コメント
@@ -36,9 +35,9 @@ const AUTO_COMMENTS: Record<string, Record<AchvStatus, string>> = {
     critical: 'インターホントーク改善が急務。対話継続のフレーズを見直し。',
   },
   nego: {
-    good:     '宅内トークが武器。商談設定率は高い。',
-    warning:  '商談設定トークに改善余地あり。',
-    critical: '商談設定トークが弱点。宅内での誘導フレーズを優先的に改善。',
+    good:     'フルトークから商談設定が強い。宅内トークが武器。',
+    warning:  'フルトーク→商談の転換に改善余地あり。',
+    critical: 'フルトーク→商談の転換が弱点。宅内での商談設定フレーズを優先改善。',
   },
   acq: {
     good:     'クロージングが強い。このペースを維持。',
@@ -48,15 +47,13 @@ const AUTO_COMMENTS: Record<string, Record<AchvStatus, string>> = {
   // indoor は将来設定のためコメントなし
 }
 
-function calcFunnelRates(r: { visits?: number; net_meetings?: number; owner_meetings?: number; full_talk?: number; indoor_entry?: number; negotiations?: number; acquisitions?: number }) {
+function calcFunnelRates(r: { visits?: number; net_meetings?: number; owner_meetings?: number; full_talk?: number; negotiations?: number; acquisitions?: number }) {
   const v = r.visits || 0, n = r.net_meetings || 0, o = r.owner_meetings || 0
-  const ft = r.full_talk || 0, ind = r.indoor_entry || 0
-  const neg = r.negotiations || 0, acq = r.acquisitions || 0
+  const ft = r.full_talk || 0, neg = r.negotiations || 0, acq = r.acquisitions || 0
   return {
     meeting: v > 0   ? n   / v   : null,
     owner:   n > 0   ? o   / n   : null,
-    indoor:  ft > 0  ? ind / ft  : null,
-    nego:    o > 0   ? neg / o   : null,
+    nego:    ft > 0  ? neg / ft  : null,  // フルトーク→商談
     acq:     neg > 0 ? acq / neg : null,
   }
 }
@@ -108,8 +105,7 @@ function FunnelBenchmarkSection({
 }) {
   const monthlyRates = calcFunnelRates({
     visits: stats.totalVisits, net_meetings: stats.totalNetMeetings,
-    owner_meetings: stats.totalOwnerMeetings,
-    full_talk: stats.totalFullTalk, indoor_entry: stats.totalIndoorEntry,
+    owner_meetings: stats.totalOwnerMeetings, full_talk: stats.totalFullTalk,
     negotiations: stats.totalNegotiations, acquisitions: stats.totalAcquisitions,
   })
 
@@ -392,7 +388,7 @@ export default function AnalysisView({ repId, repName, yearMonth }: Props) {
           <div className="space-y-2">
             {[
               { label:'👣 対面率',     value: stats.meetingRate,      sub:'ネット÷訪問',  color:'blue' },
-              { label:'🤝 主権対面率', value: stats.ownerMeetingRate, sub:'主権÷ネット',  color:'indigo' },
+              { label:'🤝 対面率', value: stats.ownerMeetingRate, sub:'主権÷ネット',  color:'indigo' },
               { label:'💬 商談率',     value: stats.negotiationRate,  sub:'商談÷主権',    color:'violet' },
               { label:'🏆 獲得率',     value: stats.acquisitionRate,  sub:'獲得÷商談',    color:'emerald' },
             ].map(s => {
@@ -525,7 +521,7 @@ export default function AnalysisView({ repId, repName, yearMonth }: Props) {
           <table className="sheet-table">
             <thead><tr>
               <th className="header-green">対面率</th>
-              <th className="header-green">主権対面率</th>
+              <th className="header-green">対面率</th>
               <th className="header-green">商談率</th>
               <th className="header-green">獲得率</th>
             </tr></thead>
@@ -546,7 +542,7 @@ export default function AnalysisView({ repId, repName, yearMonth }: Props) {
               <th></th>
               <th className="header-blue">訪問</th>
               <th className="header-blue">ネット対面</th>
-              <th className="header-blue">主権対面</th>
+              <th className="header-blue">対面</th>
               <th className="header-blue">商談</th>
               <th className="header-blue">獲得</th>
             </tr></thead>
@@ -574,7 +570,7 @@ export default function AnalysisView({ repId, repName, yearMonth }: Props) {
             <thead><tr>
               <th className="header-blue">訪問</th>
               <th className="header-blue">ネット対面</th>
-              <th className="header-blue">主権対面</th>
+              <th className="header-blue">対面</th>
               <th className="header-blue">商談</th>
               <th className="header-green">獲得</th>
             </tr></thead>
