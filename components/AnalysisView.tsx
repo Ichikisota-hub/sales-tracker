@@ -71,11 +71,33 @@ function AchvBar({ actual, benchmark }: { actual: number | null; benchmark: numb
 }
 
 function FunnelBenchmarkSection({
-  stats, dailyRecords,
+  stats, dailyRecords, repId, yearMonth,
 }: {
   stats: MonthlyStats
   dailyRecords: { record_date: string; visits?: number; net_meetings?: number; owner_meetings?: number; negotiations?: number; acquisitions?: number; attendance_status?: string }[]
+  repId: string
+  yearMonth: string
 }) {
+  const storageKey = `funnel_comments:${repId}:${yearMonth}`
+  const [comments, setComments] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(storageKey) || '{}')
+    } catch { return {} }
+  })
+  const [editingKey, setEditingKey] = useState<string | null>(null)
+  const [draft, setDraft] = useState('')
+
+  function openEdit(key: string) {
+    setDraft(comments[key] || '')
+    setEditingKey(key)
+  }
+  function saveComment(key: string) {
+    const next = { ...comments, [key]: draft }
+    setComments(next)
+    localStorage.setItem(storageKey, JSON.stringify(next))
+    setEditingKey(null)
+  }
+
   const monthlyRates = calcFunnelRates({
     visits: stats.totalVisits, net_meetings: stats.totalNetMeetings,
     owner_meetings: stats.totalOwnerMeetings, negotiations: stats.totalNegotiations,
@@ -98,6 +120,8 @@ function FunnelBenchmarkSection({
             const actual = monthlyRates[fb.key as keyof typeof monthlyRates]
             const st = achvStatus(actual, fb.benchmark)
             const c = st ? STATUS_COLOR[st] : null
+            const hasComment = !!comments[fb.key]
+            const isEditing = editingKey === fb.key
             return (
               <div key={fb.key} className={`rounded-lg p-2 ${c?.bg ?? 'bg-slate-50'}`}>
                 <div className="flex items-center justify-between mb-1">
@@ -108,6 +132,29 @@ function FunnelBenchmarkSection({
                   <span className="text-xs text-slate-400">基準 {(fb.benchmark * 100).toFixed(1)}%</span>
                 </div>
                 <AchvBar actual={actual} benchmark={fb.benchmark} />
+                {/* コメント欄 */}
+                {isEditing ? (
+                  <div className="mt-2 flex gap-1">
+                    <input
+                      autoFocus
+                      className="flex-1 text-xs border border-slate-300 rounded px-2 py-1 bg-white"
+                      value={draft}
+                      onChange={e => setDraft(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') saveComment(fb.key); if (e.key === 'Escape') setEditingKey(null) }}
+                      placeholder="改善メモを入力…"
+                    />
+                    <button onClick={() => saveComment(fb.key)} className="text-xs bg-slate-700 text-white px-2 rounded">保存</button>
+                    <button onClick={() => setEditingKey(null)} className="text-xs text-slate-400 px-1">✕</button>
+                  </div>
+                ) : (
+                  <div className="mt-1 flex items-center gap-1">
+                    {hasComment
+                      ? <span className="flex-1 text-xs text-slate-600 bg-white bg-opacity-60 rounded px-2 py-0.5 cursor-pointer" onClick={() => openEdit(fb.key)}>💬 {comments[fb.key]}</span>
+                      : <span className="text-xs text-slate-300 cursor-pointer hover:text-slate-500" onClick={() => openEdit(fb.key)}>＋ コメントを追加</span>
+                    }
+                    {hasComment && <button onClick={() => openEdit(fb.key)} className="text-xs text-slate-400 hover:text-slate-600">✏️</button>}
+                  </div>
+                )}
               </div>
             )
           })}
@@ -262,7 +309,7 @@ export default function AnalysisView({ repId, repName, yearMonth }: Props) {
     <div>
 
       {/* ファネル転換率ベンチマーク（共通） */}
-      <FunnelBenchmarkSection stats={stats} dailyRecords={dailyRecords} />
+      <FunnelBenchmarkSection stats={stats} dailyRecords={dailyRecords} repId={repId} yearMonth={yearMonth} />
 
       {/* ========== MOBILE (< md) ========== */}
       <div className="md:hidden space-y-3">
