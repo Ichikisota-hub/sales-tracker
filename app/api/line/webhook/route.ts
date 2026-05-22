@@ -59,7 +59,33 @@ async function handleBankFlow(lineUserId: string, text: string, replyToken: stri
 
   // フロー開始トリガー
   if (!session && ['銀行情報', '口座登録', '銀行口座'].includes(text)) {
-    const { data: rep } = await (sb.from('sales_reps') as any).select('name,bank_name').eq('line_user_id', lineUserId).maybeSingle()
+    let rep = null
+
+    // 1. LINE IDで直接検索
+    const { data: directRep } = await (sb.from('sales_reps') as any)
+      .select('id,name,bank_name').eq('line_user_id', lineUserId).maybeSingle()
+    rep = directRep
+
+    // 2. 見つからない場合: kaikaのusersからLINE IDで名前を取得してsales_repsを名前検索
+    if (!rep) {
+      const { data: kaikaUser } = await (sb.from('users') as any)
+        .select('name').eq('line_user_id', lineUserId).maybeSingle()
+      if (kaikaUser?.name) {
+        const name = kaikaUser.name.replace(/\s+/g, '')
+        const { data: allReps } = await (sb.from('sales_reps') as any)
+          .select('id,name,bank_name').eq('is_active', true)
+        rep = allReps?.find((r: any) => {
+          const rn = r.name.replace(/\s+/g, '')
+          return rn === name || rn.includes(name) || name.includes(rn)
+        }) ?? null
+
+        // 名前でマッチしたらLINE IDを自動設定
+        if (rep) {
+          await (sb.from('sales_reps') as any).update({ line_user_id: lineUserId }).eq('id', rep.id)
+        }
+      }
+    }
+
     if (!rep) {
       await replyLine(replyToken, '営業担当者として登録されていないため、銀行情報を登録できません。\n管理者にご連絡ください。')
       return true
