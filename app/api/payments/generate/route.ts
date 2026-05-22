@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
-import { generatePaymentHtml, PaymentDetail, ContractItem, SalesRep, IncentiveRate } from '@/lib/generatePaymentHtml'
+import { generatePaymentHtml, calculatePayment, PaymentDetail, ContractItem, SalesRep, IncentiveRate } from '@/lib/generatePaymentHtml'
 
 export async function POST(req: NextRequest) {
   const supabase = await createServiceClient()
@@ -94,9 +94,8 @@ export async function POST(req: NextRequest) {
 
     const htmlContent = generatePaymentHtml(detail)
 
-    // calculatePayment で金額を取得
     const { grossAmount, optionDeduction, cancelPenalty, transferFee, netAmount } =
-      (await import('@/lib/generatePaymentHtml')).calculatePayment(detail)
+      calculatePayment(detail)
 
     // payment_notifications に upsert
     const { data: saved } = await supabase

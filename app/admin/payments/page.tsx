@@ -61,7 +61,16 @@ export default function PaymentsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ year, month }),
     })
-    const data = await res.json() as { ok: boolean; results: GenerateResult[] }
+    const text = await res.text()
+    let data: { ok: boolean; results: GenerateResult[]; error?: string }
+    try {
+      data = JSON.parse(text)
+    } catch {
+      alert(`APIエラー: ${text.slice(0, 200)}`)
+      setGenerating(false)
+      return
+    }
+    if (!data.ok) { alert(`エラー: ${data.error ?? 'Unknown'}`); setGenerating(false); return }
     setResults(data.results ?? [])
     await loadNotifications(year, month)
     setGenerating(false)
