@@ -125,8 +125,14 @@ function calc(
 
     const monthActual = recs.reduce((s: number, r: any) => s + (Number(r.acquisitions) || 0), 0)
     const monthActualDays = recs.filter((r: any) => r.work_status === '稼働').length
-    const scheduledDays = scheds.filter((s: any) => s.work_status === '稼働').length
-    const monthPlanDays = Math.max(Number(plan?.plan_working_days) || 0, scheduledDays)
+    const today = new Date().toISOString().slice(0, 10)
+    const reportedDates = new Set(recs.map((r: any) => r.record_date))
+    const effectiveScheds = scheds.filter((s: any) =>
+      s.work_status === '稼働' &&
+      (s.schedule_date >= today || reportedDates.has(s.schedule_date))
+    )
+    const scheduledDays = effectiveScheds.length
+    const monthPlanDays = scheduledDays > 0 ? scheduledDays : (Number(plan?.plan_working_days) || 0)
 
     const monthProd = monthActualDays > 0 ? monthActual / monthActualDays : 0
     const monthYoji = monthPlanDays > 0 && monthProd > 0
@@ -142,7 +148,7 @@ function calc(
       return {
         target: Number(wt?.target) || 0,
         actual: weekRecs.reduce((s: number, r: any) => s + (Number(r.acquisitions) || 0), 0),
-        planDays: scheds.filter((s: any) => s.work_status === '稼働' && s.schedule_date >= week.start && s.schedule_date <= week.end).length,
+        planDays: effectiveScheds.filter((s: any) => s.schedule_date >= week.start && s.schedule_date <= week.end).length,
         actualDays: weekRecs.filter((r: any) => r.work_status === '稼働').length,
       }
     })
@@ -212,6 +218,20 @@ function EditCell({ value, color = 'indigo', onCommit }: {
   )
 }
 
+// ── 翌月計算 ────────────────────────────────────────────────────────────────
+
+function nextYearMonth(ym: string): string {
+  const [y, m] = ym.split('-').map(Number)
+  return m === 12
+    ? `${y + 1}-01`
+    : `${y}-${String(m + 1).padStart(2, '0')}`
+}
+
+function fmtYM(ym: string): string {
+  const [y, m] = ym.split('-')
+  return `${y}年${parseInt(m)}月`
+}
+
 // ── メイン ───────────────────────────────────────────────────────────────────
 
 export default function WeeklyKPIView({ yearMonth, teams, orgIds }: Props) {
@@ -219,37 +239,42 @@ export default function WeeklyKPIView({ yearMonth, teams, orgIds }: Props) {
   const [loading, setLoading] = useState(true)
   const [filterTeamId, setFilterTeamId] = useState<string | null>(null)
   const [theme, setTheme] = useState<Theme>(1)
+  const [monthOffset, setMonthOffset] = useState<0 | 1>(0)  // 0=今月, 1=翌月
+  const viewMonth = monthOffset === 1 ? nextYearMonth(yearMonth) : yearMonth
   const tk = getTK(theme)
   const today = new Date().toISOString().slice(0, 10)
-  const weeks = buildWeeks(yearMonth)
-  const currentWeekIdx = weeks.findIndex(w => w.start <= today && today <= w.end)
+  const weeks = buildWeeks(viewMonth)
+  const currentWeekIdx = monthOffset === 0
+    ? weeks.findIndex(w => w.start <= today && today <= w.end)
+    : -1
 
-  useEffect(() => { load() }, [yearMonth, orgIds?.join(',')])
+  useEffect(() => { setMonthOffset(0) }, [yearMonth])
+  useEffect(() => { load() }, [viewMonth, orgIds?.join(',')])
 
   async function load() {
     setLoading(true)
-    const [yStr, mStr] = yearMonth.split('-')
+    const [yStr, mStr] = viewMonth.split('-')
     const lastDay = new Date(parseInt(yStr), parseInt(mStr), 0).getDate()
     const from = `${yStr}-${mStr}-01`
     const to   = `${yStr}-${mStr}-${String(lastDay).padStart(2,'0')}`
 
     let reps: any[], records: any[], schedules: any[], plans: any[]
     if (orgIds && orgIds.length > 1) {
-      const d = await fetch(`/api/combined/data?orgIds=${orgIds.join(',')}&yearMonth=${yearMonth}`).then(r => r.json())
+      const d = await fetch(`/api/combined/data?orgIds=${orgIds.join(',')}&yearMonth=${viewMonth}`).then(r => r.json())
       reps = d.reps; records = d.records; schedules = d.schedules; plans = d.plans
     } else {
       const [r1,r2,r3,r4] = await Promise.all([
         supabase.from('sales_reps').select('*').eq('is_active',true).order('display_order'),
         supabase.from('daily_records').select('sales_rep_id,record_date,acquisitions,work_status').gte('record_date',from).lte('record_date',to),
         supabase.from('work_schedules').select('sales_rep_id,schedule_date,work_status').gte('schedule_date',from).lte('schedule_date',to),
-        supabase.from('monthly_plans').select('sales_rep_id,plan_cases,plan_working_days').eq('year_month',yearMonth),
+        supabase.from('monthly_plans').select('sales_rep_id,plan_cases,plan_working_days').eq('year_month',viewMonth),
       ])
       reps = r1.data??[]; records = r2.data??[]; schedules = r3.data??[]; plans = r4.data??[]
     }
 
     let weeklyTargets: any[] = []
     try {
-      const { data } = await supabase.from('weekly_kpi_targets').select('sales_rep_id,week_index,target').eq('year_month',yearMonth)
+      const { data } = await supabase.from('weekly_kpi_targets').select('sales_rep_id,week_index,target').eq('year_month',viewMonth)
       weeklyTargets = data ?? []
     } catch {}
 
@@ -281,9 +306,26 @@ export default function WeeklyKPIView({ yearMonth, teams, orgIds }: Props) {
         <div>
           {/* 月サマリーバナー */}
           <div className="flex items-center gap-4 mb-2">
+            {/* 今月 / 翌月 トグル */}
+            <div className="flex gap-0.5 p-0.5 rounded-xl" style={{ background:'#e2e8f0' }}>
+              {([0, 1] as const).map(offset => (
+                <button
+                  key={offset}
+                  onClick={() => setMonthOffset(offset)}
+                  className="px-3 py-1.5 rounded-[10px] text-xs font-bold transition-all"
+                  style={{
+                    background: monthOffset === offset ? '#1e293b' : 'transparent',
+                    color: monthOffset === offset ? '#f1f5f9' : '#64748b',
+                    boxShadow: monthOffset === offset ? '0 1px 4px rgba(0,0,0,0.25)' : 'none',
+                  }}
+                >
+                  {offset === 0 ? '今月' : '翌月'}
+                </button>
+              ))}
+            </div>
             <div className="flex items-center gap-2 px-4 py-2 rounded-xl"
               style={{ background:'#1e293b', color:'white' }}>
-              <span className="text-base font-black">{yearMonth.replace('-','年')}月</span>
+              <span className="text-base font-black">{fmtYM(viewMonth)}</span>
               <span className="text-xl font-black text-emerald-400">{totalActual}件</span>
               <span className="text-slate-400 text-sm">／</span>
               <span className="text-sm font-bold text-slate-300">{totalTarget > 0 ? `${totalTarget}件` : '目標未設定'}</span>
