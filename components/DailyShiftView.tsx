@@ -49,12 +49,29 @@ export default function DailyShiftView({ yearMonth, teams, orgIds }: Props) {
 
   async function loadSchedule() {
     setLoading(true)
-    const { data } = await supabase
-      .from('work_schedules')
-      .select('sales_rep_id, work_status, work_time_start, work_time_end')
-      .eq('schedule_date', selectedDate)
+    const [schedsRes, recordsRes] = await Promise.all([
+      supabase
+        .from('work_schedules')
+        .select('sales_rep_id, work_status, work_time_start, work_time_end')
+        .eq('schedule_date', selectedDate),
+      supabase
+        .from('daily_records')
+        .select('sales_rep_id, work_status, attendance_status, work_time_start, work_time_end')
+        .eq('record_date', selectedDate),
+    ])
     const map: Record<string, ScheduleRow> = {}
-    data?.forEach(r => { map[r.sales_rep_id] = r })
+    schedsRes.data?.forEach(r => { map[r.sales_rep_id] = r })
+    // daily_recordsの実績で上書き（kaika-org-appの非稼働同期を反映）
+    recordsRes.data?.forEach(r => {
+      const actualStatus = r.attendance_status || r.work_status
+      if (!actualStatus) return
+      map[r.sales_rep_id] = {
+        sales_rep_id: r.sales_rep_id,
+        work_status: actualStatus,
+        work_time_start: r.work_time_start || map[r.sales_rep_id]?.work_time_start || '',
+        work_time_end:   r.work_time_end   || map[r.sales_rep_id]?.work_time_end   || '',
+      }
+    })
     setSchedules(map)
     setLoading(false)
   }
@@ -65,7 +82,10 @@ export default function DailyShiftView({ yearMonth, teams, orgIds }: Props) {
 
   const visibleReps = filterTeamId ? reps.filter(r => r.team_id === filterTeamId) : reps
   const working = visibleReps.filter(r => schedules[r.id]?.work_status === '稼働')
-  const off = visibleReps.filter(r => schedules[r.id]?.work_status === '休日')
+  const off = visibleReps.filter(r => {
+    const s = schedules[r.id]?.work_status
+    return s === '休日' || s === '非稼働'
+  })
   const unsubmitted = visibleReps.filter(r => !schedules[r.id])
 
   if (!selectedDay) return null
