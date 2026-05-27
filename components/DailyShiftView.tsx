@@ -170,8 +170,8 @@ export default function DailyShiftView({ yearMonth, teams, orgIds }: Props) {
             </div>
           )}
 
-          {/* 休日・未提出（折りたたみ表示） */}
-          {(off.length > 0 || unsubmitted.length > 0) && (
+          {/* 休日メンバー */}
+          {off.length > 0 && (
             <div className="mobile-card">
               <div className="flex flex-wrap gap-2">
                 {off.map(rep => (
@@ -181,15 +181,6 @@ export default function DailyShiftView({ yearMonth, teams, orgIds }: Props) {
                     </div>
                     <span className="text-xs font-bold text-slate-400">{rep.name}</span>
                     <span className="text-[10px] text-slate-300">休</span>
-                  </div>
-                ))}
-                {unsubmitted.map(rep => (
-                  <div key={rep.id} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 rounded-xl border border-amber-100">
-                    <div className="w-5 h-5 rounded-full bg-amber-200 flex items-center justify-center text-amber-600 text-[10px] font-black">
-                      {rep.name.charAt(0)}
-                    </div>
-                    <span className="text-xs font-bold text-amber-500">{rep.name}</span>
-                    <span className="text-[10px] text-amber-300">未</span>
                   </div>
                 ))}
               </div>
