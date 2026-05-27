@@ -49,7 +49,7 @@ export default function DailyShiftView({ yearMonth, teams, orgIds }: Props) {
 
   async function loadSchedule() {
     setLoading(true)
-    const [schedsRes, recordsRes] = await Promise.all([
+    const [schedsRes, recordsRes, kaShiftsRes] = await Promise.all([
       supabase
         .from('work_schedules')
         .select('sales_rep_id, work_status, work_time_start, work_time_end')
@@ -58,10 +58,17 @@ export default function DailyShiftView({ yearMonth, teams, orgIds }: Props) {
         .from('daily_records')
         .select('sales_rep_id, work_status, attendance_status, work_time_start, work_time_end')
         .eq('record_date', selectedDate),
+      supabase
+        .from('shifts')
+        .select('user_id, start_time, end_time, status')
+        .eq('shift_date', selectedDate)
+        .neq('status', 'rejected'),
     ])
+
     const map: Record<string, ScheduleRow> = {}
     schedsRes.data?.forEach(r => { map[r.sales_rep_id] = r })
-    // daily_recordsの実績で上書き（kaika-org-appの非稼働同期を反映）
+
+    // daily_recordsの実績で上書き
     recordsRes.data?.forEach(r => {
       const actualStatus = r.attendance_status || r.work_status
       if (!actualStatus) return
@@ -72,6 +79,29 @@ export default function DailyShiftView({ yearMonth, teams, orgIds }: Props) {
         work_time_end:   r.work_time_end   || map[r.sales_rep_id]?.work_time_end   || '',
       }
     })
+
+    // kaika-org-appのshifts（user_id→sales_rep_id経由）で上書き
+    if (kaShiftsRes.data && kaShiftsRes.data.length > 0) {
+      const userIds = kaShiftsRes.data.map((s: any) => s.user_id)
+      const { data: orgMembers } = await supabase
+        .from('organization_members')
+        .select('user_id, sales_rep_id')
+        .in('user_id', userIds)
+        .not('sales_rep_id', 'is', null)
+      const userToRep: Record<string, string> = {}
+      orgMembers?.forEach((m: any) => { if (m.sales_rep_id) userToRep[m.user_id] = m.sales_rep_id })
+      kaShiftsRes.data.forEach((s: any) => {
+        const repId = userToRep[s.user_id]
+        if (!repId) return
+        map[repId] = {
+          sales_rep_id: repId,
+          work_status: s.start_time ? '稼働' : '休日',
+          work_time_start: s.start_time || '',
+          work_time_end:   s.end_time   || '',
+        }
+      })
+    }
+
     setSchedules(map)
     setLoading(false)
   }
