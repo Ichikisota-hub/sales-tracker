@@ -8,7 +8,7 @@ import {
   Home as HomeIcon, BarChart2, CalendarCheck, Calendar, CalendarDays,
   MapPin, Table, FileSpreadsheet, BarChart3,
   FileText, CheckSquare, Settings, Building2, LogOut,
-  ChevronDown, Menu, Shield, Flame
+  ChevronDown, Menu, Shield, Flame, Banknote
 } from 'lucide-react'
 import { supabase, SalesRep, Team } from '@/lib/supabase'
 import { getMonthList, formatYearMonth, localYearMonth } from '@/lib/dateUtils'
@@ -102,6 +102,7 @@ const ContractListView    = dynamic(() => import('@/components/ContractListView'
 const ContractStatsView   = dynamic(() => import('@/components/ContractStatsView'))
 const ContractAddForm     = dynamic(() => import('@/components/ContractAddForm'))
 const ContractImportModal = dynamic(() => import('@/components/ContractImportModal'))
+const SalaryStatusView    = dynamic(() => import('@/components/SalaryStatusView'))
 
 function getNextMonth(ym: string): string {
   const [y, m] = ym.split('-').map(Number)
@@ -110,7 +111,7 @@ function getNextMonth(ym: string): string {
 }
 
 type MainTab = 'form' | 'status' | 'analysis' | 'overall' | 'commit'
-type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings' | 'daily_report' | 'team_sheet' | 'stats_sheet' | 'submission_check' | 'contract_stats' | 'weekly_kpi'
+type SubTab = 'contracts' | 'shift_submit' | 'shift' | 'daily_shift' | 'area' | 'sheet' | 'settings' | 'daily_report' | 'team_sheet' | 'stats_sheet' | 'submission_check' | 'contract_stats' | 'weekly_kpi' | 'salary'
 
 const ORIGIN_ORG_ID = '0524dcfa-685f-4635-971b-39c7899da7cd'
 const TOP_ORG_ID    = '1db68c5a-6a4a-4a21-a46f-229b3772a527'
@@ -254,6 +255,7 @@ export default function Home() {
     { id: 'weekly_kpi'       as SubTab, label: '週KPI',      Icon: TrendingUp },
     { id: 'daily_report'     as SubTab, label: '日報',       Icon: FileText },
     ...(isManager ? [{ id: 'submission_check' as SubTab, label: '提出確認', Icon: CheckSquare }] : []),
+    ...(isManager ? [{ id: 'salary' as SubTab, label: '給与', Icon: Banknote }] : []),
     ...(isManager ? [{ id: 'settings' as SubTab, label: '設定', Icon: Settings }] : []),
   ]
 
@@ -507,6 +509,9 @@ export default function Home() {
         )}
         {activeSubTab === 'submission_check' && (
           <SubmissionCheckView yearMonth={selectedMonth} teams={teams} orgIds={ownOrgIds} />
+        )}
+        {activeSubTab === 'salary' && (
+          <SalaryStatusView yearMonth={selectedMonth} orgIds={ownOrgIds} />
         )}
         {activeSubTab === 'settings' && (
           settingsUnlocked ? (
