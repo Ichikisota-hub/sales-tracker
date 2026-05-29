@@ -252,55 +252,64 @@ export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
       endDate = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
     }
 
+    let repData: SalesRep[] = []
+    let schedData: ScheduleRow[] = []
+
     if (orgIds && orgIds.length > 1) {
       const res = await fetch(`/api/combined/data?orgIds=${orgIds.join(',')}&yearMonth=${yearMonth}`)
       const d = await res.json()
-      setReps(d.reps || [])
-      setSchedules(d.schedules || [])
+      repData = d.reps || []
+      schedData = d.schedules || []
     } else {
-      const [{ data: repData }, { data: schedData }, { data: kaShiftsData }] = await Promise.all([
+      const [{ data: reps }, { data: scheds }] = await Promise.all([
         supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
         supabase.from('work_schedules').select('*')
           .gte('schedule_date', startDate)
           .lte('schedule_date', endDate),
-        supabase.from('shifts').select('user_id, start_time, end_time, status, shift_date')
-          .gte('shift_date', startDate)
-          .lte('shift_date', endDate)
-          .neq('status', 'rejected'),
       ])
-
-      let merged: ScheduleRow[] = schedData || []
-
-      if (kaShiftsData && kaShiftsData.length > 0) {
-        const userIds = Array.from(new Set(kaShiftsData.map((s: any) => s.user_id)))
-        const { data: orgMembers } = await supabase
-          .from('organization_members')
-          .select('user_id, sales_rep_id')
-          .in('user_id', userIds)
-          .not('sales_rep_id', 'is', null)
-
-        const userToRep: Record<string, string> = {}
-        orgMembers?.forEach((m: any) => { if (m.sales_rep_id) userToRep[m.user_id] = m.sales_rep_id })
-
-        const mergedMap: Record<string, ScheduleRow> = {}
-        merged.forEach(s => { mergedMap[`${s.sales_rep_id}__${s.schedule_date}`] = s })
-        kaShiftsData.forEach((s: any) => {
-          const repId = userToRep[s.user_id]
-          if (!repId) return
-          mergedMap[`${repId}__${s.shift_date}`] = {
-            sales_rep_id: repId,
-            schedule_date: s.shift_date,
-            work_status: s.start_time ? '稼働' : '休日',
-            work_time_start: s.start_time || '',
-            work_time_end: s.end_time || '',
-          }
-        })
-        merged = Object.values(mergedMap)
-      }
-
-      setReps(repData || [])
-      setSchedules(merged)
+      repData = reps || []
+      schedData = scheds || []
     }
+
+    // kaika shifts で上書き（orgIds に関わらず常に適用）
+    const { data: kaShiftsData } = await supabase
+      .from('shifts')
+      .select('user_id, start_time, end_time, status, shift_date')
+      .gte('shift_date', startDate)
+      .lte('shift_date', endDate)
+      .neq('status', 'rejected')
+
+    let merged: ScheduleRow[] = schedData
+
+    if (kaShiftsData && kaShiftsData.length > 0) {
+      const userIds = Array.from(new Set(kaShiftsData.map((s: any) => s.user_id)))
+      const { data: orgMembers } = await supabase
+        .from('organization_members')
+        .select('user_id, sales_rep_id')
+        .in('user_id', userIds)
+        .not('sales_rep_id', 'is', null)
+
+      const userToRep: Record<string, string> = {}
+      orgMembers?.forEach((m: any) => { if (m.sales_rep_id) userToRep[m.user_id] = m.sales_rep_id })
+
+      const mergedMap: Record<string, ScheduleRow> = {}
+      merged.forEach(s => { mergedMap[`${s.sales_rep_id}__${s.schedule_date}`] = s })
+      kaShiftsData.forEach((s: any) => {
+        const repId = userToRep[s.user_id]
+        if (!repId) return
+        mergedMap[`${repId}__${s.shift_date}`] = {
+          sales_rep_id: repId,
+          schedule_date: s.shift_date,
+          work_status: s.start_time ? '稼働' : '休日',
+          work_time_start: s.start_time || '',
+          work_time_end: s.end_time || '',
+        }
+      })
+      merged = Object.values(mergedMap)
+    }
+
+    setReps(repData)
+    setSchedules(merged)
     setLoading(false)
   }
 
