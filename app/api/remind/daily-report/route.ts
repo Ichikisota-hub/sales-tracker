@@ -62,7 +62,17 @@ export async function POST(req: NextRequest) {
     .in('sales_rep_id', reps.map(r => r.id))
 
   const submittedRepIds = new Set((reports ?? []).map(r => r.sales_rep_id))
-  const unsubmitted = reps.filter(r => !submittedRepIds.has(r.id))
+
+  // 対象日に稼働予定のrep_idのみ取得
+  const { data: schedules } = await supabase
+    .from('work_schedules')
+    .select('sales_rep_id')
+    .eq('schedule_date', targetDate)
+    .eq('work_status', '稼働')
+    .in('sales_rep_id', reps.map(r => r.id))
+
+  const scheduledRepIds = new Set((schedules ?? []).map(s => s.sales_rep_id))
+  const unsubmitted = reps.filter(r => scheduledRepIds.has(r.id) && !submittedRepIds.has(r.id))
 
   // kaika usersテーブルからLINE IDを取得
   const authIds = unsubmitted.map(r => r.auth_user_id).filter(Boolean)

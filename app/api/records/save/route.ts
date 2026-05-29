@@ -21,6 +21,12 @@ export async function POST(req: NextRequest) {
 
   const supabase = getServiceClient()
 
+  // time型カラムに空文字を送るとPostgreSQLエラーになるためnullに変換
+  const TIME_COLS = ['work_time_start', 'work_time_end']
+  for (const col of TIME_COLS) {
+    if (payload[col] === '') payload[col] = null
+  }
+
   const { error } = await supabase
     .from('daily_records')
     .upsert(payload, { onConflict: 'sales_rep_id,record_date' })

@@ -51,7 +51,7 @@ export default function SalaryStatusView({ yearMonth, orgIds }: Props) {
         .select('sales_rep_id')
         .eq('work_status', '稼働')
         .gte('schedule_date', from)
-        .lte('schedule_date', to),
+        .lte('schedule_date', new Date().toISOString().slice(0, 10) < to ? new Date().toISOString().slice(0, 10) : to),
       supabase
         .from('daily_records')
         .select('sales_rep_id, acquisitions')

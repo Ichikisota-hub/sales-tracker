@@ -36,14 +36,14 @@ type Props = { repId: string; repName: string; yearMonth: string }
 
 type DaySchedule = {
   work_status: string
-  work_time_start: string
-  work_time_end: string
+  work_time_start: string | null
+  work_time_end: string | null
 }
 
 const DEFAULT_DAY: DaySchedule = {
   work_status: '休日',
-  work_time_start: '',
-  work_time_end: '',
+  work_time_start: null,
+  work_time_end: null,
 }
 
 function isAfter25th(yearMonth: string): boolean {
@@ -168,8 +168,8 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
           sales_rep_id: repId,
           schedule_date: d.dateStr,
           work_status: s.work_status || '休日',
-          work_time_start: isWork ? (s.work_time_start || '') : '',
-          work_time_end:   isWork ? (s.work_time_end   || '') : '',
+          work_time_start: isWork ? (s.work_time_start || null) : null,
+          work_time_end:   isWork ? (s.work_time_end   || null) : null,
           updated_at: new Date().toISOString(),
         }
       })
@@ -476,7 +476,7 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
                     </div>
                     <div className="flex items-center gap-2">
                       <select
-                        value={sched.work_time_start}
+                        value={sched.work_time_start ?? ''}
                         onChange={e => isEditable && setDayField(d.dateStr, 'work_time_start', e.target.value)}
                         disabled={!isEditable}
                         className={`flex-1 text-base border-2 rounded-xl px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:opacity-50 ${
@@ -488,7 +488,7 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
                       </select>
                       <span className="text-base text-slate-400 font-bold flex-shrink-0">〜</span>
                       <select
-                        value={sched.work_time_end}
+                        value={sched.work_time_end ?? ''}
                         onChange={e => isEditable && setDayField(d.dateStr, 'work_time_end', e.target.value)}
                         disabled={!isEditable}
                         className={`flex-1 text-base border-2 rounded-xl px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:opacity-50 ${

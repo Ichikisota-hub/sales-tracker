@@ -124,8 +124,8 @@ function calc(
     const scheds = schedules.filter((s: any) => s.sales_rep_id === rep.id)
 
     const monthActual = recs.reduce((s: number, r: any) => s + (Number(r.acquisitions) || 0), 0)
-    const monthActualDays = recs.filter((r: any) => r.work_status === '稼働').length
     const today = new Date().toISOString().slice(0, 10)
+    const monthActualDays = scheds.filter((s: any) => s.work_status === '稼働' && s.schedule_date <= today).length
     const reportedDates = new Set(recs.map((r: any) => r.record_date))
     const effectiveScheds = scheds.filter((s: any) =>
       s.work_status === '稼働' &&
@@ -149,7 +149,7 @@ function calc(
         target: Number(wt?.target) || 0,
         actual: weekRecs.reduce((s: number, r: any) => s + (Number(r.acquisitions) || 0), 0),
         planDays: effectiveScheds.filter((s: any) => s.schedule_date >= week.start && s.schedule_date <= week.end).length,
-        actualDays: weekRecs.filter((r: any) => r.work_status === '稼働').length,
+        actualDays: scheds.filter((s: any) => s.work_status === '稼働' && s.schedule_date >= week.start && s.schedule_date <= week.end && s.schedule_date <= today).length,
       }
     })
 

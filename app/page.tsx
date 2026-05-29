@@ -255,7 +255,7 @@ export default function Home() {
     { id: 'weekly_kpi'       as SubTab, label: '週KPI',      Icon: TrendingUp },
     { id: 'daily_report'     as SubTab, label: '日報',       Icon: FileText },
     ...(isManager ? [{ id: 'submission_check' as SubTab, label: '提出確認', Icon: CheckSquare }] : []),
-    ...(isManager ? [{ id: 'salary' as SubTab, label: '給与', Icon: Banknote }] : []),
+    ...(isSuperAdmin ? [{ id: 'salary' as SubTab, label: '給与', Icon: Banknote }] : []),
     ...(isManager ? [{ id: 'settings' as SubTab, label: '設定', Icon: Settings }] : []),
   ]
 

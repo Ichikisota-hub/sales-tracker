@@ -61,8 +61,12 @@ export default function OverallView({ yearMonth, teams, orgIds }: Props) {
     const result: RepStats[] = reps.map(rep => {
       const records = (allRecords || []).filter(r => r.sales_rep_id === rep.id)
       const plan = (allPlans || []).find(p => p.sales_rep_id === rep.id)
-      const schedWorkingDays = scheduleMap[rep.id] || []
-      const stats = calcMonthlyStats(records, plan?.plan_cases || 0, plan?.plan_working_days || 0, yearMonth, schedWorkingDays)
+      const today = new Date().toISOString().split('T')[0]
+      const reportedDates = new Set(records.map((r: any) => r.record_date))
+      const schedWorkingDays = (scheduleMap[rep.id] || []).filter((d: string) =>
+        d >= today || reportedDates.has(d)
+      )
+      const stats = calcMonthlyStats(records, plan?.plan_cases || 0, schedWorkingDays.length, yearMonth, schedWorkingDays)
       return { rep, stats }
     })
     setData(result)
