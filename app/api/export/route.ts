@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import * as XLSX from 'xlsx'
 
@@ -10,8 +10,35 @@ function getServiceClient() {
   )
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const supabase = getServiceClient()
+
+  // 代理店(組織)で絞る — organizationId または orgIds(カンマ区切り) を受け取る。
+  // 指定が無い場合のみ全代理店データを取得(後方互換)
+  const { searchParams } = req.nextUrl
+  const orgIds = (searchParams.get('orgIds') || searchParams.get('organizationId') || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+  const hasOrg = orgIds.length > 0
+
+  let repsQuery = supabase.from('sales_reps').select('id, name, team_id, display_order, is_active, organization_id, created_at')
+  let teamsQuery = supabase.from('teams').select('id, name, display_order, organization_id, created_at')
+  let contractsQuery = supabase.from('contracts').select('*')
+  let recordsQuery = supabase.from('daily_records').select('*')
+  let reportsQuery = supabase.from('daily_reports').select('*')
+  let plansQuery = supabase.from('monthly_plans').select('*')
+  let schedulesQuery = supabase.from('work_schedules').select('*')
+
+  if (hasOrg) {
+    repsQuery = repsQuery.in('organization_id', orgIds)
+    teamsQuery = teamsQuery.in('organization_id', orgIds)
+    contractsQuery = contractsQuery.in('organization_id', orgIds)
+    recordsQuery = recordsQuery.in('organization_id', orgIds)
+    reportsQuery = reportsQuery.in('organization_id', orgIds)
+    plansQuery = plansQuery.in('organization_id', orgIds)
+    schedulesQuery = schedulesQuery.in('organization_id', orgIds)
+  }
 
   const [
     { data: salesReps },
@@ -22,13 +49,13 @@ export async function GET() {
     { data: monthlyPlans },
     { data: workSchedules },
   ] = await Promise.all([
-    supabase.from('sales_reps').select('id, name, team_id, display_order, is_active, created_at').order('display_order'),
-    supabase.from('teams').select('id, name, display_order, created_at').order('display_order'),
-    supabase.from('contracts').select('*').order('created_at'),
-    supabase.from('daily_records').select('*').order('record_date'),
-    supabase.from('daily_reports').select('*').order('report_date'),
-    supabase.from('monthly_plans').select('*').order('year_month'),
-    supabase.from('work_schedules').select('*').order('schedule_date'),
+    repsQuery.order('display_order'),
+    teamsQuery.order('display_order'),
+    contractsQuery.order('created_at'),
+    recordsQuery.order('record_date'),
+    reportsQuery.order('report_date'),
+    plansQuery.order('year_month'),
+    schedulesQuery.order('schedule_date'),
   ])
 
   // 担当者IDを名前に変換するマップ

@@ -310,9 +310,9 @@ export default function AdminPage() {
         {/* データエクスポート */}
         <div className="bg-white rounded-xl shadow-sm p-5">
           <h2 className="font-bold text-slate-800 mb-1">データエクスポート</h2>
-          <p className="text-slate-500 text-xs mb-4">全データをExcelファイル（.xlsx）でダウンロードします。<br />担当者・チーム・月間計画・日別実績・シフト・契約宅・日報の7シートが含まれます。</p>
+          <p className="text-slate-500 text-xs mb-4">代理店のデータをExcelファイル（.xlsx）でダウンロードします。<br />担当者・チーム・月間計画・日別実績・シフト・契約宅・日報の7シートが含まれます。</p>
           <a
-            href="/api/export"
+            href={organization ? `/api/export?organizationId=${organization.id}` : '/api/export'}
             download
             className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-colors"
           >

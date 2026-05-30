@@ -41,8 +41,12 @@ export default function OverallView({ yearMonth, teams, orgIds }: Props) {
       reps = d.reps; allRecords = d.records; allPlans = d.plans
       allSchedules = d.schedules.filter((s: any) => s.work_status === '稼働')
     } else {
+      // 代理店(組織)で絞る — reps を組織フィルタすればランキングは組織内に限定される
+      const orgId = orgIds?.[0]
+      let repsQ = supabase.from('sales_reps').select('*').eq('is_active', true)
+      if (orgId) repsQ = repsQ.eq('organization_id', orgId)
       const [r1, r2, r3, r4] = await Promise.all([
-        supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
+        repsQ.order('display_order'),
         supabase.from('daily_records').select('*')
           .gte('record_date', `${y}-${m}-01`).lte('record_date', lastDayStr),
         supabase.from('monthly_plans').select('*').eq('year_month', yearMonth),

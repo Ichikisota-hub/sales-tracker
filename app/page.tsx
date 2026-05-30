@@ -490,7 +490,7 @@ export default function Home() {
           <DailyShiftView yearMonth={scheduleMonth} teams={teams} orgIds={isManager ? orgFilter : ownOrgIds} />
         )}
         {activeSubTab === 'area' && (
-          <AreaStatsView yearMonth={selectedMonth} />
+          <AreaStatsView yearMonth={selectedMonth} orgIds={isManager ? orgFilter : ownOrgIds} />
         )}
         {activeSubTab === 'sheet' && selectedRep && (
           <SheetView repId={selectedRep.id} repName={selectedRep.name} yearMonth={selectedMonth} />

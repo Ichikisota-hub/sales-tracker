@@ -83,8 +83,12 @@ export default function TeamStatsView({ yearMonth, teams, orgIds }: Props) {
       const d = await res.json()
       reps = d.reps; records = d.records; schedules = d.schedules; plans = d.plans
     } else {
+      // 代理店(組織)で絞る — reps を組織フィルタすればチーム集計は組織内に限定される
+      const orgId = orgIds?.[0]
+      let repsQ = supabase.from('sales_reps').select('*').eq('is_active', true)
+      if (orgId) repsQ = repsQ.eq('organization_id', orgId)
       const [r1, r2, r3, r4] = await Promise.all([
-        supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
+        repsQ.order('display_order'),
         supabase.from('daily_records').select('*').gte('record_date', dateFrom).lte('record_date', dateTo),
         supabase.from('work_schedules').select('sales_rep_id,schedule_date,work_status')
           .gte('schedule_date', dateFrom).lte('schedule_date', dateTo),

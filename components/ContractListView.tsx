@@ -105,10 +105,11 @@ export default function ContractListView({ reps, selectedRepId, onAdd, orgIds }:
         .in('id', toUpdate.map(c => c.id))
     }
 
-    const { data } = await supabase
-      .from('contracts')
-      .select('*')
-      .order('acquired_date', { ascending: false })
+    // 代理店(組織)で絞る — orgId が無い場合のみ全件フォールバック
+    const orgId = orgIds?.[0]
+    let listQuery = supabase.from('contracts').select('*')
+    if (orgId) listQuery = listQuery.eq('organization_id', orgId)
+    const { data } = await listQuery.order('acquired_date', { ascending: false })
     setContracts(data || [])
     setLoading(false)
   }

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase, SalesRep } from '@/lib/supabase'
 import { getMonthList, formatYearMonth } from '@/lib/dateUtils'
 
-type Props = { yearMonth: string }
+type Props = { yearMonth: string; orgIds?: string[] }
 
 type AreaStat = {
   pref: string
@@ -23,7 +23,7 @@ const PREF_COLORS: Record<string, string> = {
   '和歌山県': '#ec4899',
 }
 
-export default function AreaStatsView({ yearMonth }: Props) {
+export default function AreaStatsView({ yearMonth, orgIds }: Props) {
   const [reps, setReps] = useState<SalesRep[]>([])
   const [areaStats, setAreaStats] = useState<AreaStat[]>([])
   const [prefStats, setPrefStats] = useState<{ pref: string; count: number; cities: { city: string; count: number }[] }[]>([])
@@ -31,7 +31,7 @@ export default function AreaStatsView({ yearMonth }: Props) {
   const [viewMode, setViewMode] = useState<'pref' | 'city'>('pref')
   const months = getMonthList(6).reverse() // 過去6ヶ月
 
-  useEffect(() => { loadAll() }, [yearMonth])
+  useEffect(() => { loadAll() }, [yearMonth, orgIds?.join(',')])
 
   async function loadAll() {
     setLoading(true)
@@ -39,8 +39,13 @@ export default function AreaStatsView({ yearMonth }: Props) {
     const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
     const lastDayStr = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
 
+    // 代理店(組織)で絞る — orgId が無い場合のみ全件フォールバック
+    const orgId = orgIds?.[0]
+    let repQuery = supabase.from('sales_reps').select('*').eq('is_active', true)
+    if (orgId) repQuery = repQuery.eq('organization_id', orgId)
+
     const [{ data: repData }, { data: records }] = await Promise.all([
-      supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
+      repQuery.order('display_order'),
       supabase.from('daily_records').select('*')
         .gte('record_date', `${y}-${m}-01`)
         .lte('record_date', lastDayStr),
@@ -62,6 +67,7 @@ export default function AreaStatsView({ yearMonth }: Props) {
       const acq = Number(r.acquisitions)
       const mon = (r.record_date || '').slice(0, 7)
       const rep = repList.find(rep => rep.id === r.sales_rep_id)
+      if (!rep) return // 組織外(別代理店)の記録は集計しない
 
       if (!areaMap[key]) areaMap[key] = { count: 0, repSet: new Set(), months: {} }
       areaMap[key].count += acq
