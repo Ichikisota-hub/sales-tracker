@@ -144,7 +144,7 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
         remaining: planCases - actualCases,
         actualWorkDays: actualWD,
         remainingWork: Math.max(0, planWD - actualWD),
-        productivity: planCases > 0 ? (actualCases / planCases) * 100 : 0,
+        productivity: actualWD > 0 ? (actualCases / actualWD) * 100 : 0,
         nextShiftDate: ns?.schedule_date ?? null,
         nextShiftTime: ns?.work_time_start
           ? `${ns.work_time_start.slice(0, 5)}〜${(ns.work_time_end ?? '').slice(0, 5)}`
@@ -216,6 +216,20 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
   async function handleSaveAndCopy() {
     setSaving(true)
     setCopyFailed(false)
+
+    // ① タップ直後にコピー（DB保存より先に実行）。
+    //    await(DB通信)を挟むと iOS Safari 等でクリップボード権限が失効し失敗するため、
+    //    ユーザー操作直後の最初の処理としてコピーを行う。
+    const text = buildReport()
+    const ok = await copyToClipboard(text)
+    if (ok) {
+      setCopied(true)
+    } else {
+      setCopyFailed(true)
+      setReportText(text)
+    }
+
+    // ② 日報を保存
     try {
       const payload = {
         sales_rep_id: repId,
@@ -236,18 +250,10 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
       if (error) throw new Error(error.message)
       setSaved(true)
       syncSheets()
-      const text = buildReport()
-      const ok = await copyToClipboard(text)
-      if (ok) {
-        setCopied(true)
-      } else {
-        setCopyFailed(true)
-        setReportText(text)
-      }
       setSaveError('')
       setTimeout(() => { setSaved(false); setCopied(false) }, 3000)
-    } catch (e: any) {
-      setSaveError(e.message || '保存に失敗しました')
+    } catch (e: unknown) {
+      setSaveError(e instanceof Error ? e.message : '保存に失敗しました')
     } finally {
       setSaving(false)
     }
