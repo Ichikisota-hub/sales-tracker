@@ -42,7 +42,11 @@ export default function DailyShiftView({ yearMonth, teams, orgIds }: Props) {
       const d = await res.json()
       setReps((d.reps || []).filter((r: any) => r.name && !r.name.startsWith('担当者')))
     } else {
-      const { data } = await supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order')
+      // 代理店(組織)で絞る — orgId が無い場合のみ全件フォールバック
+      const orgId = orgIds?.[0]
+      let q = supabase.from('sales_reps').select('*').eq('is_active', true)
+      if (orgId) q = q.eq('organization_id', orgId)
+      const { data } = await q.order('display_order')
       setReps((data || []).filter(r => r.name && !r.name.startsWith('担当者')))
     }
   }

@@ -51,6 +51,13 @@ export function calcSalaryStatus(
       }
       break
     }
+    case 'クローザー1': {
+      // 累計5件達成で昇格したランク。昇格後はその月の件数に関わらず常に条件達成扱い
+      conditionMet = true
+      conditionLabel = '条件達成'
+      statusLevel = 'green'
+      break
+    }
     case 'ミニチームリーダー①':
     case 'ミニチームリーダー②': {
       conditionMet = acquisitions >= 5 && workDays >= 11

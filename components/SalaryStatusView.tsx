@@ -44,7 +44,7 @@ export default function SalaryStatusView({ yearMonth, orgIds }: Props) {
       .order('display_order')
     if (orgId) repsQuery.eq('organization_id', orgId)
 
-    const [repsRes, schedulesRes, recordsRes, ratesRes] = await Promise.all([
+    const [repsRes, schedulesRes, recordsRes, ratesRes, cumRes] = await Promise.all([
       repsQuery,
       supabase
         .from('work_schedules')
@@ -60,6 +60,10 @@ export default function SalaryStatusView({ yearMonth, orgIds }: Props) {
       supabase
         .from('incentive_rates')
         .select('rank, rate_per_contract'),
+      // 累計獲得（全期間）— アポインターの自動昇格判定用
+      supabase
+        .from('daily_records')
+        .select('sales_rep_id, acquisitions'),
     ])
 
     const reps = (repsRes.data ?? []).filter(r => r.name && !r.name.startsWith('担当者'))
@@ -76,14 +80,24 @@ export default function SalaryStatusView({ yearMonth, orgIds }: Props) {
       acqMap[r.sales_rep_id] = (acqMap[r.sales_rep_id] ?? 0) + (r.acquisitions ?? 0)
     }
 
-    const result = reps.map(rep =>
-      calcSalaryStatus(
-        rep,
+    // 累計獲得（全期間）。アポインターは累計5件以上で恒久的にクローザー1へ自動昇格
+    const cumAcqMap: Record<string, number> = {}
+    for (const r of cumRes.data ?? []) {
+      cumAcqMap[r.sales_rep_id] = (cumAcqMap[r.sales_rep_id] ?? 0) + (r.acquisitions ?? 0)
+    }
+
+    const result = reps.map(rep => {
+      let effectiveRank = rep.incentive_rank ?? 'アポインター'
+      if (effectiveRank === 'アポインター' && (cumAcqMap[rep.id] ?? 0) >= 5) {
+        effectiveRank = 'クローザー1'
+      }
+      return calcSalaryStatus(
+        { ...rep, incentive_rank: effectiveRank },
         workDaysMap[rep.id] ?? 0,
         acqMap[rep.id] ?? 0,
-        rateMap[rep.incentive_rank ?? 'アポインター'] ?? 0,
+        rateMap[effectiveRank] ?? 0,
       )
-    )
+    })
     setData(result)
     setLoading(false)
   }

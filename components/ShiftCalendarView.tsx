@@ -261,8 +261,12 @@ export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
       repData = d.reps || []
       schedData = d.schedules || []
     } else {
+      // 代理店(組織)で絞る — orgId が無い場合のみ全件フォールバック
+      const orgId = orgIds?.[0]
+      let repQuery = supabase.from('sales_reps').select('*').eq('is_active', true)
+      if (orgId) repQuery = repQuery.eq('organization_id', orgId)
       const [{ data: reps }, { data: scheds }] = await Promise.all([
-        supabase.from('sales_reps').select('*').eq('is_active', true).order('display_order'),
+        repQuery.order('display_order'),
         supabase.from('work_schedules').select('*')
           .gte('schedule_date', startDate)
           .lte('schedule_date', endDate),

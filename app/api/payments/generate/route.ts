@@ -67,6 +67,15 @@ export async function POST(req: NextRequest) {
     Object.entries(workingDaysMap).map(([id, s]) => [id, s.size])
   )
 
+  // 累計獲得（全期間）— アポインター→クローザー1 自動昇格(累計5件)判定用
+  const { data: cumRecords } = await supabase
+    .from('daily_records')
+    .select('sales_rep_id, acquisitions')
+  const cumAcqMap: Record<string, number> = {}
+  for (const r of (cumRecords ?? []) as { sales_rep_id: string; acquisitions: number }[]) {
+    cumAcqMap[r.sales_rep_id] = (cumAcqMap[r.sales_rep_id] ?? 0) + (r.acquisitions ?? 0)
+  }
+
   const rateMap: Record<string, IncentiveRate> = {}
   ;(rates ?? []).forEach((r: IncentiveRate) => { rateMap[r.rank] = r })
 
@@ -95,12 +104,16 @@ export async function POST(req: NextRequest) {
       : 0
     const cancelRateExceeded = cancelRate > 0.12
 
-    const rank = rep.incentive_rank ?? 'アポインター'
+    let rank = rep.incentive_rank ?? 'アポインター'
+    // アポインター → クローザー1 自動昇格（累計獲得5件以上で恒久）
+    const autoPromoted = rank === 'アポインター' && (cumAcqMap[rep.id] ?? 0) >= 5
+    if (autoPromoted) rank = 'クローザー1'
     let rate = rateMap[rank] ?? { rank, rate_per_contract: 20000, apo_rate: 20000 }
     const workingDays = workingDaysCount[rep.id] ?? 0
 
     // クローザー1 → クローザー2 自動昇格チェック（今月条件: 8稼働日以上 + 2件以上開通）
-    if (rank === 'クローザー1' && workingDays >= 8 && openCount >= 2) {
+    // ※アポインターから今月自動昇格した人は、この月での連鎖昇格はしない
+    if (rank === 'クローザー1' && !autoPromoted && workingDays >= 8 && openCount >= 2) {
       const closer2 = rateMap['クローザー2']
       if (closer2) rate = closer2
     }
