@@ -61,6 +61,11 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
   const [reportText, setReportText] = useState('')
+  const [monthSummary, setMonthSummary] = useState<{
+    monthNum: number; planCases: number; actualCases: number; remaining: number
+    actualWorkDays: number; remainingWork: number; productivity: number
+    nextShiftDate: string | null; nextShiftTime: string | null
+  } | null>(null)
 
   // 日付・担当者が変わるたびに既存データを読み込む
   useEffect(() => {
@@ -106,6 +111,45 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
         setGratitude('')
       }
       setSaved(false)
+
+      // 月次サマリー（計画/実績/残り/稼働/残稼働/生産性/次回稼働）
+      const ym = selectedDate.slice(0, 7)
+      const [yy, mm] = ym.split('-')
+      const mEnd = new Date(parseInt(yy), parseInt(mm), 0).getDate()
+      const [planRes, monthRecRes, nextShiftRes] = await Promise.all([
+        supabase.from('monthly_plans')
+          .select('plan_cases, plan_working_days')
+          .eq('sales_rep_id', repId).eq('year_month', ym).maybeSingle(),
+        supabase.from('daily_records')
+          .select('acquisitions, work_status')
+          .eq('sales_rep_id', repId)
+          .gte('record_date', `${ym}-01`)
+          .lte('record_date', `${ym}-${String(mEnd).padStart(2, '0')}`),
+        supabase.from('work_schedules')
+          .select('schedule_date, work_time_start, work_time_end')
+          .eq('sales_rep_id', repId).eq('work_status', '稼働')
+          .gt('schedule_date', selectedDate)
+          .order('schedule_date').limit(1).maybeSingle(),
+      ])
+      const planCases = planRes.data?.plan_cases ?? 0
+      const planWD = planRes.data?.plan_working_days ?? 0
+      const recs = monthRecRes.data ?? []
+      const actualCases = recs.reduce((s, r) => s + ((r.acquisitions as number) ?? 0), 0)
+      const actualWD = recs.filter(r => r.work_status === '稼働').length
+      const ns = nextShiftRes.data
+      setMonthSummary({
+        monthNum: parseInt(mm),
+        planCases,
+        actualCases,
+        remaining: planCases - actualCases,
+        actualWorkDays: actualWD,
+        remainingWork: Math.max(0, planWD - actualWD),
+        productivity: planCases > 0 ? (actualCases / planCases) * 100 : 0,
+        nextShiftDate: ns?.schedule_date ?? null,
+        nextShiftTime: ns?.work_time_start
+          ? `${ns.work_time_start.slice(0, 5)}〜${(ns.work_time_end ?? '').slice(0, 5)}`
+          : null,
+      })
     }
     load()
   }, [repId, selectedDate])
@@ -152,6 +196,19 @@ export default function DailyReportForm({ repId, repName, selectedDate, record }
       lines.push('')
       lines.push('👏 感謝・シェアしたいこと')
       lines.push(`→ ${gratitude}`)
+    }
+    // 月次現状サマリー（日報の末尾に自動付与）
+    if (monthSummary) {
+      lines.push('')
+      lines.push('━━━━━━━━━━')
+      lines.push(`${monthSummary.monthNum}月現状🔥🔥`)
+      lines.push(`計画：${monthSummary.planCases}件　実績：${monthSummary.actualCases}件`)
+      lines.push(`残り：${monthSummary.remaining}件`)
+      lines.push(`稼働：${monthSummary.actualWorkDays}日　残稼働：${monthSummary.remainingWork}日`)
+      lines.push(`生産性：${monthSummary.productivity.toFixed(2)}％`)
+      lines.push('')
+      lines.push(`次回稼働：${monthSummary.nextShiftDate ?? '未定'}`)
+      lines.push(`稼働時間：${monthSummary.nextShiftTime ?? '未定'}`)
     }
     return lines.join('\n')
   }
