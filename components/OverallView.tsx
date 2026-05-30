@@ -145,7 +145,7 @@ export default function OverallView({ yearMonth, teams, orgIds }: Props) {
 
   const SortBtn = ({ k, label }: { k: typeof sortKey; label: string }) => (
     <button onClick={() => setSortKey(k)}
-      className={`text-xs px-2 py-1 rounded font-medium transition-colors ${
+      className={`text-xs px-2.5 py-1.5 rounded font-medium transition-colors ${
         sortKey === k ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
       }`}
     >{label}</button>
@@ -396,11 +396,11 @@ export default function OverallView({ yearMonth, teams, orgIds }: Props) {
                           </div>
                           <div className="w-full rounded-t-xl text-center py-3"
                             style={{background: RANK_COLORS[1].bg, minHeight: 64}}>
-                            <div className="text-xs text-slate-300 opacity-80">現在獲得</div>
+                            <div className="text-xs text-slate-400 opacity-80">現在獲得</div>
                             <div className="text-2xl font-black text-white leading-tight">
                               {teamStats[1].totalAcquisitions}
                             </div>
-                            <div className="text-xs text-slate-300 opacity-60 mt-0.5">着地予想 {round1(teamStats[1].forecastAcquisitions)}</div>
+                            <div className="text-xs text-slate-400 opacity-60 mt-0.5">着地予想 {round1(teamStats[1].forecastAcquisitions)}</div>
                           </div>
                         </div>
                       ) : <div className="flex-1" />}
@@ -628,7 +628,7 @@ export default function OverallView({ yearMonth, teams, orgIds }: Props) {
                               <div className="absolute inset-y-0 left-0 rounded-lg transition-all"
                                 style={{width:`${pct}%`, background: barBg, opacity: 0.85}} />
                               <div className="relative h-full flex items-center justify-between px-3">
-                                <span className={`font-black truncate ${isTop3 ? 'text-sm text-white' : 'text-xs text-slate-300'}`}>
+                                <span className={`font-black truncate ${isTop3 ? 'text-sm text-white' : 'text-xs text-slate-400'}`}>
                                   {d.rep.name}
                                 </span>
                                 <span className={`font-black ml-2 flex-shrink-0 ${
@@ -694,10 +694,10 @@ export default function OverallView({ yearMonth, teams, orgIds }: Props) {
                         <td>{round1(stats.productivity)}</td>
                         <td>{stats.totalVisits > 0 ? (stats.totalNetMeetings / stats.totalVisits * 100).toFixed(0) + '%' : '—'}</td>
                         <td>{stats.totalOwnerMeetings > 0 ? (stats.totalNegotiations / stats.totalOwnerMeetings * 100).toFixed(0) + '%' : '—'}</td>
-                        <td className={`font-bold ${achieved ? 'text-emerald-600' : neededPerDay !== null ? 'text-orange-600' : 'text-slate-300'}`}>
+                        <td className={`font-bold ${achieved ? 'text-emerald-600' : neededPerDay !== null ? 'text-orange-600' : 'text-slate-400'}`}>
                           {!hasData ? '—' : achieved ? '🏆' : neededPerDay !== null ? round1(neededPerDay) : '—'}
                         </td>
-                        <td className={`font-bold text-xs ${!hasData ? 'text-slate-300' : achieved ? 'text-emerald-600' : 'text-red-500'}`}>
+                        <td className={`font-bold text-xs ${!hasData ? 'text-slate-400' : achieved ? 'text-emerald-600' : 'text-red-500'}`}>
                           {!hasData ? '未' : achieved ? '達成見込✓' : `あと${round1(stats.gapToTarget)}件`}
                         </td>
                       </tr>
@@ -760,7 +760,7 @@ export default function OverallView({ yearMonth, teams, orgIds }: Props) {
                         <td className="font-black text-xl text-slate-800">{ts.totalAcquisitions}</td>
                         <td>{ts.actualWorkingDays}日</td>
                         <td>{round1(ts.productivity)}</td>
-                        <td className={`font-bold text-xs ${!hasData ? 'text-slate-300' : achieved ? 'text-emerald-600' : 'text-red-500'}`}>
+                        <td className={`font-bold text-xs ${!hasData ? 'text-slate-400' : achieved ? 'text-emerald-600' : 'text-red-500'}`}>
                           {!hasData ? '—' : achieved ? '達成見込✓' : `あと${round1(ts.planCases - ts.forecastAcquisitions)}件`}
                         </td>
                         <td className="text-center text-slate-400 text-xs">{isExpanded ? '▲' : '▼'}</td>

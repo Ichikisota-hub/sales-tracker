@@ -182,7 +182,7 @@ function RepCalendarModal({
       <div className="flex gap-4 px-4 py-3 border-t border-slate-100 text-sm text-slate-500 flex-shrink-0">
         <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded bg-emerald-500" />稼働</div>
         <div className="flex items-center gap-1.5"><div className="w-5 h-5 rounded bg-slate-200" />休日</div>
-        <div className="flex items-center gap-1.5"><span className="text-slate-300 text-base">—</span>未提出</div>
+        <div className="flex items-center gap-1.5"><span className="text-slate-400 text-base">—</span>未提出</div>
       </div>
     </div>
   )
@@ -271,45 +271,8 @@ export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
       schedData = scheds || []
     }
 
-    // kaika shifts で上書き（orgIds に関わらず常に適用）
-    const { data: kaShiftsData } = await supabase
-      .from('shifts')
-      .select('user_id, start_time, end_time, status, shift_date')
-      .gte('shift_date', startDate)
-      .lte('shift_date', endDate)
-      .neq('status', 'rejected')
-
-    let merged: ScheduleRow[] = schedData
-
-    if (kaShiftsData && kaShiftsData.length > 0) {
-      const userIds = Array.from(new Set(kaShiftsData.map((s: any) => s.user_id)))
-      const { data: orgMembers } = await supabase
-        .from('organization_members')
-        .select('user_id, sales_rep_id')
-        .in('user_id', userIds)
-        .not('sales_rep_id', 'is', null)
-
-      const userToRep: Record<string, string> = {}
-      orgMembers?.forEach((m: any) => { if (m.sales_rep_id) userToRep[m.user_id] = m.sales_rep_id })
-
-      const mergedMap: Record<string, ScheduleRow> = {}
-      merged.forEach(s => { mergedMap[`${s.sales_rep_id}__${s.schedule_date}`] = s })
-      kaShiftsData.forEach((s: any) => {
-        const repId = userToRep[s.user_id]
-        if (!repId) return
-        mergedMap[`${repId}__${s.shift_date}`] = {
-          sales_rep_id: repId,
-          schedule_date: s.shift_date,
-          work_status: s.start_time ? '稼働' : '休日',
-          work_time_start: s.start_time || '',
-          work_time_end: s.end_time || '',
-        }
-      })
-      merged = Object.values(mergedMap)
-    }
-
     setReps(repData)
-    setSchedules(merged)
+    setSchedules(schedData)
     setLoading(false)
   }
 
@@ -435,12 +398,12 @@ export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
             <div className="flex gap-1.5 mt-2 flex-wrap">
               <button
                 onClick={() => setFilterTeamId(null)}
-                className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${filterTeamId === null ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+                className={`text-xs px-2.5 py-1.5 rounded-full font-bold transition-colors ${filterTeamId === null ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
               >全体</button>
               {teams.map(t => (
                 <button key={t.id}
                   onClick={() => setFilterTeamId(t.id)}
-                  className={`text-xs px-2.5 py-1 rounded-full font-bold transition-colors ${filterTeamId === t.id ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+                  className={`text-xs px-2.5 py-1.5 rounded-full font-bold transition-colors ${filterTeamId === t.id ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
                 >{t.name}</button>
               ))}
             </div>
@@ -489,7 +452,7 @@ export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
                   {viewMode === 'week' ? `${d.day}(${d.dowJa})` : d.day}
                 </div>
                 {viewMode === 'month' && (
-                  <div className={`text-[9px] ${d.dow === 0 ? 'text-red-300' : d.dow === 6 ? 'text-blue-300' : 'text-slate-300'}`}>
+                  <div className={`text-[11px] ${d.dow === 0 ? 'text-red-300' : d.dow === 6 ? 'text-blue-300' : 'text-slate-400'}`}>
                     {d.dowJa}
                   </div>
                 )}
@@ -504,13 +467,13 @@ export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
         <table className="border-collapse" style={{ minWidth: displayDays.length * colMinW + 120 }}>
           <thead>
             <tr className="bg-slate-800">
-              <th className="sticky left-0 bg-slate-800 z-10 px-3 py-2 text-left text-xs text-slate-300 font-bold" style={{ minWidth: 112 }}>担当者</th>
+              <th className="sticky left-0 bg-slate-800 z-10 px-3 py-2 text-left text-xs text-slate-400 font-bold" style={{ minWidth: 112 }}>担当者</th>
               {displayDays.map(d => (
                 <th key={d.dateStr} className="px-0 py-2.5 text-center" style={{ minWidth: colMinW }}>
-                  <div className={`text-[11px] font-black ${d.dow === 0 ? 'text-red-400' : d.dow === 6 ? 'text-blue-400' : 'text-slate-300'}`}>
+                  <div className={`text-[11px] font-black ${d.dow === 0 ? 'text-red-400' : d.dow === 6 ? 'text-blue-400' : 'text-slate-400'}`}>
                     {viewMode === 'week' ? `${d.day}日` : d.day}
                   </div>
-                  <div className={`text-[9px] mt-0.5 ${d.dow === 0 ? 'text-red-300' : d.dow === 6 ? 'text-blue-300' : 'text-slate-500'}`}>
+                  <div className={`text-[11px] mt-0.5 ${d.dow === 0 ? 'text-red-300' : d.dow === 6 ? 'text-blue-300' : 'text-slate-500'}`}>
                     {d.dowJa}
                   </div>
                 </th>
@@ -548,17 +511,17 @@ export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
                         {status === '稼働' ? (
                           <div className="flex flex-col items-center gap-0.5">
                             <div className="mx-auto w-6 h-6 rounded-md bg-emerald-500 flex items-center justify-center">
-                              <span className="text-white font-black text-[9px]">稼</span>
+                              <span className="text-white font-black text-[11px]">稼</span>
                             </div>
                             {row?.work_time_start && row?.work_time_end && (
-                              <div className="text-[9px] text-emerald-600 font-bold leading-tight whitespace-nowrap mt-0.5">
+                              <div className="text-[11px] text-emerald-600 font-bold leading-tight whitespace-nowrap mt-0.5">
                                 {row.work_time_start.slice(0, 5)}〜{row.work_time_end.slice(0, 5)}
                               </div>
                             )}
                           </div>
                         ) : status === '休日' ? (
                           <div className="mx-auto w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center">
-                            <span className="text-slate-300 text-[9px]">休</span>
+                            <span className="text-slate-400 text-[11px]">休</span>
                           </div>
                         ) : (
                           <div className="mx-auto w-6 h-6 flex items-center justify-center">
@@ -569,7 +532,7 @@ export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
                     )
                   })}
                   <td className="border-b border-slate-100 text-center px-1">
-                    <span className={`text-xs font-black ${totalDays > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
+                    <span className={`text-xs font-black ${totalDays > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
                       {totalDays > 0 ? totalDays : '—'}
                     </span>
                   </td>
@@ -583,11 +546,11 @@ export default function ShiftCalendarView({ yearMonth, teams, orgIds }: Props) {
       {/* 凡例 */}
       <div className="flex gap-3 mt-3 flex-wrap text-xs text-slate-500 items-center">
         <div className="flex items-center gap-1">
-          <div className="w-5 h-5 rounded-md bg-emerald-500 flex items-center justify-center"><span className="text-white font-black text-[8px]">稼</span></div>
+          <div className="w-5 h-5 rounded-md bg-emerald-500 flex items-center justify-center"><span className="text-white font-black text-[11px]">稼</span></div>
           <span>稼働（時刻はシフト予定時間）</span>
         </div>
         <div className="flex items-center gap-1">
-          <div className="w-5 h-5 rounded-md bg-slate-100 flex items-center justify-center"><span className="text-slate-300 text-[8px]">休</span></div>
+          <div className="w-5 h-5 rounded-md bg-slate-100 flex items-center justify-center"><span className="text-slate-400 text-[11px]">休</span></div>
           <span>休日</span>
         </div>
         <div className="flex items-center gap-1">

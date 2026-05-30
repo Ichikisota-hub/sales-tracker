@@ -278,7 +278,7 @@ export default function TeamStatsView({ yearMonth, teams, orgIds }: Props) {
   const totalDayAcq = DAY_ORDER.reduce((s, dow) => s + dayStats[dow].acquisitions, 0)
   const totalDayProductivity = totalActualWork > 0 ? totalDayAcq / totalActualWork : 0
 
-  const dash = <span className="text-slate-300">—</span>
+  const dash = <span className="text-slate-400">—</span>
 
   function achievementColor(rate: number) {
     if (rate >= 1) return 'text-emerald-600'
@@ -398,7 +398,7 @@ export default function TeamStatsView({ yearMonth, teams, orgIds }: Props) {
                   </td>
                   <td className="bg-orange-50 text-slate-600 border-l-[3px] border-l-slate-400">{row.planCases > 0 ? Math.round(row.planCases * 10) / 10 : dash}</td>
                   <td className="bg-orange-50 font-bold text-slate-800">{row.acquisitions > 0 ? row.acquisitions : dash}</td>
-                  <td className={`bg-orange-50 font-bold ${row.planCases > 0 ? achievementColor(row.achievementRate) : 'text-slate-300'}`}>
+                  <td className={`bg-orange-50 font-bold ${row.planCases > 0 ? achievementColor(row.achievementRate) : 'text-slate-400'}`}>
                     {row.planCases > 0 ? fmtRate(row.achievementRate) : dash}
                   </td>
                   <td className="bg-blue-50 border-l-[3px] border-l-slate-400">{row.visits > 0 ? row.visits : dash}</td>

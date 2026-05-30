@@ -100,9 +100,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 6. rep_id がない場合 → fullName で sales_reps を名前マッチ
-  //    ORIGIN組織: 名前マッチのみ（既存データと紐付け）
-  //    それ以外の組織: 名前マッチで見つからない場合は自動作成
+  // 6. rep_id がない場合 → fullName で sales_reps を名前マッチ。
+  //    既存の担当者がいれば紐付け、いなければ新規作成して紐付ける（全組織共通）。
   if (!repIdFromInvite) {
     const { data: membership } = await supabase
       .from('organization_members')
@@ -118,7 +117,8 @@ export async function POST(req: NextRequest) {
         .eq('organization_id', orgId)
         .eq('name', fullName.trim())
         .eq('is_active', true)
-        .single()
+        .limit(1)
+        .maybeSingle()
 
       if (rep) {
         // 重複チェック（同担当者が別メンバーに紐付いていないか）

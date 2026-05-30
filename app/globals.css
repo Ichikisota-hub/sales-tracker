@@ -400,7 +400,7 @@ body {
 
 .stat-card-label { font-size: 10.5px; color: #94a3b8; font-weight: 700; margin-bottom: 6px; letter-spacing: .05em; text-transform: uppercase; }
 .stat-card-value { font-size: 22px; font-weight: 900; color: #1e293b; }
-.stat-card-sub   { font-size: 10px; color: #cbd5e1; margin-top: 3px; }
+.stat-card-sub   { font-size: 10px; color: #94a3b8; margin-top: 3px; }
 
 /* ===== TOP NAV ===== */
 .top-nav {

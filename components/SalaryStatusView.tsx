@@ -130,7 +130,7 @@ export default function SalaryStatusView({ yearMonth, orgIds }: Props) {
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.bg} ${badge.text}`}>
                         {badge.label}
                       </span>
-                      <span className="text-[9px] text-slate-400 max-w-[120px] text-center leading-tight">
+                      <span className="text-[11px] text-slate-400 max-w-[120px] text-center leading-tight">
                         {d.conditionLabel}
                       </span>
                     </div>
