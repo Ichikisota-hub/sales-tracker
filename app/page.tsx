@@ -135,7 +135,8 @@ export default function Home() {
   const [reps, setReps] = useState<SalesRep[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null)
-  const [orgFilter, setOrgFilter] = useState<string[]>(ALL_ORGS.map(o => o.id))
+  // 組織フィルタ初期値は空→organizationId確定時に自組織をセット（テナント分離。横断はUIで明示選択）
+  const [orgFilter, setOrgFilter] = useState<string[]>([])
   const ownOrgIds = organizationId ? [organizationId] : [ORIGIN_ORG_ID]
   const [selectedMonth, setSelectedMonth] = useState<string>(localYearMonth())
   const [scheduleMonth, setScheduleMonth] = useState<string>(getNextMonth(localYearMonth()))
@@ -157,6 +158,8 @@ export default function Home() {
   // organizationId が確定したタイミングで担当者一覧を読み込む（初回 + 変化時）
   useEffect(() => {
     if (!orgLoading) loadReps()
+    // 組織フィルタ初期値を自組織に（管理者も初期は自代理店のみ。全代理店横断はUIで明示選択時のみ）
+    if (organizationId) setOrgFilter([organizationId])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId, orgLoading])
 
