@@ -114,7 +114,7 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
       .select('note')
       .eq('sales_rep_id', repId)
       .eq('year_month', yearMonth)
-      .single()
+      .maybeSingle()
     setNote(planData?.note || '')
   }
 
@@ -199,7 +199,7 @@ export default function ScheduleSubmitForm({ repId, repName, yearMonth }: Props)
         .select('plan_cases')
         .eq('sales_rep_id', repId)
         .eq('year_month', yearMonth)
-        .single()
+        .maybeSingle()
 
       const { error: planError } = await supabase.from('monthly_plans').upsert({
         sales_rep_id: repId,

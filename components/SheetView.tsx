@@ -48,7 +48,7 @@ export default function SheetView({ repId, repName, yearMonth }: Props) {
 
     const [{ data: planData }, { data: recData }, { data: schedData }] = await Promise.all([
       supabase.from('monthly_plans').select('*')
-        .eq('sales_rep_id', rid).eq('year_month', ym).single(),
+        .eq('sales_rep_id', rid).eq('year_month', ym).maybeSingle(),
       supabase.from('daily_records').select('*')
         .eq('sales_rep_id', rid)
         .gte('record_date', `${y}-${m}-01`)

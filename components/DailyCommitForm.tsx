@@ -25,7 +25,7 @@ export default function DailyCommitForm({ repId, repName }: Props) {
       .select('target_visits, target_contracts, committed_at')
       .eq('sales_rep_id', repId)
       .eq('record_date', today)
-      .single()
+      .maybeSingle()
 
     if (data?.committed_at) {
       setCommittedAt(data.committed_at)

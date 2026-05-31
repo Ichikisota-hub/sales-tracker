@@ -77,7 +77,7 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
       .select('target_visits, target_contracts, committed_at')
       .eq('sales_rep_id', repId)
       .eq('record_date', todayStr)
-      .single()
+      .maybeSingle()
       .then(({ data }) => {
         if (data?.committed_at) {
           setCommitTarget({ visits: data.target_visits ?? 0, contracts: data.target_contracts ?? 0 })
@@ -188,13 +188,13 @@ export default function DailyInputForm({ repId, repName, yearMonth }: Props) {
 
   async function loadPlan() {
     const { data } = await supabase.from('monthly_plans').select('*')
-      .eq('sales_rep_id', repId).eq('year_month', yearMonth).single()
+      .eq('sales_rep_id', repId).eq('year_month', yearMonth).maybeSingle()
     setPlan(data)
   }
 
   async function loadRecord() {
     const { data } = await supabase.from('daily_records').select('*')
-      .eq('sales_rep_id', repId).eq('record_date', selectedDate).single()
+      .eq('sales_rep_id', repId).eq('record_date', selectedDate).maybeSingle()
     const dbRecord: Partial<DailyRecord> = data || {
       work_status: '', attendance_status: '', working_hours: 0,
       work_time_start: '', work_time_end: '',

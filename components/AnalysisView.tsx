@@ -286,7 +286,7 @@ export default function AnalysisView({ repId, repName, yearMonth }: Props) {
       supabase.from('daily_records').select('*')
         .eq('sales_rep_id', repId).gte('record_date', `${y}-${m}-01`).lte('record_date', lastDayStr),
       supabase.from('monthly_plans').select('*')
-        .eq('sales_rep_id', repId).eq('year_month', yearMonth).single(),
+        .eq('sales_rep_id', repId).eq('year_month', yearMonth).maybeSingle(),
       supabase.from('work_schedules').select('schedule_date')
         .eq('sales_rep_id', repId).eq('work_status', '稼働')
         .gte('schedule_date', `${y}-${m}-01`).lte('schedule_date', lastDayStr),
